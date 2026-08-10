@@ -1,0 +1,19 @@
+---
+description: Always design 2easy-mobile UI for phones and tablets
+alwaysApply: true
+---
+
+# Tablet-first layout for 2easy-mobile
+
+- Assume the app runs on phones **and tablets** (iPad / Android large screens). `TARGETED_DEVICE_FAMILY` is `1,2`.
+- Use `useLayout()` from `src/shared/lib/layout.ts` for breakpoints instead of hardcoding widths.
+- Keep content readable on wide screens: center columns, `maxWidth` for forms (~460 phone / ~560 tablet) and page content (~840 tablet).
+- Increase spacing, tap targets, and type size on tablet where it helps; do not stretch single-column forms edge-to-edge.
+- Support landscape on tablets; avoid layouts that break when width > height.
+- Auth autofill must keep `textContentType` / `autoComplete` / `importantForAutofill` so credentials from `2easyeng.com` can fill login fields.
+
+# Launch & guest access (like the site)
+
+- Main screen is always **Lesson plans** (even without login).
+- Do not hard-gate the whole app behind auth. Login/registration are modal/optional.
+- Features available on the website without login/subscription should remain available in the app (browse public catalog, search, level filters; open lesson prompts auth).
