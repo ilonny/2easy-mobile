@@ -1,4 +1,4 @@
-import {useEffect, useState} from 'react';
+import {useEffect, useMemo, useState} from 'react';
 import {Pressable, Text, View} from 'react-native';
 
 import {useI18n} from '../../../../shared/i18n';
@@ -15,6 +15,7 @@ import {
   persistExercise,
   resolvePickedAttachments,
   type EditorCommonProps,
+  pickedToPreviewMedia,
 } from './editorShared';
 
 type Item = {id: string; text: string};
@@ -92,6 +93,21 @@ export function TextChecklistEditor({
     }
   };
 
+  const previewData = useMemo(
+    () => ({
+      title,
+      titleColor: TITLE_COLOR,
+      subtitle,
+      description,
+      stickers: stickers.map(s => s.text).filter(Boolean),
+      images: pickedToPreviewMedia(images),
+      editorImages: pickedToPreviewMedia(editorImages),
+      stickerBgColor: '#FFFFFF',
+      stickerTextColor: '#000000',
+    }),
+    [title, subtitle, description, stickers, images, editorImages],
+  );
+
   return (
     <EditorShell
       visible={visible}
@@ -100,7 +116,10 @@ export function TextChecklistEditor({
       onSave={() => {
         void onSave();
       }}
-      saving={saving}>
+      saving={saving}
+      previewType="text-checklist"
+      previewLessonId={lessonId}
+      previewData={previewData}>
       <TextField label={t('editor.fieldTitle')} value={title} onChangeText={setTitle} />
       <TextField
         label={t('editor.fieldSubtitle')}

@@ -1,4 +1,4 @@
-import {useEffect, useMemo, useState} from 'react';
+import {useEffect, useMemo, useRef, useState} from 'react';
 import {StyleSheet, Text, View} from 'react-native';
 
 import {colors, radii} from '../../../../shared/config/theme';
@@ -13,6 +13,7 @@ import {
   useDropTargetRegistry,
 } from '../interaction/DraggableChip';
 import {StickyChipPool} from '../interaction/StickyChipPool';
+import {answerFeedback} from '../interaction/answerFeedback';
 import {GapField, splitDataText} from './fillGapsLegacy';
 
 type Props = {data: any};
@@ -27,6 +28,7 @@ export function FillGapsDragExView({data}: Props) {
     isTeacher,
   });
   const {registerRef, hitTestDropTarget} = useDropTargetRegistry();
+  const scopeRef = useRef<View>(null);
 
   const fields: GapField[] = data?.fields || [];
   const fieldsById = useMemo(() => {
@@ -110,6 +112,7 @@ export function FillGapsDragExView({data}: Props) {
     }
     const done = correctIds.map(String).includes(String(field.id));
     const wrong = incorrectIdsMap[String(field.id)];
+    const showWrong = !done && !!wrong;
     return (
       <DropZone
         key={key}
@@ -118,16 +121,24 @@ export function FillGapsDragExView({data}: Props) {
         highlight={selectedId != null && !done}
         style={[
           styles.gap,
-          done && styles.gapOk,
-          (flashBad === String(field.id) || wrong) && styles.gapBad,
+          answerFeedback.slot,
+          done && answerFeedback.ok,
+          (flashBad === String(field.id) || showWrong) && answerFeedback.bad,
         ]}>
         <Text
           onPress={() => {
+            if (done) {
+              return;
+            }
             if (selectedId != null) {
               tryPlace(field.id, selectedId);
             }
           }}
-          style={styles.gapText}>
+          style={[
+            styles.gapText,
+            done && answerFeedback.okText,
+            showWrong && answerFeedback.badText,
+          ]}>
           {done ? chipValue(field) : wrong || '····'}
         </Text>
       </DropZone>
@@ -137,7 +148,7 @@ export function FillGapsDragExView({data}: Props) {
   const bgImages = data?.images?.length ? [data.images[0]] : [];
 
   return (
-    <View style={styles.root}>
+    <View ref={scopeRef} style={styles.root} collapsable={false}>
       <ExHeader
         title={data?.title}
         titleColor={data?.titleColor}
@@ -148,7 +159,7 @@ export function FillGapsDragExView({data}: Props) {
         <ImageGallery images={bgImages} viewType="carousel" />
       )}
       {!!pool.length && (
-        <StickyChipPool>
+        <StickyChipPool scopeRef={scopeRef}>
           {pool.map(f => (
             <DraggableChip
               key={String(f.id)}
@@ -194,13 +205,13 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   gap: {
-    minWidth: 64,
-    backgroundColor: colors.primarySoft,
-    borderRadius: radii.sm,
-    paddingHorizontal: 10,
+    minWidth: 120,
+    minHeight: 44,
+    borderRadius: 999,
+    paddingHorizontal: 12,
     paddingVertical: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  gapOk: {backgroundColor: '#EBFFEE'},
-  gapBad: {backgroundColor: '#FFE5E5'},
-  gapText: {color: colors.text, fontWeight: '600'},
+  gapText: {color: colors.primary, fontWeight: '700'},
 });

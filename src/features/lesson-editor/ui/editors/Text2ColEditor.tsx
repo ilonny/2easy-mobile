@@ -1,4 +1,4 @@
-import {useEffect, useState} from 'react';
+import {useEffect, useMemo, useState} from 'react';
 import {Text, View} from 'react-native';
 
 import {useI18n} from '../../../../shared/i18n';
@@ -15,6 +15,7 @@ import {
   persistExercise,
   resolvePickedAttachments,
   type EditorCommonProps,
+  pickedToPreviewMedia,
 } from './editorShared';
 
 export function Text2ColEditor({
@@ -85,6 +86,21 @@ export function Text2ColEditor({
     }
   };
 
+  const previewData = useMemo(
+    () => ({
+      title,
+      titleColor: TITLE_COLOR,
+      subtitle,
+      description,
+      content,
+      secondContent,
+      images: pickedToPreviewMedia(images),
+      editorImages: pickedToPreviewMedia(editorImages),
+      secondEditorImages: pickedToPreviewMedia(secondEditorImages),
+    }),
+    [title, subtitle, description, content, secondContent, images, editorImages, secondEditorImages],
+  );
+
   return (
     <EditorShell
       visible={visible}
@@ -93,7 +109,10 @@ export function Text2ColEditor({
       onSave={() => {
         void onSave();
       }}
-      saving={saving}>
+      saving={saving}
+      previewType="text-2-col"
+      previewLessonId={lessonId}
+      previewData={previewData}>
       <TextField label={t('editor.fieldTitle')} value={title} onChangeText={setTitle} />
       <TextField
         label={t('editor.fieldSubtitle')}

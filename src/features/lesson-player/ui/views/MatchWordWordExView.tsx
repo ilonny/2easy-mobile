@@ -6,6 +6,7 @@ import {useLessonPlayer} from '../../model/LessonPlayerContext';
 import {useExAnswer} from '../../model/useExAnswer';
 import {ExHeader} from '../ExHeader';
 import {ImageGallery} from '../ImageGallery';
+import {answerFeedback} from '../interaction/answerFeedback';
 
 type Props = {data: any};
 
@@ -24,8 +25,23 @@ function shuffle<T>(arr: T[]): T[] {
   return a;
 }
 
+/** Saved answers often store numeric ids; exercise matches may keep them as strings. */
+const sameId = (
+  a: string | number | undefined | null,
+  b: string | number | undefined | null,
+) => a != null && b != null && String(a) === String(b);
+
+const hasId = (
+  ids: Array<string | number> | undefined,
+  id: string | number | undefined | null,
+) => !!ids?.some(x => sameId(x, id));
+
+const mapVal = (map: Record<string, string> | undefined, id: string | number) =>
+  map?.[String(id)] ?? (map as Record<string | number, string> | undefined)?.[id];
+
 export function MatchWordWordExView({data}: Props) {
-  const {lessonId, studentId, activeStudentId, isTeacher} = useLessonPlayer();
+  const {lessonId, studentId, activeStudentId, isTeacher, isEdit} =
+    useLessonPlayer();
   const {writeAnswer, answers} = useExAnswer({
     lessonId,
     exId: Number(data?.id),
@@ -43,17 +59,22 @@ export function MatchWordWordExView({data}: Props) {
   const [selectedRight, setSelectedRight] = useState<string | number>();
   const [flashWrong, setFlashWrong] = useState<string>();
 
+  /** Site parity: teacher / constructor sees the matching pair on tap. */
+  const showCorrectHint = isTeacher || isEdit;
+
+  /** Stable shuffle of definition order; refresh when pair ids change (preview remounts ids). */
+  const matchIdsKey = matches.map(m => String(m.id)).join('|');
   const rightOrder = useMemo(
     () => shuffle(matches.map(m => m.id)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [data?.id],
+    [matchIdsKey],
   );
 
   useEffect(() => {
     try {
       const raw = answers[String(data?.id)]?.answer;
       if (!raw) return;
-      const parsed = JSON.parse(raw);
+      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
       setCorrectIds(parsed?.correctIds || []);
       setIncorrectIdsMap(parsed?.incorrectIdsMap || {});
     } catch {}
@@ -70,12 +91,12 @@ export function MatchWordWordExView({data}: Props) {
   };
 
   const tryMatch = (leftId: string | number, rightId: string | number) => {
-    const left = matches.find(m => m.id === leftId);
-    const right = matches.find(m => m.id === rightId);
+    const left = matches.find(m => sameId(m.id, leftId));
+    const right = matches.find(m => sameId(m.id, rightId));
     if (!left || !right) return;
 
-    if (leftId === rightId) {
-      const next = correctIds.includes(leftId)
+    if (sameId(leftId, rightId)) {
+      const next = hasId(correctIds, leftId)
         ? correctIds
         : correctIds.concat(leftId);
       setCorrectIds(next);
@@ -95,7 +116,7 @@ export function MatchWordWordExView({data}: Props) {
   };
 
   const onLeft = (id: string | number) => {
-    if (correctIds.includes(id)) return;
+    if (hasId(correctIds, id)) return;
     if (selectedRight !== undefined) {
       tryMatch(id, selectedRight);
       return;
@@ -104,7 +125,7 @@ export function MatchWordWordExView({data}: Props) {
   };
 
   const onRight = (id: string | number) => {
-    if (correctIds.includes(id)) return;
+    if (hasId(correctIds, id)) return;
     if (selectedLeft !== undefined) {
       tryMatch(selectedLeft, id);
       return;
@@ -112,10 +133,14 @@ export function MatchWordWordExView({data}: Props) {
     setSelectedRight(id);
   };
 
-  const remainingLeft = matches.filter(m => !correctIds.includes(m.id));
+  const remainingLeft = matches.filter(m => !hasId(correctIds, m.id));
   const remainingRight = rightOrder
-    .map(id => matches.find(m => m.id === id))
-    .filter((m): m is Match => !!m && !correctIds.includes(m.id));
+    .map(id => matches.find(m => sameId(m.id, id)))
+    .filter((m): m is Match => !!m && !hasId(correctIds, m.id));
+  const incorrectedMatches = matches
+    .filter(m => mapVal(incorrectIdsMap, m.id) && !hasId(correctIds, m.id))
+    .map(m => ({...m, selectedValue: mapVal(incorrectIdsMap, m.id)}));
+  const correctedMatches = matches.filter(m => hasId(correctIds, m.id));
 
   const bgImages = data?.images?.length ? [data.images[0]] : [];
 
@@ -130,47 +155,93 @@ export function MatchWordWordExView({data}: Props) {
       {!!bgImages.length && (
         <ImageGallery images={bgImages} viewType="carousel" />
       )}
-      <View style={styles.cols}>
-        <View style={styles.col}>
-          {remainingLeft.map(m => (
-            <Pressable
-              key={`L-${m.id}`}
-              style={[
-                styles.chip,
-                selectedLeft === m.id && styles.chipOn,
-                flashWrong === String(m.id) && styles.chipBad,
-              ]}
-              onPress={() => onLeft(m.id)}>
-              <Text style={styles.chipText}>{m.value}</Text>
-            </Pressable>
-          ))}
-        </View>
-        <View style={styles.col}>
-          {remainingRight.map(m => (
-            <Pressable
-              key={`R-${m.id}`}
-              style={[
-                styles.chip,
-                styles.chipRight,
-                selectedRight === m.id && styles.chipOn,
-              ]}
-              onPress={() => onRight(m.id)}>
-              <Text style={styles.chipText}>{m.correctValue}</Text>
-            </Pressable>
-          ))}
-        </View>
-      </View>
-      {!!correctIds.length && (
-        <View style={styles.doneBox}>
-          {matches
-            .filter(m => correctIds.includes(m.id))
-            .map(m => (
-              <Text key={`ok-${m.id}`} style={styles.doneText}>
-                {m.value} → {m.correctValue}
-              </Text>
-            ))}
+      {!!(remainingLeft.length || remainingRight.length) && (
+        <View style={styles.cols}>
+          <View style={styles.col}>
+            {remainingLeft.map(m => {
+              const hintOk =
+                showCorrectHint &&
+                selectedRight !== undefined &&
+                sameId(m.id, selectedRight);
+              return (
+                <Pressable
+                  key={`L-${m.id}`}
+                  style={[
+                    styles.chip,
+                    sameId(selectedLeft, m.id) && styles.chipOn,
+                    hintOk && styles.chipHint,
+                    flashWrong === String(m.id) && styles.chipBad,
+                  ]}
+                  onPress={() => onLeft(m.id)}>
+                  <Text
+                    style={[
+                      styles.chipText,
+                      hintOk && answerFeedback.okText,
+                      flashWrong === String(m.id) && answerFeedback.badText,
+                    ]}>
+                    {m.value}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          <View style={styles.col}>
+            {remainingRight.map(m => {
+              const hintOk =
+                showCorrectHint &&
+                selectedLeft !== undefined &&
+                sameId(m.id, selectedLeft);
+              return (
+                <Pressable
+                  key={`R-${m.id}`}
+                  style={[
+                    styles.chip,
+                    styles.chipRight,
+                    sameId(selectedRight, m.id) && styles.chipOn,
+                    hintOk && styles.chipHint,
+                  ]}
+                  onPress={() => onRight(m.id)}>
+                  <Text
+                    style={[
+                      styles.chipText,
+                      hintOk && answerFeedback.okText,
+                    ]}>
+                    {m.correctValue}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
         </View>
       )}
+      {incorrectedMatches.map(m => (
+        <View key={`bad-${m.id}`} style={styles.pairRow}>
+          <View style={[styles.chip, answerFeedback.chipBad, styles.pairChip]}>
+            <Text style={[styles.chipText, answerFeedback.badText]}>
+              {m.value}
+            </Text>
+          </View>
+          <View style={[styles.chip, answerFeedback.chipBad, styles.pairChip]}>
+            <Text style={[styles.chipText, answerFeedback.badText]}>
+              {m.selectedValue}
+            </Text>
+          </View>
+        </View>
+      ))}
+      {correctedMatches.map(m => (
+        <View key={`ok-${m.id}`} style={styles.pairRow}>
+          <View style={[styles.chip, answerFeedback.chipOk, styles.pairChip]}>
+            <Text style={[styles.chipText, answerFeedback.okText]}>
+              {m.value}
+            </Text>
+          </View>
+          <View style={[styles.chip, answerFeedback.chipOk, styles.pairChip]}>
+            <Text style={[styles.chipText, answerFeedback.okText]}>
+              {m.correctValue}
+            </Text>
+          </View>
+        </View>
+      ))}
     </View>
   );
 }
@@ -189,18 +260,20 @@ const styles = StyleSheet.create({
   },
   chipRight: {backgroundColor: '#F3F0FF'},
   chipOn: {borderColor: colors.primary, backgroundColor: '#DDD6FF'},
-  chipBad: {backgroundColor: '#FFE5E5', borderColor: colors.danger},
+  chipHint: {
+    backgroundColor: '#A7F3D0',
+    borderColor: 'rgba(22,163,74,0.95)',
+  },
+  chipBad: {
+    backgroundColor: '#FEE2E2',
+    borderColor: 'rgba(220,38,38,0.75)',
+  },
+  pairRow: {flexDirection: 'row', gap: 10},
+  pairChip: {flex: 1},
   chipText: {
     textAlign: 'center',
     color: colors.primary,
     fontWeight: '600',
     fontSize: 15,
   },
-  doneBox: {
-    backgroundColor: '#EBFFEE',
-    borderRadius: radii.md,
-    padding: 12,
-    gap: 4,
-  },
-  doneText: {color: '#166534', fontWeight: '600'},
 });

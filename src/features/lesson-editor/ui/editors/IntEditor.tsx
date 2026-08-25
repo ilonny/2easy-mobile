@@ -1,4 +1,4 @@
-import {useEffect, useState} from 'react';
+import {useEffect, useMemo, useState} from 'react';
 import {View} from 'react-native';
 
 import {useI18n} from '../../../../shared/i18n';
@@ -14,6 +14,7 @@ import {
   persistExercise,
   resolvePickedAttachments,
   type EditorCommonProps,
+  pickedToPreviewMedia,
 } from './editorShared';
 
 export function IntEditor({
@@ -68,6 +69,18 @@ export function IntEditor({
     }
   };
 
+  const previewData = useMemo(
+    () => ({
+      title,
+      titleColor: TITLE_COLOR,
+      subtitle,
+      description,
+      iframe,
+      images: pickedToPreviewMedia(images),
+    }),
+    [title, subtitle, description, iframe, images],
+  );
+
   return (
     <EditorShell
       visible={visible}
@@ -76,7 +89,10 @@ export function IntEditor({
       onSave={() => {
         void onSave();
       }}
-      saving={saving}>
+      saving={saving}
+      previewType="int"
+      previewLessonId={lessonId}
+      previewData={previewData}>
       <TextField label={t('editor.fieldTitle')} value={title} onChangeText={setTitle} />
       <TextField
         label={t('editor.fieldSubtitle')}

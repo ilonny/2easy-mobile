@@ -1,7 +1,8 @@
-import {useEffect, useMemo, useState} from 'react';
+import {useEffect, useMemo, useRef, useState} from 'react';
 import {StyleSheet, Text, View} from 'react-native';
 
 import {colors, radii} from '../../../../shared/config/theme';
+import {useLayout} from '../../../../shared/lib/layout';
 import {useLessonPlayer} from '../../model/LessonPlayerContext';
 import {useExAnswer} from '../../model/useExAnswer';
 import {ExHeader} from '../ExHeader';
@@ -12,6 +13,7 @@ import {
   useDropTargetRegistry,
 } from '../interaction/DraggableChip';
 import {StickyChipPool} from '../interaction/StickyChipPool';
+import {answerFeedback} from '../interaction/answerFeedback';
 
 type Props = {data: any};
 
@@ -19,6 +21,8 @@ type SortedWord = {word: string; id: string; columnId: string | number};
 type Column = {id: string | number; title?: string; words?: string[]};
 
 export function MatchWordColumnExView({data}: Props) {
+  const {isTablet, isLandscape} = useLayout();
+  const sideBySide = isTablet || isLandscape;
   const {lessonId, studentId, activeStudentId, isTeacher} = useLessonPlayer();
   const {writeAnswer, answers} = useExAnswer({
     lessonId,
@@ -28,6 +32,7 @@ export function MatchWordColumnExView({data}: Props) {
     isTeacher,
   });
   const {registerRef, hitTestDropTarget} = useDropTargetRegistry();
+  const scopeRef = useRef<View>(null);
 
   const columns: Column[] = data?.columns || [];
   const [correctChips, setCorrectChips] = useState<SortedWord[]>([]);
@@ -113,7 +118,7 @@ export function MatchWordColumnExView({data}: Props) {
   const bgImages = data?.images?.length ? [data.images[0]] : [];
 
   return (
-    <View style={styles.root}>
+    <View ref={scopeRef} style={styles.root} collapsable={false}>
       <ExHeader
         title={data?.title}
         titleColor={data?.titleColor}
@@ -124,7 +129,7 @@ export function MatchWordColumnExView({data}: Props) {
         <ImageGallery images={bgImages} viewType="carousel" />
       )}
       {!!pool.length && (
-        <StickyChipPool>
+        <StickyChipPool scopeRef={scopeRef}>
           {pool.map(chip => (
             <DraggableChip
               key={chip.id}
@@ -138,10 +143,13 @@ export function MatchWordColumnExView({data}: Props) {
           ))}
         </StickyChipPool>
       )}
-      <View style={styles.columns}>
+      <View style={[styles.columns, sideBySide && styles.columnsRow]}>
         {columns.map(col => {
           const placed = correctChips.filter(
             c => String(c.columnId) === String(col.id),
+          );
+          const wrongWords = (incorrectIdsMap[String(col.id)] || []).filter(
+            word => !placed.some(p => p.word === word),
           );
           return (
             <DropZone
@@ -151,7 +159,8 @@ export function MatchWordColumnExView({data}: Props) {
               highlight={!!selected}
               style={[
                 styles.column,
-                flashCol === String(col.id) && styles.columnBad,
+                sideBySide && styles.columnFlex,
+                flashCol === String(col.id) && answerFeedback.bad,
                 selected && styles.columnActive,
               ]}>
               <Text
@@ -164,11 +173,20 @@ export function MatchWordColumnExView({data}: Props) {
                 {col.title || 'Column'}
               </Text>
               {placed.map(p => (
-                <Text key={p.id} style={styles.placed}>
-                  {p.word}
-                </Text>
+                <View key={p.id} style={answerFeedback.chipOk}>
+                  <Text style={[styles.placedText, answerFeedback.okText]}>
+                    {p.word}
+                  </Text>
+                </View>
               ))}
-              {!placed.length && (
+              {wrongWords.map(word => (
+                <View key={`bad-${col.id}-${word}`} style={answerFeedback.chipBad}>
+                  <Text style={[styles.placedText, answerFeedback.badText]}>
+                    {word}
+                  </Text>
+                </View>
+              ))}
+              {!placed.length && !wrongWords.length && (
                 <Text
                   style={styles.hint}
                   onPress={() => {
@@ -190,6 +208,10 @@ export function MatchWordColumnExView({data}: Props) {
 const styles = StyleSheet.create({
   root: {gap: 12, overflow: 'visible'},
   columns: {gap: 10},
+  columnsRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+  },
   column: {
     minHeight: 90,
     backgroundColor: colors.primarySoft,
@@ -199,22 +221,20 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
     gap: 6,
   },
+  columnFlex: {
+    flex: 1,
+    minWidth: 0,
+  },
   columnActive: {borderColor: colors.primary},
-  columnBad: {backgroundColor: '#FFE5E5', borderColor: colors.danger},
   colTitle: {
     fontWeight: '700',
     color: colors.primary,
     textAlign: 'center',
     marginBottom: 4,
   },
-  placed: {
+  placedText: {
     textAlign: 'center',
-    color: '#166534',
-    fontWeight: '600',
-    backgroundColor: '#EBFFEE',
-    borderRadius: 8,
-    paddingVertical: 6,
-    overflow: 'visible',
+    fontSize: 15,
   },
   hint: {textAlign: 'center', color: colors.textSecondary},
 });

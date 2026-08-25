@@ -1,6 +1,7 @@
 import {Image, StyleSheet, View} from 'react-native';
 
 import {colors, radii} from '../../../../shared/config/theme';
+import {useLayout} from '../../../../shared/lib/layout';
 import {ExHeader} from '../ExHeader';
 import {HtmlContent} from '../HtmlContent';
 import {ImageGallery} from '../ImageGallery';
@@ -29,6 +30,8 @@ function Col({
 }
 
 export function Text2ColExView({data}: Props) {
+  const {isTablet, isLandscape} = useLayout();
+  const sideBySide = isTablet || isLandscape;
   const bgImages = data?.images?.length ? [data.images[0]] : [];
 
   return (
@@ -42,7 +45,7 @@ export function Text2ColExView({data}: Props) {
       {!!bgImages.length && (
         <ImageGallery images={bgImages} viewType="carousel" />
       )}
-      <View style={styles.cols}>
+      <View style={[styles.cols, sideBySide && styles.colsRow]}>
         <Col html={data?.content} image={data?.editorImages?.[0]} />
         <Col
           html={data?.secondContent}
@@ -56,11 +59,13 @@ export function Text2ColExView({data}: Props) {
 const styles = StyleSheet.create({
   root: {gap: 12},
   cols: {gap: 12},
+  colsRow: {flexDirection: 'row', alignItems: 'flex-start'},
   col: {
     backgroundColor: colors.white,
     borderRadius: radii.lg,
     padding: 14,
     flex: 1,
+    minWidth: 0,
   },
   editorImg: {
     width: '100%',

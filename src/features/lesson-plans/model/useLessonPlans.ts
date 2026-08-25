@@ -3,17 +3,33 @@ import {useCallback, useEffect, useMemo, useState} from 'react';
 import {useAuth} from '../../../entities/session';
 import {
   LEVEL_FILTERS,
+  TWO_EASY_USER_ID,
   matchesLevelFilter,
   matchesSearch,
   type Lesson,
   type LevelFilter,
   type LessonsTab,
 } from '../../../entities/lesson';
+import {fetchCourses, type Course} from '../api/coursesApi';
 import {fetchPublicLessons, fetchSecureLessons} from '../api/lessonsApi';
+
+function matchesCourseSearch(course: Course, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) {
+    return true;
+  }
+  return (
+    course.title?.toLowerCase().includes(q) ||
+    course.description?.toLowerCase().includes(q) ||
+    course.tags?.toLowerCase().includes(q) ||
+    false
+  );
+}
 
 export function useLessonPlans() {
   const {isAuthorized, authIsLoading} = useAuth();
   const [lessons, setLessons] = useState<Lesson[]>([]);
+  const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
@@ -24,16 +40,18 @@ export function useLessonPlans() {
     setLoading(true);
     setError('');
     try {
-      const res = isAuthorized
-        ? await fetchSecureLessons()
-        : await fetchPublicLessons();
+      const [lessonsRes, coursesList] = await Promise.all([
+        isAuthorized ? fetchSecureLessons() : fetchPublicLessons(),
+        fetchCourses({isSecure: isAuthorized}).catch(() => [] as Course[]),
+      ]);
 
-      if (res.success === false) {
-        setError(res.message || 'Не удалось загрузить уроки');
-        return;
+      if (lessonsRes.success === false) {
+        setError(lessonsRes.message || 'Не удалось загрузить уроки');
+        setLessons([]);
+      } else {
+        setLessons(lessonsRes.lessons || []);
       }
-
-      setLessons(res.lessons || []);
+      setCourses(coursesList);
     } catch {
       setError('Не удалось загрузить уроки');
     } finally {
@@ -49,23 +67,62 @@ export function useLessonPlans() {
     void load();
   }, [authIsLoading, isAuthorized, load]);
 
+  const hasMyCourses = useMemo(
+    () => courses.some(c => Number(c.user_id) !== TWO_EASY_USER_ID),
+    [courses],
+  );
+
+  const hasTwoEasyCourses = useMemo(
+    () => courses.some(c => Number(c.user_id) === TWO_EASY_USER_ID),
+    [courses],
+  );
+
+  useEffect(() => {
+    if (tab === 'myCourses' && !hasMyCourses) {
+      setTab(isAuthorized ? 'my' : 'twoEasy');
+    } else if (tab === 'twoEasyCourses' && !hasTwoEasyCourses) {
+      setTab(isAuthorized ? 'my' : 'twoEasy');
+    }
+  }, [tab, hasMyCourses, hasTwoEasyCourses, isAuthorized]);
+
+  const isCoursesTab = tab === 'myCourses' || tab === 'twoEasyCourses';
+
   const visibleLessons = useMemo(() => {
+    if (isCoursesTab) {
+      return [] as Lesson[];
+    }
     let list = lessons;
     if (isAuthorized) {
       list =
         tab === 'my'
-          ? lessons.filter(lesson => lesson.user_id !== 1)
-          : lessons.filter(lesson => lesson.user_id === 1);
+          ? lessons.filter(lesson => Number(lesson.user_id) !== TWO_EASY_USER_ID)
+          : lessons.filter(lesson => Number(lesson.user_id) === TWO_EASY_USER_ID);
     }
 
     return list.filter(
       lesson =>
         matchesLevelFilter(lesson, levelFilter) && matchesSearch(lesson, search),
     );
-  }, [isAuthorized, lessons, tab, levelFilter, search]);
+  }, [isAuthorized, lessons, tab, levelFilter, search, isCoursesTab]);
+
+  const visibleCourses = useMemo(() => {
+    if (!isCoursesTab) {
+      return [] as Course[];
+    }
+    const list =
+      tab === 'myCourses'
+        ? courses.filter(c => Number(c.user_id) !== TWO_EASY_USER_ID)
+        : courses.filter(c => Number(c.user_id) === TWO_EASY_USER_ID);
+
+    return list.filter(course => matchesCourseSearch(course, search));
+  }, [courses, tab, search, isCoursesTab]);
 
   return {
     lessons: visibleLessons,
+    courses: visibleCourses,
+    isCoursesTab,
+    hasMyCourses,
+    hasTwoEasyCourses,
     loading: loading || authIsLoading,
     error,
     search,

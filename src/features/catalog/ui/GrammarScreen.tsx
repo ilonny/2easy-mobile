@@ -161,10 +161,10 @@ export function GrammarScreen() {
           renderItem={({item}) => (
             <View style={[styles.gridItem, {marginBottom: gap}]}>
               <LessonCard
-                lesson={item}
-                onPress={lesson =>
+                item={item}
+                onPress={() =>
                   navigation.navigate('LessonViewer', {
-                    lessonId: lesson.id,
+                    lessonId: item.id,
                     from: 'Grammar',
                   })
                 }

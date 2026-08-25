@@ -35,21 +35,31 @@ export function AppSidebar({visible, onClose}: Props) {
       animationType="fade"
       transparent
       onRequestClose={onClose}>
-      <View style={styles.root}>
-        <Pressable style={styles.backdrop} onPress={onClose} />
+      <View style={styles.root} pointerEvents="box-none">
+        <Pressable
+          style={[styles.backdrop, {top: insets.top + 48}]}
+          onPress={onClose}
+        />
         <View
           style={[
             styles.panel,
             {
-              paddingTop: insets.top + 16,
+              marginTop: insets.top + 48,
+              paddingTop: 12,
               paddingBottom: insets.bottom + 24,
             },
           ]}>
           <View style={styles.panelHeader}>
-            <Text style={styles.panelTitle}>{t('header.menu')}</Text>
-            <Pressable onPress={onClose} hitSlop={10}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t('common.close')}
+              onPress={onClose}
+              hitSlop={10}
+              style={styles.closeBtn}>
               <Text style={styles.close}>✕</Text>
             </Pressable>
+            <Text style={styles.panelTitle}>{t('header.menu')}</Text>
+            <View style={styles.closeBtn} />
           </View>
 
           {APP_NAV_ITEMS.map(item => (
@@ -95,16 +105,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 12,
+    minHeight: 44,
   },
   panelTitle: {
     fontSize: 18,
     fontWeight: '800',
     color: colors.text,
   },
+  closeBtn: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   close: {
-    fontSize: 20,
-    color: colors.muted,
-    paddingHorizontal: 4,
+    fontSize: 22,
+    color: colors.text,
+    fontWeight: '600',
   },
   item: {
     paddingVertical: 14,

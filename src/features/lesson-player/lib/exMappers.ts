@@ -42,10 +42,16 @@ const mapTextDefaultExData = (data: string) => {
   const parsed = parse(data);
   if (parsed?.bgAttachments) {
     parsed.images = mapAttachments(parsed.bgAttachments as Attachment[]);
+  } else if (Array.isArray(parsed?.images)) {
+    parsed.images = mapAttachments(parsed.images as Attachment[]);
   }
   if (parsed?.editorAttachments) {
     parsed.editorImages = mapAttachments(
       parsed.editorAttachments as Attachment[],
+    );
+  } else if (Array.isArray(parsed?.editorImages)) {
+    parsed.editorImages = mapAttachments(
+      parsed.editorImages as Attachment[],
     );
   }
   return parsed;
@@ -57,6 +63,10 @@ const mapText2ColExData = (data: string) => {
     parsed.secondEditorImages = mapAttachments(
       parsed.secondEditorAttachments as Attachment[],
     );
+  } else if (Array.isArray(parsed?.secondEditorImages)) {
+    parsed.secondEditorImages = mapAttachments(
+      parsed.secondEditorImages as Attachment[],
+    );
   }
   return parsed;
 };
@@ -65,6 +75,8 @@ const mapTextStickerExData = (data: string) => {
   const parsed = parse(data);
   if (parsed?.bgAttachments) {
     parsed.images = mapAttachments(parsed.bgAttachments as Attachment[]);
+  } else if (Array.isArray(parsed?.images)) {
+    parsed.images = mapAttachments(parsed.images as Attachment[]);
   }
   return parsed;
 };
@@ -77,6 +89,8 @@ const mapFillGapsSelectEx = (data: string) => {
   const parsed = parse(data);
   if (parsed?.bgAttachments) {
     parsed.images = mapAttachments(parsed.bgAttachments as Attachment[]);
+  } else if (Array.isArray(parsed?.images)) {
+    parsed.images = mapAttachments(parsed.images as Attachment[]);
   }
   return parsed;
 };

@@ -30,7 +30,10 @@ import {
 
 type Props = {
   visible: boolean;
-  lesson: LessonDetail | null;
+  lesson: Pick<
+    LessonDetail,
+    'id' | 'title' | 'description' | 'tags' | 'image_path'
+  > | null;
   onClose: () => void;
   onSaved: () => void;
 };

@@ -23,6 +23,7 @@ import {AppDialog, Breadcrumbs, Button} from '../../../shared/ui';
 import {AppHeader} from '../../app-shell';
 import {fetchSecureLessons} from '../../lesson-plans/api/lessonsApi';
 import {LessonCard} from '../../lesson-plans/ui/LessonCard';
+import {saveStartLessonSelectedIds} from '../../lesson-player/lib/startLessonSelection';
 import {
   deleteStudent,
   fetchStudentInfo,
@@ -225,15 +226,18 @@ export function StudentCabinetScreen({studentId}: Props) {
           renderItem={({item}) => (
             <View style={styles.gridItem}>
               <LessonCard
-                lesson={item}
-                onPress={lesson => {
+                item={item}
+                onPress={() => {
                   if (!(isTeacher || isStudentSelf)) {
                     return;
+                  }
+                  if (isTeacher) {
+                    void saveStartLessonSelectedIds([studentId]);
                   }
                   navigation.getParent()?.navigate('Lessons', {
                     screen: 'LessonViewer',
                     params: {
-                      lessonId: lesson.id,
+                      lessonId: item.id,
                       from: 'Lessons',
                       studentId: isTeacher ? studentId : undefined,
                     },

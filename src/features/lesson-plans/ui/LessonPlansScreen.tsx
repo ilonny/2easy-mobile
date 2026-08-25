@@ -8,6 +8,7 @@ import {
   Platform,
   Pressable,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -18,30 +19,51 @@ import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
 import {useAuth} from '../../../entities/session';
-import type {Lesson} from '../../../entities/lesson';
+import {TWO_EASY_USER_ID, type Lesson} from '../../../entities/lesson';
 import type {RootStackParamList} from '../../../shared/navigation/types';
 import {useI18n} from '../../../shared/i18n';
 import {colors, radii} from '../../../shared/config/theme';
 import {useLayout} from '../../../shared/lib/layout';
+import {
+  ActionMenuModal,
+  AppDialog,
+  type ActionMenuItem,
+} from '../../../shared/ui';
+import {useSubscription} from '../../home/model/useSubscription';
+import {
+  copyLesson,
+  deleteLesson,
+} from '../../lesson-player/api/lessonApi';
+import {EditLessonMetaModal, CreateLessonButton} from '../../lesson-editor';
+import {AppHeader} from '../../app-shell';
+import type {Course} from '../api/coursesApi';
 import {useLessonPlans} from '../model/useLessonPlans';
+import {AddLessonToCourseModal} from './AddLessonToCourseModal';
+import {AttachLessonToStudentsModal} from './AttachLessonToStudentsModal';
 import {LessonCard} from './LessonCard';
 import {TryNowModal} from './TryNowModal';
-import {AppHeader} from '../../app-shell';
-import {CreateLessonButton} from '../../lesson-editor';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
-const AnimatedFlatList = Animated.createAnimatedComponent(FlatList<Lesson>);
+type CatalogRow = Lesson | Course;
+
+const AnimatedFlatList = Animated.createAnimatedComponent(FlatList<CatalogRow>);
 
 export function LessonPlansScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<Nav>();
   const {isAuthorized, profile} = useAuth();
+  const {hasSubscription} = useSubscription();
   const {t} = useI18n();
   const isTeacher = profile?.role_id === 1 || profile?.role_id === 2;
+  const profileId = Number(profile?.id || profile?.user_id || 0);
   const {isTablet, pageGutter, pageContentMaxWidth} = useLayout();
   const {
     lessons,
+    courses,
+    isCoursesTab,
+    hasMyCourses,
+    hasTwoEasyCourses,
     loading,
     error,
     search,
@@ -58,11 +80,22 @@ export function LessonPlansScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [headerHeight, setHeaderHeight] = useState(0);
 
+  const [menuLesson, setMenuLesson] = useState<Lesson | null>(null);
+  const [editLesson, setEditLesson] = useState<Lesson | null>(null);
+  const [attachLesson, setAttachLesson] = useState<Lesson | null>(null);
+  const [courseLesson, setCourseLesson] = useState<Lesson | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Lesson | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [notice, setNotice] = useState('');
+
   const headerTranslate = useRef(new Animated.Value(0)).current;
   const lastScrollY = useRef(0);
   const headerVisible = useRef(true);
 
-  const listData = useMemo(() => lessons, [lessons]);
+  const listData = useMemo(
+    () => (isCoursesTab ? courses : lessons),
+    [isCoursesTab, courses, lessons],
+  );
   const gap = isTablet ? 16 : 12;
 
   const showHeader = useCallback(() => {
@@ -130,6 +163,100 @@ export function LessonPlansScreen() {
     });
   };
 
+  const onPressCourse = (course: Course) => {
+    if (!isAuthorized) {
+      setTryNowVisible(true);
+      return;
+    }
+    navigation.navigate('Course', {courseId: course.id});
+  };
+
+  const onMenuPress = (lesson: Lesson) => {
+    if (!isAuthorized) {
+      setTryNowVisible(true);
+      return;
+    }
+    if (!hasSubscription) {
+      setNotice(t('lessons.needSubscriptionForActions'));
+      return;
+    }
+    setMenuLesson(lesson);
+  };
+
+  const menuItems: ActionMenuItem[] = useMemo(() => {
+    if (!menuLesson) {
+      return [];
+    }
+    const own =
+      profileId > 0 && Number(menuLesson.user_id) === profileId;
+    const twoEasy = Number(menuLesson.user_id) === TWO_EASY_USER_ID;
+    const lesson = menuLesson;
+    const items: ActionMenuItem[] = [];
+    if (own) {
+      items.push({
+        label: t('lessons.edit'),
+        onPress: () => setEditLesson(lesson),
+      });
+    }
+    items.push({
+      label: t('lessons.attachToStudent'),
+      onPress: () => setAttachLesson(lesson),
+    });
+    items.push({
+      label: t('lessons.addToCourse'),
+      onPress: () => setCourseLesson(lesson),
+    });
+    items.push({
+      label: twoEasy ? t('lessons.addToMyLessons') : t('lessons.copyLesson'),
+      onPress: () => {
+        void (async () => {
+          try {
+            const res = await copyLesson(lesson.id);
+            if (res.success === false) {
+              setNotice(t('lessons.lessonCopyFailed'));
+              return;
+            }
+            setNotice(res.successMessage || t('lessons.lessonCopied'));
+            await reload();
+          } catch {
+            setNotice(t('lessons.lessonCopyFailed'));
+          }
+        })();
+      },
+    });
+    if (own) {
+      items.push({
+        label: t('common.delete'),
+        destructive: true,
+        onPress: () => setDeleteTarget(lesson),
+      });
+    }
+    return items;
+  }, [menuLesson, profileId, reload, t]);
+
+  const onConfirmDelete = async () => {
+    if (!deleteTarget) {
+      return;
+    }
+    setDeleting(true);
+    try {
+      const res = await deleteLesson(deleteTarget.id);
+      if (res.success === false) {
+        setNotice(res.message || t('lessons.deleteLessonFailed'));
+        return;
+      }
+      setDeleteTarget(null);
+      setNotice(t('lessons.deleteLessonSuccess'));
+      await reload();
+    } catch {
+      setNotice(t('lessons.deleteLessonFailed'));
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const showMenu = isAuthorized && isTeacher && !isCoursesTab;
+
   const listPaddingTop = headerHeight > 0 ? headerHeight + 8 : insets.top + 120;
 
   return (
@@ -156,28 +283,98 @@ export function LessonPlansScreen() {
             {t('lessonPlans.title')}
           </Text>
 
-          {isAuthorized && (
-            <View style={styles.tabs}>
-              <Pressable
-                onPress={() => setTab('my')}
-                style={[styles.tab, tab === 'my' && styles.tabActive]}>
-                <Text style={[styles.tabLabel, tab === 'my' && styles.tabLabelActive]}>
-                  {t('lessonPlans.myLessons')}
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={() => setTab('twoEasy')}
-                style={[styles.tab, tab === 'twoEasy' && styles.tabActive]}>
-                <Text
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.tabs}
+            style={styles.tabsScroll}>
+            {isAuthorized ? (
+              <>
+                <Pressable
+                  onPress={() => setTab('my')}
+                  style={[styles.tab, tab === 'my' && styles.tabActive]}>
+                  <Text
+                    style={[
+                      styles.tabLabel,
+                      tab === 'my' && styles.tabLabelActive,
+                    ]}>
+                    {t('lessonPlans.myLessons')}
+                  </Text>
+                </Pressable>
+                {hasMyCourses ? (
+                  <Pressable
+                    onPress={() => setTab('myCourses')}
+                    style={[
+                      styles.tab,
+                      tab === 'myCourses' && styles.tabActive,
+                    ]}>
+                    <Text
+                      style={[
+                        styles.tabLabel,
+                        tab === 'myCourses' && styles.tabLabelActive,
+                      ]}>
+                      {t('lessonPlans.myCourses')}
+                    </Text>
+                  </Pressable>
+                ) : null}
+                <Pressable
+                  onPress={() => setTab('twoEasy')}
+                  style={[styles.tab, tab === 'twoEasy' && styles.tabActive]}>
+                  <Text
+                    style={[
+                      styles.tabLabel,
+                      tab === 'twoEasy' && styles.tabLabelActive,
+                    ]}>
+                    {t('lessonPlans.twoEasyLessons')}
+                  </Text>
+                </Pressable>
+                {hasTwoEasyCourses ? (
+                  <Pressable
+                    onPress={() => setTab('twoEasyCourses')}
+                    style={[
+                      styles.tab,
+                      tab === 'twoEasyCourses' && styles.tabActive,
+                    ]}>
+                    <Text
+                      style={[
+                        styles.tabLabel,
+                        tab === 'twoEasyCourses' && styles.tabLabelActive,
+                      ]}>
+                      {t('lessonPlans.twoEasyCourses')}
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </>
+            ) : hasTwoEasyCourses ? (
+              <>
+                <Pressable
+                  onPress={() => setTab('twoEasy')}
+                  style={[styles.tab, tab === 'twoEasy' && styles.tabActive]}>
+                  <Text
+                    style={[
+                      styles.tabLabel,
+                      tab === 'twoEasy' && styles.tabLabelActive,
+                    ]}>
+                    {t('lessonPlans.twoEasyLessons')}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => setTab('twoEasyCourses')}
                   style={[
-                    styles.tabLabel,
-                    tab === 'twoEasy' && styles.tabLabelActive,
+                    styles.tab,
+                    tab === 'twoEasyCourses' && styles.tabActive,
                   ]}>
-                  {t('lessonPlans.twoEasyLessons')}
-                </Text>
-              </Pressable>
-            </View>
-          )}
+                  <Text
+                    style={[
+                      styles.tabLabel,
+                      tab === 'twoEasyCourses' && styles.tabLabelActive,
+                    ]}>
+                    {t('lessonPlans.twoEasyCourses')}
+                  </Text>
+                </Pressable>
+              </>
+            ) : null}
+          </ScrollView>
 
           {isAuthorized && tab === 'my' ? (
             <View style={styles.createWrap}>
@@ -188,13 +385,17 @@ export function LessonPlansScreen() {
           <TextInput
             value={search}
             onChangeText={setSearch}
-            placeholder={t('lessonPlans.searchPlaceholder')}
+            placeholder={
+              isCoursesTab
+                ? t('lessonPlans.searchCoursesPlaceholder')
+                : t('lessonPlans.searchPlaceholder')
+            }
             placeholderTextColor={colors.muted}
             style={[styles.search, isTablet && styles.searchTablet]}
             autoCorrect={false}
           />
 
-          {(tab === 'twoEasy' || !isAuthorized) && (
+          {(tab === 'twoEasy' || (!isAuthorized && !isCoursesTab)) && (
             <View style={styles.filters}>
               {levelFilters.map(filter => {
                 const active = levelFilter === filter;
@@ -204,7 +405,10 @@ export function LessonPlansScreen() {
                     onPress={() => setLevelFilter(filter)}
                     style={[styles.chip, active && styles.chipActive]}>
                     <Text
-                      style={[styles.chipLabel, active && styles.chipLabelActive]}>
+                      style={[
+                        styles.chipLabel,
+                        active && styles.chipLabelActive,
+                      ]}>
                       {filter === 'All lessons'
                         ? t('lessonPlans.allLessons')
                         : filter}
@@ -236,7 +440,9 @@ export function LessonPlansScreen() {
         ) : (
           <AnimatedFlatList
             data={listData}
-            keyExtractor={item => String(item.id)}
+            keyExtractor={item =>
+              `${isCoursesTab ? 'c' : 'l'}-${item.id}`
+            }
             numColumns={2}
             columnWrapperStyle={[styles.row, {gap}]}
             contentContainerStyle={[
@@ -245,11 +451,29 @@ export function LessonPlansScreen() {
             ]}
             renderItem={({item}) => (
               <View style={[styles.gridItem, {marginBottom: gap}]}>
-                <LessonCard lesson={item} onPress={onPressLesson} />
+                <LessonCard
+                  item={item}
+                  onPress={() => {
+                    if (isCoursesTab) {
+                      onPressCourse(item as Course);
+                    } else {
+                      onPressLesson(item as Lesson);
+                    }
+                  }}
+                  onMenuPress={
+                    showMenu
+                      ? () => onMenuPress(item as Lesson)
+                      : undefined
+                  }
+                />
               </View>
             )}
             ListEmptyComponent={
-              <Text style={styles.empty}>{t('lessonPlans.empty')}</Text>
+              <Text style={styles.empty}>
+                {isCoursesTab
+                  ? t('lessonPlans.emptyCourses')
+                  : t('lessonPlans.empty')}
+              </Text>
             }
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
@@ -281,6 +505,108 @@ export function LessonPlansScreen() {
           navigation.navigate('Registration');
         }}
       />
+
+      <ActionMenuModal
+        visible={!!menuLesson}
+        title={menuLesson?.title}
+        items={menuItems}
+        cancelLabel={t('common.cancel')}
+        onClose={() => setMenuLesson(null)}
+      />
+
+      <EditLessonMetaModal
+        visible={!!editLesson}
+        lesson={editLesson}
+        onClose={() => setEditLesson(null)}
+        onSaved={() => {
+          setEditLesson(null);
+          void reload();
+        }}
+      />
+
+      {!!attachLesson && (
+        <AttachLessonToStudentsModal
+          visible
+          lessonId={attachLesson.id}
+          lessonTitle={attachLesson.title}
+          onClose={() => setAttachLesson(null)}
+          onAttached={() => {
+            setAttachLesson(null);
+            setNotice(t('lessons.attachSuccess'));
+          }}
+        />
+      )}
+
+      {!!courseLesson && (
+        <AddLessonToCourseModal
+          visible
+          lessonId={courseLesson.id}
+          lessonTitle={courseLesson.title}
+          onClose={() => setCourseLesson(null)}
+          onAdded={() => {
+            setCourseLesson(null);
+            setNotice(t('lessons.addToCourseSuccess'));
+          }}
+        />
+      )}
+
+      <AppDialog
+        visible={!!deleteTarget}
+        title={t('lessons.deleteLessonConfirm')}
+        message={t('lessons.deleteLessonConfirmMessage').replace(
+          '{{title}}',
+          deleteTarget?.title || '',
+        )}
+        onClose={() => {
+          if (!deleting) {
+            setDeleteTarget(null);
+          }
+        }}
+        actions={[
+          {
+            label: t('common.delete'),
+            variant: 'danger',
+            loading: deleting,
+            onPress: () => {
+              void onConfirmDelete();
+            },
+          },
+          {
+            label: t('common.cancel'),
+            variant: 'ghost',
+            onPress: () => setDeleteTarget(null),
+          },
+        ]}
+      />
+
+      <AppDialog
+        visible={!!notice}
+        message={notice}
+        onClose={() => setNotice('')}
+        actions={
+          notice === t('lessons.needSubscriptionForActions')
+            ? [
+                {
+                  label: t('lessons.chooseTariff'),
+                  onPress: () => {
+                    setNotice('');
+                    navigation.navigate('Subscription');
+                  },
+                },
+                {
+                  label: t('common.close'),
+                  variant: 'ghost',
+                  onPress: () => setNotice(''),
+                },
+              ]
+            : [
+                {
+                  label: t('common.close'),
+                  onPress: () => setNotice(''),
+                },
+              ]
+        }
+      />
     </View>
   );
 }
@@ -295,7 +621,8 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    zIndex: 20,
+    zIndex: 200,
+    elevation: 24,
     backgroundColor: 'rgba(247, 245, 255, 0.96)',
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
@@ -337,10 +664,14 @@ const styles = StyleSheet.create({
   titleTablet: {
     fontSize: 34,
   },
+  tabsScroll: {
+    marginBottom: 12,
+    flexGrow: 0,
+  },
   tabs: {
     flexDirection: 'row',
     gap: 8,
-    marginBottom: 12,
+    paddingRight: 8,
   },
   tab: {
     borderRadius: 999,
@@ -405,6 +736,8 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
     alignSelf: 'center',
+    zIndex: 0,
+    elevation: 0,
   },
   listContent: {
     flexGrow: 1,

@@ -4,6 +4,7 @@ import {colors, radii} from '../../../../shared/config/theme';
 import {useLessonPlayer} from '../../model/LessonPlayerContext';
 import {useExAnswer} from '../../model/useExAnswer';
 import {ExHeader} from '../ExHeader';
+import {HtmlContent, looksLikeHtml} from '../HtmlContent';
 import {ImageGallery} from '../ImageGallery';
 
 type Props = {data: any};
@@ -58,7 +59,13 @@ export function TextChecklistExView({data}: Props) {
                 <View style={[styles.box, checked && styles.boxOn]}>
                   {checked ? <Text style={styles.check}>✓</Text> : null}
                 </View>
-                <Text style={styles.label}>{sticker}</Text>
+                {looksLikeHtml(sticker) ? (
+                  <View style={styles.labelHtml}>
+                    <HtmlContent html={sticker} />
+                  </View>
+                ) : (
+                  <Text style={styles.label}>{sticker}</Text>
+                )}
               </Pressable>
             );
           })}
@@ -98,6 +105,7 @@ const styles = StyleSheet.create({
   boxOn: {backgroundColor: colors.primary},
   check: {color: '#fff', fontWeight: '800', fontSize: 14},
   label: {flex: 1, fontSize: 16, color: colors.text, lineHeight: 22},
+  labelHtml: {flex: 1},
   sideImg: {
     width: '100%',
     height: 200,

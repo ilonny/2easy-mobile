@@ -1,6 +1,11 @@
-import {useState} from 'react';
+import {useMemo, useState} from 'react';
 import {Image, Pressable, StyleSheet, Text, View} from 'react-native';
-import {useNavigation} from '@react-navigation/native';
+import {
+  useNavigation,
+  useNavigationState,
+  type NavigationState,
+  type PartialState,
+} from '@react-navigation/native';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 
 import {useAuth} from '../../../entities/session';
@@ -17,6 +22,34 @@ type Props = {
   style?: object;
 };
 
+/** Tab roots / guest home — show menu (or empty slot for students). */
+const MAIN_ROUTE_NAMES = new Set([
+  'LessonPlans',
+  'StudentsList',
+  'Profile',
+  'Home',
+  'MainTabs',
+  'Lessons',
+  'Students',
+]);
+
+function getFocusedRouteName(
+  state?: NavigationState | PartialState<NavigationState>,
+): string | undefined {
+  if (!state || !('routes' in state) || !state.routes?.length) {
+    return undefined;
+  }
+  const index = state.index ?? state.routes.length - 1;
+  const route = state.routes[index];
+  if (!route) {
+    return undefined;
+  }
+  if (route.state) {
+    return getFocusedRouteName(route.state);
+  }
+  return route.name;
+}
+
 function MenuIcon() {
   return (
     <View style={styles.menuIcon} accessibilityElementsHidden>
@@ -27,12 +60,45 @@ function MenuIcon() {
   );
 }
 
+function CloseIcon() {
+  return (
+    <View style={styles.closeIcon} accessibilityElementsHidden>
+      <View style={[styles.closeLine, styles.closeLineA]} />
+      <View style={[styles.closeLine, styles.closeLineB]} />
+    </View>
+  );
+}
+
+function ChevronLeftIcon() {
+  return (
+    <View style={styles.chevronWrap} accessibilityElementsHidden>
+      <View style={styles.chevron} />
+    </View>
+  );
+}
+
 export function AppHeader({style}: Props) {
   const navigation = useNavigation<Nav>();
   const {isAuthorized, profile} = useAuth();
   const {t} = useI18n();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const isStudent = !!profile?.isStudent;
+
+  const focusedRoute = useNavigationState(state => getFocusedRouteName(state));
+  const isMainScreen = useMemo(() => {
+    if (!focusedRoute) {
+      return true;
+    }
+    return MAIN_ROUTE_NAMES.has(focusedRoute);
+  }, [focusedRoute]);
+
+  const onBack = () => {
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+      return;
+    }
+    resetToRoute(navigation, isStudent ? 'Students' : 'Lessons');
+  };
 
   if (!isAuthorized) {
     return (
@@ -46,21 +112,32 @@ export function AppHeader({style}: Props) {
     );
   }
 
+  const leftControl = !isMainScreen ? (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={t('common.back')}
+      hitSlop={8}
+      onPress={onBack}
+      style={styles.menuButton}>
+      <ChevronLeftIcon />
+    </Pressable>
+  ) : isStudent ? (
+    <View style={styles.menuButton} />
+  ) : (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={sidebarOpen ? t('common.close') : t('header.menu')}
+      hitSlop={8}
+      onPress={() => setSidebarOpen(current => !current)}
+      style={styles.menuButton}>
+      {sidebarOpen ? <CloseIcon /> : <MenuIcon />}
+    </Pressable>
+  );
+
   return (
     <>
       <View style={[styles.rowAuth, style]}>
-        {isStudent ? (
-          <View style={styles.menuButton} />
-        ) : (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={t('header.menu')}
-            hitSlop={8}
-            onPress={() => setSidebarOpen(true)}
-            style={styles.menuButton}>
-            <MenuIcon />
-          </Pressable>
-        )}
+        {leftControl}
 
         <Pressable
           onPress={() =>
@@ -83,8 +160,11 @@ export function AppHeader({style}: Props) {
         </View>
       </View>
 
-      {!isStudent ? (
-        <AppSidebar visible={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      {!isStudent && isMainScreen ? (
+        <AppSidebar
+          visible={sidebarOpen}
+          onClose={() => setSidebarOpen(false)}
+        />
       ) : null}
     </>
   );
@@ -137,6 +217,40 @@ const styles = StyleSheet.create({
     width: 16,
     borderRadius: 2,
     backgroundColor: '#1A1A1A',
+  },
+  closeIcon: {
+    width: 22,
+    height: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  closeLine: {
+    position: 'absolute',
+    width: 22,
+    height: 2.5,
+    borderRadius: 2,
+    backgroundColor: '#1A1A1A',
+  },
+  closeLineA: {
+    transform: [{rotate: '45deg'}],
+  },
+  closeLineB: {
+    transform: [{rotate: '-45deg'}],
+  },
+  chevronWrap: {
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chevron: {
+    width: 12,
+    height: 12,
+    borderLeftWidth: 2.5,
+    borderBottomWidth: 2.5,
+    borderColor: '#1A1A1A',
+    transform: [{rotate: '45deg'}],
+    marginLeft: 4,
   },
   logoCenterWrap: {
     position: 'absolute',

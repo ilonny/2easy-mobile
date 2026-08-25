@@ -1,13 +1,14 @@
 import {useCallback, useMemo, useRef, useState} from 'react';
 import {
   Animated,
-  Dimensions,
   Image,
   Modal,
   PanResponder,
   Pressable,
   StyleSheet,
   Text,
+  TouchableOpacity,
+  useWindowDimensions,
   View,
   type ImageResizeMode,
   type ImageSourcePropType,
@@ -22,14 +23,21 @@ type Props = {
   resizeMode?: ImageResizeMode;
   /** When false, renders a plain Image (no zoom). Default true. */
   zoomable?: boolean;
+  /**
+   * Other images in the same gallery. When set (length > 1), the viewer
+   * can be swiped horizontally between images.
+   */
+  gallerySources?: ImageSourcePropType[];
+  /** Index of `source` inside `gallerySources` (default 0). */
+  galleryIndex?: number;
 };
 
-const {width: SCREEN_W, height: SCREEN_H} = Dimensions.get('window');
 const MIN_SCALE = 1;
 const MAX_SCALE = 4;
-const IMAGE_H = SCREEN_H * 0.82;
 const DISMISS_DISTANCE = 120;
 const DISMISS_VELOCITY = 0.9;
+const PAGE_SWIPE_DISTANCE = 64;
+const PAGE_SWIPE_VELOCITY = 0.55;
 
 function distance(
   a: {pageX: number; pageY: number},
@@ -44,11 +52,23 @@ function PinchPanImage({
   source,
   onDismiss,
   backdropOpacity,
+  screenW,
+  screenH,
+  canSwipePage = false,
+  onSwipePage,
 }: {
   source: ImageSourcePropType;
   onDismiss: () => void;
   backdropOpacity: Animated.Value;
+  screenW: number;
+  screenH: number;
+  canSwipePage?: boolean;
+  onSwipePage?: (dir: 1 | -1) => void;
 }) {
+  const imageH = screenH * 0.82;
+  const dimsRef = useRef({screenW, screenH, imageH});
+  dimsRef.current = {screenW, screenH, imageH};
+
   const scale = useRef(new Animated.Value(1)).current;
   const translateX = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(0)).current;
@@ -63,6 +83,7 @@ function PinchPanImage({
   const panStartY = useRef(0);
   const lastTap = useRef(0);
   const dismissing = useRef(false);
+  const paging = useRef(false);
   const moved = useRef(false);
   const pendingClose = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -77,8 +98,9 @@ function PinchPanImage({
     Math.min(MAX_SCALE, Math.max(MIN_SCALE, value));
 
   const clampTranslate = (s: number, x: number, y: number) => {
-    const maxX = Math.max(0, ((s - 1) * SCREEN_W) / 2);
-    const maxY = Math.max(0, ((s - 1) * IMAGE_H) / 2);
+    const {screenW: w, imageH: h} = dimsRef.current;
+    const maxX = Math.max(0, ((s - 1) * w) / 2);
+    const maxY = Math.max(0, ((s - 1) * h) / 2);
     return {
       x: Math.max(-maxX, Math.min(maxX, x)),
       y: Math.max(-maxY, Math.min(maxY, y)),
@@ -130,14 +152,17 @@ function PinchPanImage({
   const panResponder = useMemo(
     () =>
       PanResponder.create({
+        // Claim early so pinch isn't stolen by parent scroll views.
         onStartShouldSetPanResponder: () => true,
         onMoveShouldSetPanResponder: (_, g) =>
           g.numberActiveTouches >= 2 ||
           scaleValue.current > 1.01 ||
           Math.abs(g.dx) > 2 ||
           Math.abs(g.dy) > 2,
+        onPanResponderTerminationRequest: () => false,
         onPanResponderGrant: evt => {
           dismissing.current = false;
+          paging.current = false;
           moved.current = false;
           const touches = evt.nativeEvent.touches;
           if (touches.length >= 2) {
@@ -162,7 +187,6 @@ function PinchPanImage({
             lastTap.current = 0;
           } else {
             lastTap.current = now;
-            // Single tap on image / letterbox closes when not zoomed.
             if (scaleValue.current <= 1.01) {
               clearPendingClose();
               pendingClose.current = setTimeout(() => {
@@ -185,6 +209,7 @@ function PinchPanImage({
 
           if (touches.length >= 2) {
             dismissing.current = false;
+            paging.current = false;
             const d = distance(touches[0], touches[1]);
             if (pinchStartDistance.current <= 0) {
               pinchStartDistance.current = d;
@@ -205,20 +230,35 @@ function PinchPanImage({
             panStartY.current = tyValue.current - gesture.dy;
           }
 
-          // Swipe-to-dismiss when not zoomed
+          // Idle (not zoomed): horizontal → page swipe, vertical → dismiss.
           if (scaleValue.current <= 1.01) {
-            const vertical =
-              Math.abs(gesture.dy) > Math.abs(gesture.dx) * 1.1;
-            if (!vertical && Math.abs(gesture.dy) < 8) {
+            const absX = Math.abs(gesture.dx);
+            const absY = Math.abs(gesture.dy);
+            const horizontal = absX > absY * 1.05 && absX > 8;
+            const vertical = absY > absX * 1.1 && absY > 8;
+
+            if (canSwipePage && (paging.current || (horizontal && !vertical))) {
+              paging.current = true;
+              dismissing.current = false;
+              translateX.setValue(gesture.dx);
+              txValue.current = gesture.dx;
+              backdropOpacity.setValue(
+                1 - Math.min(0.35, absX / (dimsRef.current.screenW * 1.4)),
+              );
               return;
             }
+
+            if (!vertical && absY < 8) {
+              return;
+            }
+            paging.current = false;
             clearPendingClose();
             dismissing.current = true;
             translateY.setValue(gesture.dy);
             tyValue.current = gesture.dy;
             const progress = Math.min(
               1,
-              Math.abs(gesture.dy) / (SCREEN_H * 0.35),
+              absY / (dimsRef.current.screenH * 0.35),
             );
             backdropOpacity.setValue(1 - progress * 0.75);
             return;
@@ -233,6 +273,39 @@ function PinchPanImage({
         onPanResponderRelease: (_, gesture) => {
           pinchStartDistance.current = 0;
 
+          if (scaleValue.current <= 1.01 && paging.current && canSwipePage) {
+            clearPendingClose();
+            const shouldPage =
+              Math.abs(gesture.dx) > PAGE_SWIPE_DISTANCE ||
+              Math.abs(gesture.vx) > PAGE_SWIPE_VELOCITY;
+            if (shouldPage) {
+              const dir: 1 | -1 = gesture.dx < 0 ? 1 : -1;
+              const outX = dir * dimsRef.current.screenW;
+              Animated.parallel([
+                Animated.timing(translateX, {
+                  toValue: -outX,
+                  duration: 160,
+                  useNativeDriver: true,
+                }),
+                Animated.timing(backdropOpacity, {
+                  toValue: 1,
+                  duration: 160,
+                  useNativeDriver: true,
+                }),
+              ]).start(({finished}) => {
+                if (finished) {
+                  onSwipePage?.(dir);
+                }
+              });
+              paging.current = false;
+              return;
+            }
+            animateTo(1, 0, 0);
+            resetBackdrop();
+            paging.current = false;
+            return;
+          }
+
           if (scaleValue.current <= 1.01 && dismissing.current) {
             clearPendingClose();
             const shouldClose =
@@ -243,7 +316,7 @@ function PinchPanImage({
               const direction = gesture.dy >= 0 ? 1 : -1;
               Animated.parallel([
                 Animated.timing(translateY, {
-                  toValue: direction * SCREEN_H,
+                  toValue: direction * dimsRef.current.screenH,
                   duration: 180,
                   useNativeDriver: true,
                 }),
@@ -275,6 +348,7 @@ function PinchPanImage({
             resetBackdrop();
           }
           dismissing.current = false;
+          paging.current = false;
         },
         onPanResponderTerminate: () => {
           pinchStartDistance.current = 0;
@@ -284,10 +358,11 @@ function PinchPanImage({
             resetBackdrop();
           }
           dismissing.current = false;
+          paging.current = false;
         },
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [onDismiss, backdropOpacity],
+    [onDismiss, backdropOpacity, canSwipePage, onSwipePage],
   );
 
   return (
@@ -296,6 +371,7 @@ function PinchPanImage({
       source={source}
       style={[
         styles.fullImage,
+        {width: screenW, height: imageH},
         {
           transform: [{translateX}, {translateY}, {scale}],
         },
@@ -310,22 +386,58 @@ export function ZoomableImage({
   style,
   resizeMode = 'cover',
   zoomable = true,
+  gallerySources,
+  galleryIndex = 0,
 }: Props) {
   const insets = useSafeAreaInsets();
+  const {width: screenW, height: screenH} = useWindowDimensions();
+  const imageH = screenH * 0.82;
   const [open, setOpen] = useState(false);
   const [session, setSession] = useState(0);
+  const [pageIndex, setPageIndex] = useState(galleryIndex);
   const backdropOpacity = useRef(new Animated.Value(1)).current;
+
+  const pages = useMemo(() => {
+    if (gallerySources && gallerySources.length > 1) {
+      return gallerySources;
+    }
+    return [source];
+  }, [gallerySources, source]);
+
+  const multi = pages.length > 1;
+  const activeSource = pages[pageIndex] ?? source;
 
   const openViewer = useCallback(() => {
     backdropOpacity.setValue(1);
+    setPageIndex(
+      Math.max(0, Math.min(galleryIndex, Math.max(0, pages.length - 1))),
+    );
     setSession(s => s + 1);
     setOpen(true);
-  }, [backdropOpacity]);
+  }, [backdropOpacity, galleryIndex, pages.length]);
 
   const close = useCallback(() => {
     setOpen(false);
     backdropOpacity.setValue(1);
   }, [backdropOpacity]);
+
+  const onSwipePage = useCallback(
+    (dir: 1 | -1) => {
+      setPageIndex(prev => {
+        const next = prev + dir;
+        if (next < 0 || next >= pages.length) {
+          // Bounce back: remount to reset transform.
+          setSession(s => s + 1);
+          backdropOpacity.setValue(1);
+          return prev;
+        }
+        setSession(s => s + 1);
+        backdropOpacity.setValue(1);
+        return next;
+      });
+    },
+    [backdropOpacity, pages.length],
+  );
 
   if (!zoomable) {
     return <Image source={source} style={style} resizeMode={resizeMode} />;
@@ -333,13 +445,15 @@ export function ZoomableImage({
 
   return (
     <>
-      <Pressable
+      <TouchableOpacity
         onPress={openViewer}
+        delayPressIn={50}
+        activeOpacity={0.92}
         accessibilityRole="imagebutton"
         accessibilityLabel="Zoom image"
-        style={({pressed}) => [style as object, pressed && styles.pressed]}>
+        style={style as object}>
         <Image source={source} style={styles.fill} resizeMode={resizeMode} />
-      </Pressable>
+      </TouchableOpacity>
 
       <Modal
         visible={open}
@@ -364,10 +478,19 @@ export function ZoomableImage({
               style={[styles.closeBtn, {top: insets.top + 12}]}>
               <Text style={styles.closeText}>✕</Text>
             </Pressable>
+            {multi ? (
+              <Text
+                style={[styles.counter, {top: insets.top + 20}]}
+                pointerEvents="none">
+                {pageIndex + 1} / {pages.length}
+              </Text>
+            ) : null}
             <View
               style={[
                 styles.imageSlot,
                 {
+                  width: screenW,
+                  height: imageH,
                   marginTop: insets.top + 12,
                   marginBottom: insets.bottom + 12,
                 },
@@ -375,9 +498,13 @@ export function ZoomableImage({
               {open ? (
                 <PinchPanImage
                   key={session}
-                  source={source}
+                  source={activeSource}
                   onDismiss={close}
                   backdropOpacity={backdropOpacity}
+                  screenW={screenW}
+                  screenH={screenH}
+                  canSwipePage={multi}
+                  onSwipePage={onSwipePage}
                 />
               ) : null}
             </View>
@@ -393,9 +520,6 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  pressed: {
-    opacity: 0.92,
-  },
   modalRoot: {
     flex: 1,
     justifyContent: 'center',
@@ -410,15 +534,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   imageSlot: {
-    width: SCREEN_W,
-    height: IMAGE_H,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  fullImage: {
-    width: SCREEN_W,
-    height: IMAGE_H,
-  },
+  fullImage: {},
   closeBtn: {
     position: 'absolute',
     right: 16,
@@ -434,5 +553,14 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 18,
     fontWeight: '700',
+  },
+  counter: {
+    position: 'absolute',
+    alignSelf: 'center',
+    zIndex: 2,
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '600',
+    opacity: 0.9,
   },
 });

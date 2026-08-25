@@ -115,6 +115,33 @@ export function attachmentsToPicked(
     .filter(Boolean) as PickedImage[];
 }
 
+/** Live editor preview media (local uri or saved path). */
+export function pickedToPreviewMedia(
+  images: PickedImage[],
+): Array<{id: string; path?: string; dataURL?: string; text?: string}> {
+  return images
+    .map(img => {
+      const dataURL =
+        img.uri ||
+        (img.path ? getImageUrl(img.path) : undefined) ||
+        undefined;
+      if (!dataURL && !img.path) {
+        return null;
+      }
+      return {
+        id: String(img.id),
+        path: img.path,
+        dataURL,
+      };
+    })
+    .filter(Boolean) as Array<{
+    id: string;
+    path?: string;
+    dataURL?: string;
+    text?: string;
+  }>;
+}
+
 /** Convert YouTube / Rutube / VK links into embed iframes (site parity). */
 export function linkToVideoEmbed(text: string): string {
   const trimmed = (text || '').trim();

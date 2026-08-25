@@ -1,6 +1,7 @@
 import {StyleSheet, Text, View} from 'react-native';
 
 import {colors} from '../../../shared/config/theme';
+import {HtmlContent, looksLikeHtml} from './HtmlContent';
 
 type Props = {
   title?: string;
@@ -17,8 +18,26 @@ export function ExHeader({title, titleColor, subtitle, description}: Props) {
           {title}
         </Text>
       )}
-      {!!subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
-      {!!description && <Text style={styles.desc}>{description}</Text>}
+      {!!subtitle &&
+        (looksLikeHtml(subtitle) ? (
+          <HtmlContent
+            html={subtitle}
+            baseStyle={styles.htmlCentered}
+            contentWidth={320}
+          />
+        ) : (
+          <Text style={styles.subtitle}>{subtitle}</Text>
+        ))}
+      {!!description &&
+        (looksLikeHtml(description) ? (
+          <HtmlContent
+            html={description}
+            baseStyle={styles.htmlDesc}
+            contentWidth={320}
+          />
+        ) : (
+          <Text style={styles.desc}>{description}</Text>
+        ))}
     </View>
   );
 }
@@ -38,6 +57,18 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   desc: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  htmlCentered: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
+    textAlign: 'center',
+  },
+  htmlDesc: {
     fontSize: 14,
     color: colors.textSecondary,
     textAlign: 'center',

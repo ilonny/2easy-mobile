@@ -1,11 +1,11 @@
 import {useMemo, useState} from 'react';
 import {
-  Dimensions,
   FlatList,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
   type ImageSourcePropType,
 } from 'react-native';
@@ -17,6 +17,7 @@ import {WebView} from 'react-native-webview';
 import {useAuth} from '../../../entities/session';
 import {useI18n} from '../../../shared/i18n';
 import {colors, radii} from '../../../shared/config/theme';
+import {useLayout} from '../../../shared/lib/layout';
 import type {RootStackParamList} from '../../../shared/navigation/types';
 import {
   goHome,
@@ -37,10 +38,10 @@ type Props = {
   slug: ContentSlug;
 };
 
-const {width: SCREEN_W} = Dimensions.get('window');
-
 export function ContentPlayerScreen({slug}: Props) {
   const insets = useSafeAreaInsets();
+  const {width: screenW} = useWindowDimensions();
+  const {isTablet, pageGutter, pageContentMaxWidth} = useLayout();
   const navigation = useNavigation<Nav>();
   const {t} = useI18n();
   const {isAuthorized} = useAuth();
@@ -79,13 +80,22 @@ export function ContentPlayerScreen({slug}: Props) {
     return pack.tabs.find(tab => tab.key === tabKey)?.images ?? pack.tabs[0]?.images ?? [];
   }, [pack, tabKey]);
 
+  const contentW = Math.min(screenW, pageContentMaxWidth || screenW);
+  const cardInnerW = Math.min(contentW - pageGutter * 2, isTablet ? 560 : 9999);
+
   if (subLoading) {
     return (
       <View style={styles.root}>
-        <View style={[styles.header, {paddingTop: insets.top + 8}]}>
-          <AppHeader />
+        <View
+          style={[
+            styles.header,
+            {paddingTop: insets.top + 8, paddingHorizontal: pageGutter},
+          ]}>
+          <View style={{maxWidth: pageContentMaxWidth, width: '100%'}}>
+            <AppHeader />
+          </View>
         </View>
-        <View style={styles.crumbsPad}>
+        <View style={[styles.crumbsPad, {paddingHorizontal: pageGutter}]}>
           <Breadcrumbs items={crumbs} />
         </View>
         <Text style={styles.loading}>{t('common.loading')}</Text>
@@ -96,10 +106,16 @@ export function ContentPlayerScreen({slug}: Props) {
   if (!allowed) {
     return (
       <View style={styles.root}>
-        <View style={[styles.header, {paddingTop: insets.top + 8}]}>
-          <AppHeader />
+        <View
+          style={[
+            styles.header,
+            {paddingTop: insets.top + 8, paddingHorizontal: pageGutter},
+          ]}>
+          <View style={{maxWidth: pageContentMaxWidth, width: '100%'}}>
+            <AppHeader />
+          </View>
         </View>
-        <View style={styles.gate}>
+        <View style={[styles.gate, {paddingHorizontal: pageGutter}]}>
           <Breadcrumbs items={crumbs} />
           <Text style={styles.title}>{t(pack.titleKey)}</Text>
           <Text style={styles.howTo}>{t(pack.howToKey)}</Text>
@@ -120,70 +136,103 @@ export function ContentPlayerScreen({slug}: Props) {
 
   return (
     <View style={styles.root}>
-      <View style={[styles.header, {paddingTop: insets.top + 8}]}>
-        <AppHeader />
+      <View
+        style={[
+          styles.header,
+          {paddingTop: insets.top + 8, paddingHorizontal: pageGutter},
+        ]}>
+        <View style={{maxWidth: pageContentMaxWidth, width: '100%'}}>
+          <AppHeader />
+        </View>
       </View>
       <ScrollView
-        contentContainerStyle={{paddingBottom: insets.bottom + 24}}
+        contentContainerStyle={{
+          paddingBottom: insets.bottom + 24,
+          alignItems: 'center',
+        }}
         showsVerticalScrollIndicator={false}>
-        <View style={styles.crumbsPad}>
-          <Breadcrumbs items={crumbs} />
-        </View>
-        <Text style={styles.title}>{t(pack.titleKey)}</Text>
-        <Text style={styles.howTo}>{t(pack.howToKey)}</Text>
+        <View
+          style={[
+            styles.pageColumn,
+            {maxWidth: pageContentMaxWidth, width: '100%'},
+          ]}>
+          <View style={[styles.crumbsPad, {paddingHorizontal: pageGutter}]}>
+            <Breadcrumbs items={crumbs} />
+          </View>
+          <Text style={[styles.title, {marginHorizontal: pageGutter}]}>
+            {t(pack.titleKey)}
+          </Text>
+          <Text style={[styles.howTo, {marginHorizontal: pageGutter}]}>
+            {t(pack.howToKey)}
+          </Text>
 
-        {pack.kind === 'cards' ? (
-          <>
-            {pack.tabs.length > 1 ? (
-              <ScrollView
+          {pack.kind === 'cards' ? (
+            <>
+              {pack.tabs.length > 1 ? (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={[
+                    styles.tabs,
+                    {paddingHorizontal: pageGutter},
+                  ]}>
+                  {pack.tabs.map(tab => {
+                    const active = tab.key === tabKey;
+                    return (
+                      <Pressable
+                        key={tab.key}
+                        onPress={() => setTabKey(tab.key)}
+                        style={[styles.tab, active && styles.tabActive]}>
+                        <Text
+                          style={[
+                            styles.tabText,
+                            active && styles.tabTextActive,
+                          ]}>
+                          {tab.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+              ) : null}
+              <FlatList
+                data={cardImages}
+                key={`${tabKey}-${screenW}`}
                 horizontal
+                pagingEnabled
                 showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.tabs}>
-                {pack.tabs.map(tab => {
-                  const active = tab.key === tabKey;
-                  return (
-                    <Pressable
-                      key={tab.key}
-                      onPress={() => setTabKey(tab.key)}
-                      style={[styles.tab, active && styles.tabActive]}>
-                      <Text style={[styles.tabText, active && styles.tabTextActive]}>
-                        {tab.label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
-            ) : null}
-            <FlatList
-              data={cardImages}
-              key={tabKey}
-              horizontal
-              pagingEnabled
-              showsHorizontalScrollIndicator={false}
-              keyExtractor={(_, i) => String(i)}
-              renderItem={({item, index}) => (
-                <View style={styles.cardPage}>
-                  <ZoomableImage
-                    source={item}
-                    style={styles.cardImage}
-                    resizeMode="contain"
-                  />
-                  <Text style={styles.counter}>
-                    {index + 1} / {cardImages.length}
-                  </Text>
-                </View>
-              )}
-            />
-          </>
-        ) : (
-          <YoutubeSection
-            clips={pack.clips}
-            clipIndex={clipIndex}
-            setClipIndex={setClipIndex}
-            showFull={showFull}
-            setShowFull={setShowFull}
-          />
-        )}
+                keyExtractor={(_, i) => String(i)}
+                renderItem={({item, index}) => (
+                  <View style={[styles.cardPage, {width: contentW}]}>
+                    <ZoomableImage
+                      source={item}
+                      style={{
+                        width: cardInnerW,
+                        height: cardInnerW * 1.25,
+                        backgroundColor: colors.white,
+                        borderRadius: radii.lg,
+                      }}
+                      resizeMode="contain"
+                    />
+                    <Text style={styles.counter}>
+                      {index + 1} / {cardImages.length}
+                    </Text>
+                  </View>
+                )}
+              />
+            </>
+          ) : (
+            <View style={{paddingHorizontal: pageGutter}}>
+              <YoutubeSection
+                clips={pack.clips}
+                clipIndex={clipIndex}
+                setClipIndex={setClipIndex}
+                showFull={showFull}
+                setShowFull={setShowFull}
+              />
+            </View>
+          )}
+        </View>
       </ScrollView>
     </View>
   );
@@ -248,30 +297,29 @@ function YoutubeSection({
 
 const styles = StyleSheet.create({
   root: {flex: 1, backgroundColor: '#F9F9F9'},
-  header: {paddingHorizontal: 16, paddingBottom: 8},
-  crumbsPad: {paddingHorizontal: 16, paddingTop: 8},
+  header: {paddingBottom: 8, alignItems: 'center'},
+  pageColumn: {alignSelf: 'center'},
+  crumbsPad: {paddingTop: 8},
   loading: {textAlign: 'center', marginTop: 40, color: colors.muted},
-  gate: {padding: 24, gap: 14, alignItems: 'center'},
+  gate: {paddingVertical: 24, gap: 14, alignItems: 'center'},
   title: {
     fontSize: 26,
     fontWeight: '800',
     color: colors.primary,
     textAlign: 'center',
     marginTop: 8,
-    marginHorizontal: 16,
   },
   howTo: {
     fontSize: 15,
     lineHeight: 22,
     color: colors.text,
     textAlign: 'center',
-    marginHorizontal: 20,
     marginTop: 10,
     marginBottom: 16,
   },
   gateText: {fontSize: 15, textAlign: 'center', color: colors.muted},
   link: {color: colors.primary, fontWeight: '700', marginTop: 8},
-  tabs: {paddingHorizontal: 12, gap: 8, paddingBottom: 12},
+  tabs: {gap: 8, paddingBottom: 12},
   tab: {
     paddingHorizontal: 14,
     paddingVertical: 10,
@@ -284,22 +332,15 @@ const styles = StyleSheet.create({
   tabText: {fontWeight: '700', color: colors.text, fontSize: 13},
   tabTextActive: {color: colors.primary},
   cardPage: {
-    width: SCREEN_W,
     paddingHorizontal: 16,
     alignItems: 'center',
-  },
-  cardImage: {
-    width: SCREEN_W - 32,
-    height: (SCREEN_W - 32) * 1.25,
-    backgroundColor: colors.white,
-    borderRadius: radii.lg,
   },
   counter: {
     marginTop: 10,
     color: colors.muted,
     fontWeight: '600',
   },
-  ytWrap: {paddingHorizontal: 16, gap: 12},
+  ytWrap: {gap: 12},
   ytFrame: {
     width: '100%',
     aspectRatio: 16 / 9,

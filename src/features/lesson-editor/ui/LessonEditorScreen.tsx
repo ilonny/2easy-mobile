@@ -23,6 +23,8 @@ import {
 } from '../../../shared/navigation/resetToLessonPlans';
 import {AppDialog, Breadcrumbs, Button} from '../../../shared/ui';
 import {AppHeader} from '../../app-shell';
+import {useLayout} from '../../../shared/lib/layout';
+import {useSubscription} from '../../home/model/useSubscription';
 import {
   changeExSortIndex,
   changeExVisible,
@@ -37,6 +39,7 @@ import {
   LessonScrollProvider,
   LessonScrollView,
 } from '../../lesson-player/model/LessonScrollContext';
+import {StartLessonStudentsModal} from './StartLessonStudentsModal';
 import type {Exercise, LessonDetail} from '../../lesson-player/model/types';
 import {ExList} from '../../lesson-player/ui/ExList';
 import {isExVisible} from '../../lesson-player/lib/exMappers';
@@ -66,6 +69,8 @@ export function LessonEditorScreen({lessonId}: Props) {
   const navigation = useNavigation<Nav>();
   const {isAuthorized, profile} = useAuth();
   const {t} = useI18n();
+  const {isTablet, pageGutter, pageContentMaxWidth} = useLayout();
+  const {hasSubscription} = useSubscription();
 
   const [lesson, setLesson] = useState<LessonDetail | null>(null);
   const [exercises, setExercises] = useState<Exercise[]>([]);
@@ -73,6 +78,7 @@ export function LessonEditorScreen({lessonId}: Props) {
   const [error, setError] = useState('');
   const [metaOpen, setMetaOpen] = useState(false);
   const [templateOpen, setTemplateOpen] = useState(false);
+  const [startStudentsOpen, setStartStudentsOpen] = useState(false);
   const [insertAt, setInsertAt] = useState<number | undefined>();
   const [editor, setEditor] = useState<EditorState>(null);
   const [deleteId, setDeleteId] = useState<number | null>(null);
@@ -83,6 +89,8 @@ export function LessonEditorScreen({lessonId}: Props) {
   const [copying, setCopying] = useState(false);
 
   const headerTranslate = useRef(new Animated.Value(0)).current;
+  /** 0 = header visible, 1 = hidden — drives sticky chip pin (JS driver). */
+  const headerCollapseProgress = useRef(new Animated.Value(0)).current;
   const lastScrollY = useRef(0);
   const headerVisible = useRef(true);
 
@@ -132,12 +140,20 @@ export function LessonEditorScreen({lessonId}: Props) {
     }
     headerVisible.current = true;
     headerTranslate.stopAnimation();
-    Animated.timing(headerTranslate, {
-      toValue: 0,
-      duration: 280,
-      useNativeDriver: true,
-    }).start();
-  }, [headerTranslate]);
+    headerCollapseProgress.stopAnimation();
+    Animated.parallel([
+      Animated.timing(headerTranslate, {
+        toValue: 0,
+        duration: 280,
+        useNativeDriver: true,
+      }),
+      Animated.timing(headerCollapseProgress, {
+        toValue: 0,
+        duration: 280,
+        useNativeDriver: false,
+      }),
+    ]).start();
+  }, [headerCollapseProgress, headerTranslate]);
 
   const hideHeader = useCallback(() => {
     if (!headerVisible.current || headerHeight <= 0) {
@@ -145,12 +161,20 @@ export function LessonEditorScreen({lessonId}: Props) {
     }
     headerVisible.current = false;
     headerTranslate.stopAnimation();
-    Animated.timing(headerTranslate, {
-      toValue: -headerHeight,
-      duration: 280,
-      useNativeDriver: true,
-    }).start();
-  }, [headerHeight, headerTranslate]);
+    headerCollapseProgress.stopAnimation();
+    Animated.parallel([
+      Animated.timing(headerTranslate, {
+        toValue: -headerHeight,
+        duration: 280,
+        useNativeDriver: true,
+      }),
+      Animated.timing(headerCollapseProgress, {
+        toValue: 1,
+        duration: 280,
+        useNativeDriver: false,
+      }),
+    ]).start();
+  }, [headerCollapseProgress, headerHeight, headerTranslate]);
 
   const onScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -211,8 +235,22 @@ export function LessonEditorScreen({lessonId}: Props) {
 
   const onChangeVisible = async (ex: Exercise) => {
     try {
-      await changeExVisible(ex.id, !isExVisible(ex.is_visible));
+      const nextVisible = !isExVisible(ex.is_visible);
+      await changeExVisible(ex.id, nextVisible);
       await load();
+      if (ex.type === 'note') {
+        setNotice(
+          nextVisible
+            ? t('lessons.noteNowVisibleToStudent')
+            : t('lessons.noteNowHiddenFromStudent'),
+        );
+      } else {
+        setNotice(
+          nextVisible
+            ? t('lessons.taskNowVisibleToStudent')
+            : t('lessons.taskNowHiddenFromStudent'),
+        );
+      }
     } catch {
       setNotice(t('editor.saveFailed'));
     }
@@ -302,9 +340,20 @@ export function LessonEditorScreen({lessonId}: Props) {
   }, [lesson, is2easy, isAdmin, isOwner]);
 
   const startLesson = () => {
+    if (!hasSubscription) {
+      setNotice(t('lessons.needSubscriptionToStart'));
+      navigation.navigate('Subscription');
+      return;
+    }
+    setStartStudentsOpen(true);
+  };
+
+  const onStartLessonWithStudents = (selectedIds: number[]) => {
+    setStartStudentsOpen(false);
     navigation.navigate('LessonViewer', {
       lessonId,
       from: 'Lessons',
+      ...(selectedIds.length === 1 ? {studentId: selectedIds[0]} : {}),
     });
   };
 
@@ -347,7 +396,10 @@ export function LessonEditorScreen({lessonId}: Props) {
             <CreateLessonButton />
           </View>
         ) : (
-          <LessonScrollProvider stickyTop={insets.top}>
+          <LessonScrollProvider
+            stickyTop={headerHeight > 0 ? headerHeight : insets.top}
+            stickyTopCollapsed={insets.top}
+            headerCollapseProgress={headerCollapseProgress}>
             <Animated.View
               onLayout={event => {
                 const next = event.nativeEvent.layout.height;
@@ -358,77 +410,99 @@ export function LessonEditorScreen({lessonId}: Props) {
               style={[
                 styles.headerShell,
                 {
-                  paddingTop: insets.top + 8,
+                  paddingTop: insets.top + (isTablet ? 12 : 8),
+                  paddingHorizontal: pageGutter,
                   transform: [{translateY: headerTranslate}],
                 },
               ]}>
-              <AppHeader />
-              <View style={styles.headerActions}>
-                <Button
-                  title={t('lessons.startLesson')}
-                  onPress={startLesson}
-                />
-                {canEditContent ? (
+              <View
+                style={[
+                  styles.headerInner,
+                  {maxWidth: pageContentMaxWidth, width: '100%'},
+                ]}>
+                <AppHeader />
+                <View
+                  style={[
+                    styles.headerActions,
+                    isTablet && styles.headerActionsTablet,
+                  ]}>
                   <Button
-                    title={t('editor.editLesson')}
-                    onPress={() => setMetaOpen(true)}
-                    variant="secondary"
+                    title={t('lessons.startLesson')}
+                    onPress={startLesson}
                   />
-                ) : null}
-                {is2easy && !isAdmin ? (
-                  <Button
-                    title={t('lessons.addToMyLessons')}
-                    onPress={() => {
-                      void onAddToMyLessons();
-                    }}
-                    variant="secondary"
-                    loading={copying}
-                  />
-                ) : null}
+                  {canEditContent ? (
+                    <Button
+                      title={t('editor.editLesson')}
+                      onPress={() => setMetaOpen(true)}
+                      variant="secondary"
+                    />
+                  ) : null}
+                  {is2easy && !isAdmin ? (
+                    <Button
+                      title={t('lessons.addToMyLessons')}
+                      onPress={() => {
+                        void onAddToMyLessons();
+                      }}
+                      variant="secondary"
+                      loading={copying}
+                    />
+                  ) : null}
+                </View>
               </View>
             </Animated.View>
 
             <LessonScrollView
               style={styles.flex}
               contentContainerStyle={{
-                paddingHorizontal: 16,
+                paddingHorizontal: pageGutter,
                 paddingTop: listPaddingTop,
                 paddingBottom: insets.bottom + 40,
+                alignItems: 'center',
               }}
               keyboardShouldPersistTaps="handled"
               nestedScrollEnabled
               onScroll={onScroll}>
-              <Breadcrumbs items={crumbs} />
-              <Text style={styles.title}>{lesson?.title || ''}</Text>
-              {!!lesson?.description && (
-                <Text style={styles.desc}>{lesson.description}</Text>
-              )}
+              <View
+                style={[
+                  styles.pageColumn,
+                  {maxWidth: pageContentMaxWidth, width: '100%'},
+                ]}>
+                <Breadcrumbs items={crumbs} />
+                <Text style={[styles.title, isTablet && styles.titleTablet]}>
+                  {lesson?.title || ''}
+                </Text>
+                {!!lesson?.description && (
+                  <Text style={[styles.desc, isTablet && styles.descTablet]}>
+                    {lesson.description}
+                  </Text>
+                )}
 
-              <ExList
-                list={exercises}
-                chrome={
-                  canEditContent
-                    ? {
-                        hasClipboard,
-                        onPressCreate,
-                        onPressEdit,
-                        onPressDelete: id => setDeleteId(id),
-                        changeSortIndex: (id, idx) => {
-                          void onChangeSort(id, idx);
-                        },
-                        onChangeIsVisible: ex => {
-                          void onChangeVisible(ex);
-                        },
-                        onPressCopy: ex => {
-                          void onPressCopy(ex);
-                        },
-                        onPressPaste: idx => {
-                          void onPressPaste(idx);
-                        },
-                      }
-                    : undefined
-                }
-              />
+                <ExList
+                  list={exercises}
+                  chrome={
+                    canEditContent
+                      ? {
+                          hasClipboard,
+                          onPressCreate,
+                          onPressEdit,
+                          onPressDelete: id => setDeleteId(id),
+                          changeSortIndex: (id, idx) => {
+                            void onChangeSort(id, idx);
+                          },
+                          onChangeIsVisible: ex => {
+                            void onChangeVisible(ex);
+                          },
+                          onPressCopy: ex => {
+                            void onPressCopy(ex);
+                          },
+                          onPressPaste: idx => {
+                            void onPressPaste(idx);
+                          },
+                        }
+                      : undefined
+                  }
+                />
+              </View>
             </LessonScrollView>
           </LessonScrollProvider>
         )}
@@ -489,6 +563,13 @@ export function LessonEditorScreen({lessonId}: Props) {
           </>
         ) : null}
 
+        <StartLessonStudentsModal
+          visible={startStudentsOpen}
+          lessonId={lessonId}
+          onClose={() => setStartStudentsOpen(false)}
+          onStarted={onStartLessonWithStudents}
+        />
+
         <AppDialog
           visible={!!notice}
           title=""
@@ -515,16 +596,23 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    zIndex: 20,
-    elevation: 12,
+    zIndex: 200,
+    elevation: 24,
     paddingHorizontal: 16,
     paddingBottom: 12,
     backgroundColor: '#F9F9F9',
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
+    alignItems: 'center',
+  },
+  headerInner: {gap: 10},
+  headerActions: {gap: 8},
+  headerActionsTablet: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 10,
   },
-  headerActions: {gap: 8},
+  pageColumn: {gap: 0},
   centered: {
     flex: 1,
     alignItems: 'center',
@@ -540,6 +628,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 8,
   },
+  titleTablet: {fontSize: 34},
   desc: {
     marginTop: 10,
     marginBottom: 16,
@@ -548,4 +637,5 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     color: colors.text,
   },
+  descTablet: {fontSize: 18, lineHeight: 26},
 });

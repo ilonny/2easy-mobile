@@ -11,6 +11,7 @@ import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
 import {useI18n} from '../../../shared/i18n';
 import {colors, radii} from '../../../shared/config/theme';
+import {useLayout} from '../../../shared/lib/layout';
 import {templates, type TTemplate} from '../model/templates';
 
 type Props = {
@@ -22,6 +23,7 @@ type Props = {
 export function ChooseTemplateModal({visible, onClose, onSelect}: Props) {
   const insets = useSafeAreaInsets();
   const {t} = useI18n();
+  const {isTablet, pageGutter} = useLayout();
   const root = useMemo(() => templates, []);
   const [list, setList] = useState<TTemplate[]>(root);
   const [isSub, setIsSub] = useState(false);
@@ -85,13 +87,21 @@ export function ChooseTemplateModal({visible, onClose, onSelect}: Props) {
         <ScrollView
           contentContainerStyle={[
             styles.list,
-            {paddingBottom: insets.bottom + 24},
+            {
+              paddingBottom: insets.bottom + 24,
+              paddingHorizontal: pageGutter,
+              maxWidth: isTablet ? 720 : undefined,
+              width: '100%',
+              alignSelf: 'center',
+            },
+            isTablet && styles.listTablet,
           ]}>
           {list.map(item => (
             <Pressable
               key={item.type}
               style={({pressed}) => [
                 styles.card,
+                isTablet && styles.cardTablet,
                 pressed && styles.cardPressed,
               ]}
               onPress={() => onPress(item)}>
@@ -137,6 +147,10 @@ const styles = StyleSheet.create({
   },
   close: {width: 90, textAlign: 'right', fontSize: 22, color: colors.muted},
   list: {padding: 16, gap: 12},
+  listTablet: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
   card: {
     backgroundColor: colors.white,
     borderRadius: radii.xl,
@@ -147,6 +161,10 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderLeftWidth: 5,
     borderLeftColor: colors.primary,
+  },
+  cardTablet: {
+    width: '48%',
+    flexGrow: 1,
   },
   cardPressed: {opacity: 0.92, backgroundColor: colors.primarySoft},
   cardTitle: {

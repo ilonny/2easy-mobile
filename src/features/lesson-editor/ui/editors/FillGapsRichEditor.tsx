@@ -116,10 +116,7 @@ export function slateToEditorHtml(
     .join('');
 }
 
-function buildFillGapsHtml(
-  initialHtml: string,
-  makeGapLabel: string,
-) {
+function buildFillGapsHtml(initialHtml: string, makeGapLabel: string) {
   const safe = JSON.stringify(initialHtml || '<p><br></p>');
   const makeLabel = JSON.stringify(makeGapLabel);
   return `<!DOCTYPE html>
@@ -152,29 +149,52 @@ function buildFillGapsHtml(
     vertical-align: baseline;
     cursor: pointer;
   }
-  #bar {
-    position: sticky; top: 0; z-index: 2;
+  #gapFloat {
+    position: fixed;
+    z-index: 10050;
     display: none;
-    gap: 8px; padding: 8px; background: #F8F7FC;
-    border-bottom: 1px solid #E5E7EB;
+    transform: translateX(-50%);
+    pointer-events: auto;
+    filter: drop-shadow(0 4px 16px rgba(17, 24, 39, 0.2));
   }
-  #bar.show { display: flex; }
+  #gapFloat.show { display: block; }
+  #gapFloatInner {
+    padding: 5px;
+    border-radius: 14px;
+    background: #ffffff;
+    border: 1px solid rgba(63, 40, 198, 0.35);
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.9) inset,
+      0 12px 28px rgba(17, 24, 39, 0.18);
+  }
   #makeGap {
-    border: 0; background: #3F28C6; color: #fff;
-    font-weight: 700; border-radius: 8px; padding: 8px 12px;
+    border: 0;
+    background: #3F28C6;
+    color: #fff;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    border-radius: 10px;
+    min-height: 36px;
+    padding: 8px 14px;
+    white-space: nowrap;
+    box-shadow: 0 2px 0 rgba(0, 0, 0, 0.12) inset;
   }
 </style>
 </head>
 <body>
-<div id="bar"><button id="makeGap" type="button"></button></div>
 <div id="editor" contenteditable="true"></div>
+<div id="gapFloat"><div id="gapFloatInner"><button id="makeGap" type="button"></button></div></div>
 <script>
 (function() {
   var editor = document.getElementById('editor');
-  var bar = document.getElementById('bar');
+  var gapFloat = document.getElementById('gapFloat');
   var makeBtn = document.getElementById('makeGap');
   makeBtn.textContent = ${makeLabel};
   editor.innerHTML = ${safe};
+
+  var SHOW_DELAY_MS = 300;
+  var floatTimer = null;
+  var selecting = false;
 
   function uuid() {
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
@@ -208,7 +228,6 @@ function buildFillGapsHtml(
       var el = node;
       var tag = el.tagName.toLowerCase();
       if (tag !== 'p' && tag !== 'div') {
-        // wrap stray content
         el = document.createElement('p');
         el.appendChild(node.cloneNode(true));
       }
@@ -274,20 +293,73 @@ function buildFillGapsHtml(
     return false;
   }
 
-  function updateBar() {
+  function hideFloat() {
+    if (floatTimer) {
+      clearTimeout(floatTimer);
+      floatTimer = null;
+    }
+    gapFloat.classList.remove('show');
+  }
+
+  function placeFloat() {
     var sel = window.getSelection();
-    if (!sel || sel.isCollapsed || !sel.toString().trim() || selectionHasGap()) {
-      bar.classList.remove('show');
+    if (!sel || sel.isCollapsed || !sel.rangeCount || !sel.toString().trim() || selectionHasGap()) {
+      hideFloat();
       return;
     }
     if (!editor.contains(sel.anchorNode)) {
-      bar.classList.remove('show');
+      hideFloat();
       return;
     }
-    bar.classList.add('show');
+    var rect = sel.getRangeAt(0).getBoundingClientRect();
+    if (rect.width < 1 && rect.height < 1) {
+      hideFloat();
+      return;
+    }
+    var btnW = 180;
+    var btnH = 48;
+    var margin = 12;
+    var top = rect.bottom + margin;
+    var vvTop = (window.visualViewport && window.visualViewport.offsetTop) || 0;
+    var vvH = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
+    var vvBottom = vvTop + vvH;
+    if (top + btnH > vvBottom - 8) {
+      top = Math.max(vvTop + 8, rect.top - btnH - margin);
+    }
+    var left = rect.left + rect.width / 2;
+    left = Math.max(btnW / 2 + 8, Math.min(left, window.innerWidth - btnW / 2 - 8));
+    gapFloat.style.top = Math.round(top) + 'px';
+    gapFloat.style.left = Math.round(left) + 'px';
+    gapFloat.classList.add('show');
   }
 
-  makeBtn.addEventListener('click', function() {
+  function scheduleFloat(immediate) {
+    if (floatTimer) {
+      clearTimeout(floatTimer);
+      floatTimer = null;
+    }
+    var sel = window.getSelection();
+    if (!sel || sel.isCollapsed || !sel.toString().trim()) {
+      hideFloat();
+      return;
+    }
+    if (selecting && !immediate) {
+      return;
+    }
+    var run = function() {
+      floatTimer = null;
+      requestAnimationFrame(function() {
+        requestAnimationFrame(placeFloat);
+      });
+    };
+    if (immediate) {
+      run();
+    } else {
+      floatTimer = setTimeout(run, SHOW_DELAY_MS);
+    }
+  }
+
+  function doMakeGap() {
     var sel = window.getSelection();
     if (!sel || sel.isCollapsed || !sel.toString().trim() || selectionHasGap()) return;
     var text = sel.toString().trim();
@@ -301,22 +373,48 @@ function buildFillGapsHtml(
     range.deleteContents();
     range.insertNode(span);
     sel.removeAllRanges();
-    bar.classList.remove('show');
+    hideFloat();
     post('gapCreated', { gapId: gapId, text: text });
     emitChange();
-  });
+  }
+
+  function onMakeGapPointer(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    doMakeGap();
+  }
+  makeBtn.addEventListener('pointerdown', onMakeGapPointer);
+  makeBtn.addEventListener('mousedown', onMakeGapPointer);
+  makeBtn.addEventListener('touchstart', onMakeGapPointer, { passive: false });
 
   editor.addEventListener('click', function(e) {
     var t = e.target;
     if (t && t.classList && t.classList.contains('gap')) {
+      hideFloat();
       post('gapTap', { gapId: t.getAttribute('data-gap-id') });
     }
   });
 
-  document.addEventListener('selectionchange', updateBar);
   editor.addEventListener('input', scheduleEmit);
-  editor.addEventListener('keyup', updateBar);
-  editor.addEventListener('mouseup', updateBar);
+
+  function onSelectStart() {
+    selecting = true;
+    hideFloat();
+  }
+  function onSelectEnd() {
+    selecting = false;
+    scheduleFloat(false);
+  }
+  document.addEventListener('selectionchange', function() {
+    if (selecting) return;
+    scheduleFloat(false);
+  });
+  editor.addEventListener('touchstart', onSelectStart, { passive: true });
+  editor.addEventListener('touchend', onSelectEnd);
+  editor.addEventListener('mouseup', onSelectEnd);
+  window.addEventListener('scroll', function() {
+    if (gapFloat.classList.contains('show')) placeFloat();
+  }, true);
 
   document.addEventListener('message', handleNative);
   window.addEventListener('message', handleNative);
@@ -328,6 +426,7 @@ function buildFillGapsHtml(
       if (!msg || !msg.type) return;
       if (msg.type === 'setHtml') {
         editor.innerHTML = msg.payload || '<p><br></p>';
+        hideFloat();
       } else if (msg.type === 'updateGapLabel') {
         var id = msg.payload && msg.payload.gapId;
         var label = (msg.payload && msg.payload.label) || '…';
@@ -342,7 +441,7 @@ function buildFillGapsHtml(
           emitChange();
         }
       } else if (msg.type === 'makeGap') {
-        makeBtn.click();
+        doMakeGap();
       } else if (msg.type === 'getState') {
         post('change', serialize());
       }
@@ -434,7 +533,6 @@ export function FillGapsRichEditor({
         payload.content?.length > 0 ? payload.content : defaultContent();
       const ids = new Set(payload.gapIds || []);
       let nextGaps = gapsRef.current.filter(g => ids.has(g.id));
-      // keep order of appearance
       nextGaps = (payload.gapIds || [])
         .map(id => nextGaps.find(g => g.id === id) || gapsRef.current.find(g => g.id === id))
         .filter(Boolean) as FillGapsGap[];
@@ -504,7 +602,6 @@ export function FillGapsRichEditor({
           }
         : g,
     );
-    // if somehow missing (race), append
     if (!nextGaps.some(g => g.id === activeGapId)) {
       nextGaps.push({
         id: activeGapId,
@@ -535,13 +632,6 @@ export function FillGapsRichEditor({
   return (
     <View style={styles.wrap}>
       {hint ? <Text style={styles.hint}>{hint}</Text> : null}
-      <View style={styles.toolbar}>
-        <Pressable
-          style={styles.makeGapBtn}
-          onPress={() => postToWeb(webRef, {type: 'makeGap'})}>
-          <Text style={styles.makeGapText}>{label}</Text>
-        </Pressable>
-      </View>
       <EditorWebView
         ref={webRef}
         originWhitelist={['*']}
@@ -657,24 +747,11 @@ const styles = StyleSheet.create({
   hint: {
     paddingHorizontal: 12,
     paddingTop: 10,
+    paddingBottom: 4,
     color: colors.textSecondary,
     fontSize: 13,
     lineHeight: 18,
   },
-  toolbar: {
-    padding: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    backgroundColor: '#F8F7FC',
-  },
-  makeGapBtn: {
-    alignSelf: 'flex-start',
-    backgroundColor: colors.primary,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: radii.sm,
-  },
-  makeGapText: {color: colors.white, fontWeight: '700'},
   web: {width: '100%', backgroundColor: colors.white},
   gapCount: {
     padding: 10,

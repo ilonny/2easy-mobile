@@ -1,4 +1,4 @@
-import {useCallback, useEffect, useMemo, useState} from 'react';
+import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
   StyleSheet,
   Text,
@@ -18,6 +18,7 @@ import {
 } from '../interaction/DraggableChip';
 import {OptionSelect} from '../interaction/OptionSelect';
 import {StickyChipPool} from '../interaction/StickyChipPool';
+import {answerFeedback} from '../interaction/answerFeedback';
 
 type Props = {data: any};
 
@@ -36,6 +37,18 @@ function hasCorrect(gap?: Gap) {
   );
 }
 
+function gapAnswerKey(gapId: string, occurrence: number) {
+  return occurrence > 0 ? `${gapId}#${occurrence}` : String(gapId);
+}
+
+function parseGapAnswerKey(key: string): {gapId: string} {
+  const i = String(key).lastIndexOf('#');
+  if (i > 0 && /^\d+$/.test(String(key).slice(i + 1))) {
+    return {gapId: String(key).slice(0, i)};
+  }
+  return {gapId: String(key)};
+}
+
 export function FillGapsNewExView({data}: Props) {
   const {lessonId, studentId, activeStudentId, isTeacher} = useLessonPlayer();
   const {writeAnswer, answers} = useExAnswer({
@@ -50,6 +63,7 @@ export function FillGapsNewExView({data}: Props) {
   const gaps: Gap[] = data?.gaps || [];
   const content: any[] = Array.isArray(data?.content) ? data.content : [];
   const {registerRef, hitTestDropTarget} = useDropTargetRegistry();
+  const scopeRef = useRef<View>(null);
 
   const gapsById = useMemo(() => {
     const m = new Map<string, Gap>();
@@ -102,17 +116,19 @@ export function FillGapsNewExView({data}: Props) {
     );
   };
 
-  const setAnswer = (gapId: string, value: string, status: AnswerStatus) => {
-    const next = {...map, [gapId]: {value, status}};
+  const setAnswer = (answerKey: string, value: string, status: AnswerStatus) => {
+    const next = {...map, [answerKey]: {value, status}};
     setMap(next);
     persist(next);
   };
 
-  const placeOnGap = (gapId: string, value: string) => {
+  const placeOnGap = (targetKey: string, value: string) => {
+    const {gapId} = parseGapAnswerKey(targetKey);
     const gap = gapsById.get(gapId);
     const ok = isCorrectForGap(gap, value);
-    setAnswer(gapId, value, ok ? 'correct' : 'incorrect');
+    setAnswer(targetKey, value, ok ? 'correct' : 'incorrect');
     setSelectedPoolId(null);
+    // Only consume (hide) the chip when the answer is correct.
     return ok;
   };
 
@@ -135,32 +151,37 @@ export function FillGapsNewExView({data}: Props) {
     return items.filter(i => !used.has(normalize(i.value)));
   }, [gaps, map]);
 
-  const renderGap = (gapId: string) => {
+  const renderGap = (gapId: string, occurrence = 0) => {
     const gap = gapsById.get(gapId);
-    const ans = map[gapId];
+    const answerKey = gapAnswerKey(gapId, occurrence);
+    const ans = map[answerKey];
     const status = ans?.status || 'neutral';
     const value = ans?.value || '';
 
     if (mode === 'input') {
       return (
         <TextInput
-          key={gapId}
+          key={answerKey}
           value={value}
-          onChangeText={text => setAnswer(gapId, text, 'neutral')}
+          autoComplete="off"
+          onChangeText={text => setAnswer(answerKey, text, 'neutral')}
           onBlur={() => {
             if (!value.trim()) {
               return;
             }
             setAnswer(
-              gapId,
+              answerKey,
               value,
               isCorrectForGap(gap, value) ? 'correct' : 'incorrect',
             );
           }}
           style={[
             styles.gapInput,
-            status === 'correct' && styles.ok,
-            status === 'incorrect' && styles.bad,
+            answerFeedback.slot,
+            status === 'correct' && answerFeedback.ok,
+            status === 'incorrect' && answerFeedback.bad,
+            status === 'correct' && answerFeedback.okText,
+            status === 'incorrect' && answerFeedback.badText,
           ]}
           placeholder="…"
           placeholderTextColor={colors.muted}
@@ -176,7 +197,7 @@ export function FillGapsNewExView({data}: Props) {
       }));
       return (
         <OptionSelect
-          key={gapId}
+          key={answerKey}
           value={value}
           options={options}
           highlightCorrect={isTeacher}
@@ -185,34 +206,44 @@ export function FillGapsNewExView({data}: Props) {
           }
           onChange={opt => {
             const ok = isCorrectForGap(gap, opt.label);
-            setAnswer(gapId, opt.label, ok ? 'correct' : 'incorrect');
+            setAnswer(answerKey, opt.label, ok ? 'correct' : 'incorrect');
           }}
         />
       );
     }
 
-    // drag mode drop zone
+    // drag mode drop zone — filled slots are green; wrong attempts stay red
     return (
       <DropZone
-        key={gapId}
-        id={gapId}
+        key={answerKey}
+        id={answerKey}
         registerRef={registerRef}
-        highlight={!!selectedPoolId}
+        highlight={!!selectedPoolId && status !== 'correct'}
         style={[
           styles.gapSelect,
-          status === 'correct' && styles.ok,
-          status === 'incorrect' && styles.bad,
+          answerFeedback.slot,
+          status === 'incorrect' && answerFeedback.bad,
+          status === 'correct' && answerFeedback.ok,
+          status === 'neutral' && !!value && answerFeedback.ok,
         ]}>
         <Text
           onPress={() => {
+            if (status === 'correct') {
+              return;
+            }
             if (selectedPoolId) {
               const item = pool.find(p => p.id === selectedPoolId);
               if (item) {
-                placeOnGap(gapId, item.value);
+                placeOnGap(answerKey, item.value);
               }
             }
           }}
-          style={styles.gapText}>
+          style={[
+            styles.gapText,
+            status === 'incorrect' && answerFeedback.badText,
+            (status === 'correct' || (!!value && status !== 'incorrect')) &&
+              answerFeedback.okText,
+          ]}>
           {value || (selectedPoolId ? '⬇' : '····')}
         </Text>
       </DropZone>
@@ -252,7 +283,7 @@ export function FillGapsNewExView({data}: Props) {
   const bgImages = data?.images?.length ? data.images : [];
 
   return (
-    <View style={styles.root}>
+    <View ref={scopeRef} style={styles.root} collapsable={false}>
       <ExHeader
         title={data?.title}
         titleColor={data?.titleColor}
@@ -263,7 +294,7 @@ export function FillGapsNewExView({data}: Props) {
         <ImageGallery images={bgImages} viewType="carousel" />
       )}
       {mode === 'drag' && !!pool.length && (
-        <StickyChipPool>
+        <StickyChipPool scopeRef={scopeRef}>
           {pool.map(item => (
             <DraggableChip
               key={item.id}
@@ -280,13 +311,22 @@ export function FillGapsNewExView({data}: Props) {
         </StickyChipPool>
       )}
       <View style={styles.card}>
-        {content.map((para, pIdx) => (
-          <View key={`p-${pIdx}`} style={styles.para}>
-            {(para?.children || []).map((child: any, cIdx: number) =>
-              renderNode(child, cIdx),
-            )}
-          </View>
-        ))}
+        {(() => {
+          const occ: Record<string, number> = {};
+          return content.map((para, pIdx) => (
+            <View key={`p-${pIdx}`} style={styles.para}>
+              {(para?.children || []).map((child: any, cIdx: number) => {
+                if (child?.type === 'gap' && child.gapId) {
+                  const id = String(child.gapId);
+                  const n = occ[id] || 0;
+                  occ[id] = n + 1;
+                  return renderGap(id, n);
+                }
+                return renderNode(child, cIdx);
+              })}
+            </View>
+          ));
+        })()}
         {!content.length &&
           gaps.map(g => <View key={g.id}>{renderGap(g.id)}</View>)}
       </View>
@@ -323,13 +363,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   gapSelect: {
-    minWidth: 72,
-    borderRadius: radii.sm,
-    backgroundColor: colors.primarySoft,
-    paddingHorizontal: 10,
+    minWidth: 120,
+    minHeight: 44,
+    borderRadius: 999,
+    paddingHorizontal: 12,
     paddingVertical: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  gapText: {color: colors.text, fontWeight: '600'},
-  ok: {backgroundColor: '#EBFFEE'},
-  bad: {backgroundColor: '#FFE5E5'},
+  gapText: {color: colors.primary, fontWeight: '700'},
 });

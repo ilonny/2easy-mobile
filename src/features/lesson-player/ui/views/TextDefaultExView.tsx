@@ -10,6 +10,12 @@ type Props = {data: any};
 export function TextDefaultExView({data}: Props) {
   const editorImage = data?.editorImages?.[0];
   const bgImages = data?.images?.length ? [data.images[0]] : [];
+  const contentHtml =
+    typeof data?.content === 'string'
+      ? data.content
+      : data?.content != null
+        ? String(data.content)
+        : '';
 
   return (
     <View style={styles.root}>
@@ -30,7 +36,7 @@ export function TextDefaultExView({data}: Props) {
             resizeMode="contain"
           />
         )}
-        <HtmlContent html={data?.content} />
+        <HtmlContent html={contentHtml} />
       </View>
     </View>
   );

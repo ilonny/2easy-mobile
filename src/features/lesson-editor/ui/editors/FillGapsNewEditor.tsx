@@ -1,4 +1,4 @@
-import {useEffect, useState} from 'react';
+import {useEffect, useMemo, useState} from 'react';
 import {Pressable, Text, View} from 'react-native';
 
 import {useI18n} from '../../../../shared/i18n';
@@ -20,6 +20,7 @@ import {
   persistExercise,
   resolvePickedAttachments,
   type EditorCommonProps,
+  pickedToPreviewMedia,
 } from './editorShared';
 
 type Mode = 'input' | 'select' | 'drag';
@@ -134,6 +135,20 @@ export function FillGapsNewEditor({
         ? t('editor.fillGapsHintDrag')
         : t('editor.fillGapsHintInput');
 
+  const previewData = useMemo(
+    () => ({
+      mode,
+      title,
+      titleColor: TITLE_COLOR,
+      subtitle,
+      description,
+      content,
+      gaps,
+      images: pickedToPreviewMedia(images),
+    }),
+    [mode, title, subtitle, description, content, gaps, images],
+  );
+
   return (
     <EditorShell
       visible={visible}
@@ -142,7 +157,10 @@ export function FillGapsNewEditor({
       onSave={() => {
         void onSave();
       }}
-      saving={saving}>
+      saving={saving}
+      previewType="FILL_GAPS_NEW"
+      previewLessonId={lessonId}
+      previewData={previewData}>
       <TextField label={t('editor.fieldTitle')} value={title} onChangeText={setTitle} />
       <TextField
         label={t('editor.fieldSubtitle')}

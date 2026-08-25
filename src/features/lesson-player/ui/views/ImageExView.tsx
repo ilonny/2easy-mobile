@@ -6,6 +6,11 @@ import {ImageGallery} from '../ImageGallery';
 type Props = {data: any};
 
 export function ImageExView({data}: Props) {
+  const images =
+    (Array.isArray(data?.images) && data.images.length
+      ? data.images
+      : data?.attachments) || [];
+
   return (
     <View style={styles.root}>
       <ExHeader
@@ -14,7 +19,7 @@ export function ImageExView({data}: Props) {
         subtitle={data?.subtitle}
         description={data?.description}
       />
-      <ImageGallery images={data?.images} viewType={data?.viewType} />
+      <ImageGallery images={images} viewType={data?.viewType} />
     </View>
   );
 }

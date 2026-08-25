@@ -10,6 +10,7 @@ import {
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
 import {colors, radii} from '../../../../shared/config/theme';
+import {answerFeedback} from './answerFeedback';
 
 type Option = {
   id: string;
@@ -55,10 +56,17 @@ export function OptionSelect({
         onPress={() => setOpen(true)}
         style={[
           styles.trigger,
-          status === 'ok' && styles.ok,
-          status === 'bad' && styles.bad,
+          status === 'ok' && answerFeedback.ok,
+          status === 'bad' && answerFeedback.bad,
         ]}>
-        <Text style={styles.triggerText}>{title || placeholder}</Text>
+        <Text
+          style={[
+            styles.triggerText,
+            status === 'ok' && answerFeedback.okText,
+            status === 'bad' && answerFeedback.badText,
+          ]}>
+          {title || placeholder}
+        </Text>
         <Text style={styles.chevron}>▾</Text>
       </Pressable>
 
@@ -124,8 +132,6 @@ const styles = StyleSheet.create({
   },
   triggerText: {color: colors.text, fontWeight: '600', flexShrink: 1},
   chevron: {color: colors.primary, fontWeight: '800'},
-  ok: {backgroundColor: '#EBFFEE', borderColor: '#B7E4C7'},
-  bad: {backgroundColor: '#FFE5E5', borderColor: '#F0C9C9'},
   backdrop: {
     flex: 1,
     backgroundColor: 'rgba(32, 16, 125, 0.35)',

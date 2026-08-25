@@ -1,4 +1,4 @@
-import {useEffect, useState} from 'react';
+import {useEffect, useMemo, useState} from 'react';
 import {Text, View} from 'react-native';
 
 import {useI18n} from '../../../../shared/i18n';
@@ -15,6 +15,7 @@ import {
   persistExercise,
   resolvePickedAttachments,
   type EditorCommonProps,
+  pickedToPreviewMedia,
 } from './editorShared';
 
 export function TextDefaultEditor({
@@ -77,6 +78,20 @@ export function TextDefaultEditor({
     }
   };
 
+  const previewData = useMemo(
+    () => ({
+      title,
+      titleColor: TITLE_COLOR,
+      subtitle,
+      description,
+      content,
+      images: pickedToPreviewMedia(images),
+      editorImages: pickedToPreviewMedia(editorImages),
+      viewType: 'carousel',
+    }),
+    [title, subtitle, description, content, images, editorImages],
+  );
+
   return (
     <EditorShell
       visible={visible}
@@ -85,7 +100,10 @@ export function TextDefaultEditor({
       onSave={() => {
         void onSave();
       }}
-      saving={saving}>
+      saving={saving}
+      previewType="text-default"
+      previewLessonId={lessonId}
+      previewData={previewData}>
       <TextField
         label={t('editor.fieldTitle')}
         value={title}

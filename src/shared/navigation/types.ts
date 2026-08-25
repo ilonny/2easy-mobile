@@ -12,6 +12,7 @@ export type AuthStackParamList = {
 /** Catalog + lesson content under the Lessons tab (keeps tab bar visible). */
 export type LessonsStackParamList = {
   LessonPlans: undefined;
+  Course: {courseId: number};
   SpeakingGames: undefined;
   DiscussionCards: undefined;
   Grammar: undefined;

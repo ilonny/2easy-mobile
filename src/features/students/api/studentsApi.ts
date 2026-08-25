@@ -70,3 +70,42 @@ export async function deleteStudent(id: number) {
     data: {id},
   });
 }
+
+export async function createLessonRelation(data: {
+  lesson_id: number;
+  student_id: number;
+  status: 'open' | 'close';
+}) {
+  return postJson<{success?: boolean; message?: string}>({
+    path: '/lesson-relation/create',
+    isSecure: true,
+    data,
+  });
+}
+
+export type LessonParticipant = {
+  id?: number;
+  student_id: number;
+  'student.name'?: string;
+  'student.email'?: string;
+  name?: string;
+  email?: string;
+};
+
+export async function fetchLessonStudents(
+  lessonId: number,
+  studentIds?: number[],
+): Promise<LessonParticipant[]> {
+  const qs = new URLSearchParams({lesson_id: String(lessonId)});
+  if (studentIds?.length) {
+    qs.set('student_ids', studentIds.join(','));
+  }
+  const res = await getJson<{
+    success?: boolean;
+    studentList?: LessonParticipant[];
+  }>({
+    path: `/lesson-students?${qs.toString()}`,
+    isSecure: true,
+  });
+  return Array.isArray(res?.studentList) ? res.studentList : [];
+}

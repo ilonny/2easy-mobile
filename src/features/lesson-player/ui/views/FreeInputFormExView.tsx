@@ -1,10 +1,11 @@
 import {useEffect, useState} from 'react';
-import {StyleSheet, Text, TextInput, View} from 'react-native';
+import {StyleSheet, TextInput, View} from 'react-native';
 
 import {colors, radii} from '../../../../shared/config/theme';
 import {useLessonPlayer} from '../../model/LessonPlayerContext';
 import {useExAnswer} from '../../model/useExAnswer';
 import {ExHeader} from '../ExHeader';
+import {HtmlContent} from '../HtmlContent';
 import {ImageGallery} from '../ImageGallery';
 
 type Props = {data: any};
@@ -49,7 +50,7 @@ export function FreeInputFormExView({data}: Props) {
         return (
           <View key={key} style={styles.block}>
             {!!question.value && (
-              <Text style={styles.prompt}>{question.value}</Text>
+              <HtmlContent html={question.value} baseStyle={styles.prompt} />
             )}
             <TextInput
               style={styles.input}

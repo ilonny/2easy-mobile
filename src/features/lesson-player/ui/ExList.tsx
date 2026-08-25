@@ -6,12 +6,13 @@ import {colors, radii} from '../../../shared/config/theme';
 import {ActionMenuModal, type ActionMenuItem} from '../../../shared/ui';
 import {getExerciseTypeLabel} from '../../lesson-editor/model/templates';
 import {
-  ANSWER_EX_TYPES,
   type Exercise,
   type ExListChromeHandlers,
 } from '../model/types';
 import {isExVisible} from '../lib/exMappers';
 import {useLessonPlayer} from '../model/LessonPlayerContext';
+import {stripHtml} from './HtmlContent';
+import {useChipDrag} from './interaction/ChipDragContext';
 import {ExViewRouter} from './views/ExViewRouter';
 
 type Props = {
@@ -28,7 +29,10 @@ function exerciseTitle(data: Exercise['data']) {
   ];
   for (const value of candidates) {
     if (typeof value === 'string' && value.trim()) {
-      return value.trim();
+      const plain = stripHtml(value);
+      if (plain) {
+        return plain;
+      }
     }
   }
   return '';
@@ -52,6 +56,7 @@ function visibilityLabel(
 export function ExList({list, chrome}: Props) {
   const {t} = useI18n();
   const {isTeacher, isEdit, isView} = useLessonPlayer();
+  const {isDragging} = useChipDrag();
   const [menuExId, setMenuExId] = useState<number | null>(null);
 
   const menuEx = useMemo(
@@ -123,7 +128,12 @@ export function ExList({list, chrome}: Props) {
 
         return (
           <View key={ex.id}>
-            <View style={[styles.card, !visible && styles.cardHidden]}>
+            <View
+              style={[
+                styles.card,
+                !visible && styles.cardHidden,
+                isDragging && styles.cardDragging,
+              ]}>
               {isEdit ? (
                 <View style={styles.chrome}>
                   <View style={styles.chromeTop}>
@@ -167,12 +177,6 @@ export function ExList({list, chrome}: Props) {
               ) : null}
 
               <ExViewRouter type={ex.type} data={{...ex.data, id: ex.id}} />
-
-              {isEdit && ANSWER_EX_TYPES.has(ex.type) ? (
-                <View style={styles.answerBadge}>
-                  <Text style={styles.answerHint}>{t('editor.answersOn')}</Text>
-                </View>
-              ) : null}
             </View>
 
             {isEdit && index < list.length - 1 ? (
@@ -256,6 +260,10 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     overflow: 'visible',
     zIndex: 1,
+  },
+  cardDragging: {
+    zIndex: 50,
+    elevation: 8,
   },
   cardHidden: {opacity: 0.55},
   chrome: {
@@ -344,17 +352,4 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   insertText: {color: colors.primary, fontWeight: '700'},
-  answerBadge: {
-    marginTop: 10,
-    alignSelf: 'center',
-    backgroundColor: colors.primarySoft,
-    borderRadius: 100,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-  },
-  answerHint: {
-    fontSize: 12,
-    color: colors.primary,
-    fontWeight: '600',
-  },
 });

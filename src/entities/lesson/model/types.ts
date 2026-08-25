@@ -19,4 +19,6 @@ export const LEVEL_FILTERS = [
 
 export type LevelFilter = (typeof LEVEL_FILTERS)[number];
 
-export type LessonsTab = 'twoEasy' | 'my';
+export type LessonsTab = 'twoEasy' | 'my' | 'myCourses' | 'twoEasyCourses';
+
+export const TWO_EASY_USER_ID = 1;

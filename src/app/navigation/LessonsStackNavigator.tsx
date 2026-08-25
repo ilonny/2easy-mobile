@@ -1,6 +1,7 @@
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
 
 import {LessonPlansPage} from '../../pages/lesson-plans/ui/LessonPlansPage';
+import {CoursePage} from '../../pages/course/ui/CoursePage';
 import {SpeakingGamesPage} from '../../pages/speaking-games/ui/SpeakingGamesPage';
 import {DiscussionCardsPage} from '../../pages/discussion-cards/ui/DiscussionCardsPage';
 import {GrammarPage} from '../../pages/grammar/ui/GrammarPage';
@@ -28,6 +29,11 @@ export function LessonsStackNavigator() {
       <Stack.Screen
         name="LessonPlans"
         component={LessonPlansPage}
+        options={{contentStyle: {backgroundColor: '#F7F5FF'}}}
+      />
+      <Stack.Screen
+        name="Course"
+        component={CoursePage}
         options={{contentStyle: {backgroundColor: '#F7F5FF'}}}
       />
       <Stack.Screen name="SpeakingGames" component={SpeakingGamesPage} />

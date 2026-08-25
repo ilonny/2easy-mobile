@@ -1,19 +1,11 @@
-import {useCallback, useRef, useState} from 'react';
-import {
-  Dimensions,
-  FlatList,
-  Image,
-  Modal,
-  NativeScrollEvent,
-  NativeSyntheticEvent,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
-import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import {useMemo, useState} from 'react';
+import {StyleSheet, Text, View} from 'react-native';
+import {FlatList} from 'react-native-gesture-handler';
 
 import {colors, radii} from '../../../shared/config/theme';
+import {useLayout} from '../../../shared/lib/layout';
+import {ZoomableImage} from '../../../shared/ui/ZoomableImage';
+import {getImageUrl} from '../lib/getImageUrl';
 import type {ExAttachment} from '../model/types';
 
 type Props = {
@@ -21,138 +13,136 @@ type Props = {
   viewType?: string;
 };
 
-const {width: SCREEN_W, height: SCREEN_H} = Dimensions.get('window');
+function resolveUri(img: ExAttachment): string {
+  const raw = img.dataURL || img.path || '';
+  if (!raw) {
+    return '';
+  }
+  if (/\.svg(?:\?|#|$)/i.test(raw) || raw.includes('/_next/static/')) {
+    return '';
+  }
+  if (raw.startsWith('about:')) {
+    return '';
+  }
+  if (
+    /^https?:\/\//i.test(raw) ||
+    /^file:\/\//i.test(raw) ||
+    raw.startsWith('content://') ||
+    raw.startsWith('ph://') ||
+    raw.startsWith('assets-library://') ||
+    raw.startsWith('data:')
+  ) {
+    return raw;
+  }
+  return getImageUrl(raw);
+}
 
 export function ImageGallery({images = [], viewType = 'carousel'}: Props) {
-  const insets = useSafeAreaInsets();
-  const [viewerOpen, setViewerOpen] = useState(false);
-  const [index, setIndex] = useState(0);
-  const listRef = useRef<FlatList>(null);
+  const {isTablet} = useLayout();
+  const [carouselW, setCarouselW] = useState(0);
+  const imageH = isTablet ? 340 : 280;
 
-  const uris = images
-    .map(img => img.dataURL || img.path || '')
-    .filter(
-      uri =>
-        !!uri &&
-        /^https?:\/\//i.test(uri) &&
-        !/\.svg(?:\?|#|$)/i.test(uri) &&
-        !uri.includes('/_next/static/') &&
-        !uri.startsWith('about:'),
-    );
+  const items = useMemo(
+    () =>
+      images
+        .map((img, i) => ({uri: resolveUri(img), text: img.text, key: i}))
+        .filter(item => !!item.uri),
+    [images],
+  );
 
-  const openAt = useCallback((i: number) => {
-    setIndex(i);
-    setViewerOpen(true);
-  }, []);
+  const gallerySources = useMemo(
+    () => items.map(item => ({uri: item.uri})),
+    [items],
+  );
 
-  const onViewerScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const i = Math.round(e.nativeEvent.contentOffset.x / SCREEN_W);
-    if (i !== index) {
-      setIndex(i);
-    }
-  };
-
-  if (!uris.length) {
-    return <View style={styles.placeholder} />;
+  if (!items.length) {
+    return <View style={[styles.placeholder, {height: isTablet ? 220 : 180}]} />;
   }
 
   const isCarousel = viewType === 'carousel' || !viewType;
   const cols = viewType === '3-col' ? 3 : viewType === '2-col' ? 2 : 1;
 
   return (
-    <>
-      {isCarousel && uris.length >= 2 ? (
-        <FlatList
-          data={uris}
-          horizontal
-          pagingEnabled
-          showsHorizontalScrollIndicator={false}
-          keyExtractor={(uri, i) => `${uri}-${i}`}
-          renderItem={({item, index: i}) => (
-            <Pressable
-              style={{width: SCREEN_W - 48}}
-              onPress={() => openAt(i)}>
-              <Image source={{uri: item}} style={styles.carouselImg} resizeMode="contain" />
-              {!!images[i]?.text && (
-                <Text style={styles.caption}>{images[i].text}</Text>
-              )}
-            </Pressable>
-          )}
-        />
-      ) : isCarousel && uris.length === 1 ? (
-        <Pressable onPress={() => openAt(0)}>
-          <Image
-            source={{uri: uris[0]}}
-            style={styles.single}
-            resizeMode="contain"
-          />
-          {!!images[0]?.text && (
-            <Text style={styles.caption}>{images[0].text}</Text>
-          )}
-        </Pressable>
-      ) : (
-        <View style={[styles.grid, cols === 3 && styles.grid3]}>
-          {uris.map((uri, i) => (
-            <Pressable
-              key={`${uri}-${i}`}
-              style={[styles.gridItem, {width: `${100 / cols - 2}%` as never}]}
-              onPress={() => openAt(i)}>
-              <Image source={{uri}} style={styles.gridImg} resizeMode="cover" />
-              {!!images[i]?.text && (
-                <Text style={styles.caption}>{images[i].text}</Text>
-              )}
-            </Pressable>
-          ))}
-        </View>
-      )}
-
-      <Modal
-        visible={viewerOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setViewerOpen(false)}>
-        <View style={styles.viewer}>
-          <Pressable
-            style={[styles.close, {top: insets.top + 8}]}
-            onPress={() => setViewerOpen(false)}>
-            <Text style={styles.closeText}>✕</Text>
-          </Pressable>
+    <View
+      style={styles.root}
+      collapsable={false}
+      onLayout={e => {
+        const w = Math.round(e.nativeEvent.layout.width);
+        if (w > 0 && w !== carouselW) {
+          setCarouselW(w);
+        }
+      }}>
+      {isCarousel && items.length >= 2 ? (
+        carouselW > 0 ? (
           <FlatList
-            ref={listRef}
-            data={uris}
+            style={{width: carouselW}}
+            data={items}
             horizontal
             pagingEnabled
-            initialScrollIndex={index}
-            getItemLayout={(_, i) => ({
-              length: SCREEN_W,
-              offset: SCREEN_W * i,
-              index: i,
-            })}
-            onScroll={onViewerScroll}
+            nestedScrollEnabled
+            decelerationRate="fast"
             showsHorizontalScrollIndicator={false}
-            keyExtractor={(uri, i) => `viewer-${uri}-${i}`}
-            renderItem={({item}) => (
-              <View style={{width: SCREEN_W, height: SCREEN_H}}>
-                <Image
-                  source={{uri: item}}
-                  style={styles.viewerImg}
+            keyExtractor={(item, i) => `${item.uri}-${i}`}
+            getItemLayout={(_, index) => ({
+              length: carouselW,
+              offset: carouselW * index,
+              index,
+            })}
+            renderItem={({item, index}) => (
+              <View style={{width: carouselW}}>
+                <ZoomableImage
+                  source={{uri: item.uri}}
+                  gallerySources={gallerySources}
+                  galleryIndex={index}
+                  style={[styles.carouselImg, {height: imageH}]}
                   resizeMode="contain"
                 />
+                {!!item.text && <Text style={styles.caption}>{item.text}</Text>}
               </View>
             )}
           />
-          {uris.length > 1 ? (
-            <Text style={[styles.counter, {bottom: insets.bottom + 16}]}>
-              {index + 1} / {uris.length}
-            </Text>
-          ) : null}
+        ) : (
+          <View style={{height: imageH}} />
+        )
+      ) : isCarousel && items.length === 1 ? (
+        <View>
+          <ZoomableImage
+            source={{uri: items[0].uri}}
+            style={[styles.single, {height: imageH}]}
+            resizeMode="contain"
+          />
+          {!!items[0].text && (
+            <Text style={styles.caption}>{items[0].text}</Text>
+          )}
         </View>
-      </Modal>
-    </>
+      ) : (
+        <View style={[styles.grid, cols === 3 && styles.grid3]}>
+          {items.map((item, i) => (
+            <View
+              key={`${item.uri}-${i}`}
+              style={[styles.gridItem, {width: `${100 / cols - 2}%` as never}]}>
+              <ZoomableImage
+                source={{uri: item.uri}}
+                gallerySources={gallerySources}
+                galleryIndex={i}
+                style={styles.gridImg}
+                resizeMode="cover"
+              />
+              {!!item.text && <Text style={styles.caption}>{item.text}</Text>}
+            </View>
+          ))}
+        </View>
+      )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  root: {
+    zIndex: 0,
+    elevation: 0,
+    overflow: 'visible',
+  },
   placeholder: {
     height: 180,
     borderRadius: radii.lg,
@@ -163,11 +153,13 @@ const styles = StyleSheet.create({
     height: 280,
     borderRadius: radii.md,
     backgroundColor: colors.primarySoft,
+    overflow: 'hidden',
   },
   single: {
     width: '100%',
     height: 280,
     borderRadius: radii.md,
+    overflow: 'hidden',
   },
   caption: {
     marginTop: 8,
@@ -190,33 +182,6 @@ const styles = StyleSheet.create({
     aspectRatio: 1,
     borderRadius: radii.md,
     backgroundColor: colors.primarySoft,
-  },
-  viewer: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.94)',
-  },
-  close: {
-    position: 'absolute',
-    right: 16,
-    zIndex: 2,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  closeText: {color: '#fff', fontSize: 18, fontWeight: '700'},
-  viewerImg: {
-    width: SCREEN_W,
-    height: SCREEN_H * 0.82,
-    alignSelf: 'center',
-    marginTop: SCREEN_H * 0.08,
-  },
-  counter: {
-    position: 'absolute',
-    alignSelf: 'center',
-    color: '#fff',
-    fontWeight: '700',
+    overflow: 'hidden',
   },
 });

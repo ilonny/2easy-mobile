@@ -1,6 +1,5 @@
-import {useEffect, useMemo, useState} from 'react';
+import {useEffect, useMemo, useRef, useState} from 'react';
 import {
-  Image,
   StyleSheet,
   Text,
   TextInput,
@@ -8,6 +7,9 @@ import {
 } from 'react-native';
 
 import {colors, radii} from '../../../../shared/config/theme';
+import {useLayout} from '../../../../shared/lib/layout';
+import {ZoomableImage} from '../../../../shared/ui/ZoomableImage';
+import {getImageUrl} from '../../lib/getImageUrl';
 import {useLessonPlayer} from '../../model/LessonPlayerContext';
 import {useExAnswer} from '../../model/useExAnswer';
 import {ExHeader} from '../ExHeader';
@@ -17,6 +19,7 @@ import {
   useDropTargetRegistry,
 } from '../interaction/DraggableChip';
 import {StickyChipPool} from '../interaction/StickyChipPool';
+import {answerFeedback} from '../interaction/answerFeedback';
 
 type Props = {data: any};
 
@@ -27,7 +30,26 @@ type ImgItem = {
   text?: string;
 };
 
+function resolveUri(item: ImgItem): string {
+  const raw = item.dataURL || item.path || '';
+  if (!raw) {
+    return '';
+  }
+  if (
+    /^https?:\/\//i.test(raw) ||
+    /^file:\/\//i.test(raw) ||
+    raw.startsWith('content://') ||
+    raw.startsWith('ph://') ||
+    raw.startsWith('data:')
+  ) {
+    return raw;
+  }
+  return getImageUrl(raw);
+}
+
 export function MatchWordImageExView({data}: Props) {
+  const {isTablet, isLandscape} = useLayout();
+  const multiCol = isTablet || isLandscape;
   const {lessonId, studentId, activeStudentId, isTeacher} = useLessonPlayer();
   const {writeAnswer, answers} = useExAnswer({
     lessonId,
@@ -37,9 +59,18 @@ export function MatchWordImageExView({data}: Props) {
     isTeacher,
   });
   const {registerRef, hitTestDropTarget} = useDropTargetRegistry();
+  const scopeRef = useRef<View>(null);
 
   const images: ImgItem[] = (data?.images || []).filter(
     (i: ImgItem) => !!i.text,
+  );
+  const gallerySources = useMemo(
+    () =>
+      images
+        .map(i => resolveUri(i))
+        .filter(Boolean)
+        .map(uri => ({uri})),
+    [images],
   );
   const viewType = data?.viewType === 'input' ? 'input' : 'drag';
   const [correctIds, setCorrectIds] = useState<Array<string | number>>([]);
@@ -51,7 +82,7 @@ export function MatchWordImageExView({data}: Props) {
   const [flashBad, setFlashBad] = useState<string>();
 
   const chips = useMemo(
-    () => images.filter(i => !correctIds.includes(i.id)),
+    () => images.filter(i => !correctIds.some(id => String(id) === String(i.id))),
     [images, correctIds],
   );
 
@@ -61,13 +92,29 @@ export function MatchWordImageExView({data}: Props) {
       if (!raw) {
         return;
       }
-      const parsed = JSON.parse(raw);
-      setCorrectIds(parsed?.correctIds || []);
-      setIncorrectIdsMap(parsed?.incorrectIdsMap || {});
+      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      const nextCorrect: Array<string | number> = parsed?.correctIds || [];
+      const nextIncorrect: Record<string, string> =
+        parsed?.incorrectIdsMap || {};
+      setCorrectIds(nextCorrect);
+      setIncorrectIdsMap(nextIncorrect);
+      const list: ImgItem[] = (data?.images || []).filter(
+        (i: ImgItem) => !!i.text,
+      );
+      const nextInputs: Record<string, string> = {};
+      list.forEach(item => {
+        const key = String(item.id);
+        if (nextCorrect.some(id => String(id) === key)) {
+          nextInputs[key] = String(item.text || '');
+        } else if (nextIncorrect[key]) {
+          nextInputs[key] = nextIncorrect[key];
+        }
+      });
+      setInputs(nextInputs);
     } catch {
       // ignore
     }
-  }, [answers, data?.id]);
+  }, [answers, data?.id, data?.images]);
 
   const persist = (
     nextCorrect: Array<string | number>,
@@ -83,7 +130,9 @@ export function MatchWordImageExView({data}: Props) {
   };
 
   const markCorrect = (id: string | number) => {
-    const next = correctIds.includes(id) ? correctIds : correctIds.concat(id);
+    const next = correctIds.some(x => String(x) === String(id))
+      ? correctIds
+      : correctIds.concat(id);
     setCorrectIds(next);
     persist(next, incorrectIdsMap);
     setSelectedChipId(undefined);
@@ -99,7 +148,7 @@ export function MatchWordImageExView({data}: Props) {
   };
 
   const placeChip = (targetId: string | number, chipId: string | number) => {
-    if (correctIds.includes(targetId)) {
+    if (correctIds.some(id => String(id) === String(targetId))) {
       return false;
     }
     const chip = images.find(i => String(i.id) === String(chipId));
@@ -117,7 +166,7 @@ export function MatchWordImageExView({data}: Props) {
 
   const onBlurInput = (item: ImgItem) => {
     const val = (inputs[String(item.id)] || '').trim();
-    if (!val || correctIds.includes(item.id)) {
+    if (!val || correctIds.some(id => String(id) === String(item.id))) {
       return;
     }
     if (val.toLowerCase() === String(item.text || '').toLowerCase()) {
@@ -128,7 +177,7 @@ export function MatchWordImageExView({data}: Props) {
   };
 
   return (
-    <View style={styles.root}>
+    <View ref={scopeRef} style={styles.root} collapsable={false}>
       <ExHeader
         title={data?.title}
         titleColor={data?.titleColor}
@@ -136,7 +185,7 @@ export function MatchWordImageExView({data}: Props) {
         description={data?.description}
       />
       {viewType === 'drag' && !!chips.length && (
-        <StickyChipPool>
+        <StickyChipPool scopeRef={scopeRef}>
           {chips.map(chip => (
             <DraggableChip
               key={`chip-${chip.id}`}
@@ -150,22 +199,40 @@ export function MatchWordImageExView({data}: Props) {
           ))}
         </StickyChipPool>
       )}
-      <View style={styles.grid}>
-        {images.map(item => {
-          const done = correctIds.includes(item.id);
-          const uri = item.dataURL || item.path;
+      <View style={[styles.grid, multiCol && styles.gridMulti]}>
+        {images.map((item, index) => {
+          const done = correctIds.some(id => String(id) === String(item.id));
+          const wrong = !done ? incorrectIdsMap[String(item.id)] : undefined;
+          const uri = resolveUri(item);
+          const galleryIndex = gallerySources.findIndex(
+            s => s.uri === uri,
+          );
           const body = (
             <>
               {!!uri && (
-                <Image source={{uri}} style={styles.img} resizeMode="contain" />
+                <ZoomableImage
+                  source={{uri}}
+                  gallerySources={
+                    gallerySources.length > 1 ? gallerySources : undefined
+                  }
+                  galleryIndex={galleryIndex >= 0 ? galleryIndex : index}
+                  style={[styles.img, multiCol && styles.imgCompact]}
+                  resizeMode="contain"
+                />
               )}
               {viewType === 'input' ? (
                 done ? (
-                  <Text style={styles.okText}>{item.text}</Text>
+                  <Text style={[styles.slot, answerFeedback.okText]}>
+                    {item.text}
+                  </Text>
                 ) : (
                   <TextInput
-                    style={styles.input}
-                    value={inputs[String(item.id)] ?? ''}
+                    style={[
+                      styles.input,
+                      !!wrong && answerFeedback.bad,
+                      !!wrong && answerFeedback.badText,
+                    ]}
+                    value={inputs[String(item.id)] ?? wrong ?? ''}
                     onChangeText={v =>
                       setInputs(prev => ({...prev, [String(item.id)]: v}))
                     }
@@ -176,13 +243,22 @@ export function MatchWordImageExView({data}: Props) {
                 )
               ) : (
                 <Text
-                  style={styles.slot}
+                  style={[
+                    styles.slot,
+                    done && answerFeedback.okText,
+                    !done && !!wrong && answerFeedback.badText,
+                  ]}
                   onPress={() => {
+                    if (done) {
+                      return;
+                    }
                     if (selectedChipId != null) {
                       placeChip(item.id, selectedChipId);
                     }
                   }}>
-                  {done ? item.text : selectedChipId != null ? '⬇' : ' '}
+                  {done
+                    ? item.text
+                    : wrong || (selectedChipId != null ? '⬇' : ' ')}
                 </Text>
               )}
             </>
@@ -197,8 +273,10 @@ export function MatchWordImageExView({data}: Props) {
                 highlight={selectedChipId != null && !done}
                 style={[
                   styles.card,
-                  done && styles.cardOk,
-                  flashBad === String(item.id) && styles.cardBad,
+                  multiCol && styles.cardHalf,
+                  done && answerFeedback.ok,
+                  !done && !!wrong && answerFeedback.bad,
+                  flashBad === String(item.id) && answerFeedback.bad,
                 ]}>
                 {body}
               </DropZone>
@@ -210,8 +288,10 @@ export function MatchWordImageExView({data}: Props) {
               key={String(item.id)}
               style={[
                 styles.card,
-                done && styles.cardOk,
-                flashBad === String(item.id) && styles.cardBad,
+                multiCol && styles.cardHalf,
+                done && answerFeedback.ok,
+                !done && !!wrong && answerFeedback.bad,
+                flashBad === String(item.id) && answerFeedback.bad,
               ]}>
               {body}
             </View>
@@ -223,8 +303,12 @@ export function MatchWordImageExView({data}: Props) {
 }
 
 const styles = StyleSheet.create({
-  root: {gap: 12, overflow: 'visible'},
-  grid: {gap: 12},
+  root: {gap: 12, overflow: 'visible', zIndex: 1},
+  grid: {gap: 12, zIndex: 0, elevation: 0},
+  gridMulti: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
   card: {
     backgroundColor: colors.white,
     borderRadius: radii.md,
@@ -232,10 +316,21 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: 'transparent',
     gap: 8,
+    zIndex: 0,
+    elevation: 0,
   },
-  cardOk: {borderColor: '#22C55E', backgroundColor: '#EBFFEE'},
-  cardBad: {borderColor: colors.danger, backgroundColor: '#FFE5E5'},
-  img: {width: '100%', height: 160, borderRadius: radii.sm},
+  cardHalf: {
+    width: '48%',
+    flexGrow: 1,
+  },
+  img: {
+    width: '100%',
+    height: 160,
+    borderRadius: radii.sm,
+    overflow: 'hidden',
+    backgroundColor: colors.primarySoft,
+  },
+  imgCompact: {height: 140},
   slot: {textAlign: 'center', color: colors.textSecondary, minHeight: 22},
   input: {
     borderWidth: 1,
@@ -244,10 +339,5 @@ const styles = StyleSheet.create({
     padding: 10,
     backgroundColor: colors.white,
     color: colors.text,
-  },
-  okText: {
-    textAlign: 'center',
-    fontWeight: '700',
-    color: '#166534',
   },
 });

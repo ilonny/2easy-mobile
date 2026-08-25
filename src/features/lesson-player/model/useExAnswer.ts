@@ -18,6 +18,12 @@ export type AnswerRow = {
   [key: string]: unknown;
 };
 
+/** Backend rejects NaN / missing ids (`Unknown column 'NaN'`). */
+function isPositiveId(value: unknown): value is number {
+  const n = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(n) && n > 0;
+}
+
 function toAnswersMap(data: unknown[]): Record<string, AnswerRow> {
   return (data || []).reduce((map: Record<string, AnswerRow>, obj: any) => {
     if (obj?.q_id != null) {
@@ -44,25 +50,26 @@ export function useExAnswer({
     isTeacher ? activeStudentId || 0 : studentId || 0,
   );
 
+  const canFetch =
+    isPositiveId(lessonId) &&
+    isPositiveId(exId) &&
+    isPositiveId(targetStudentId);
+
   const getAnswers = useCallback(async () => {
-    if (!lessonId || !exId) {
+    if (!canFetch) {
       return {};
     }
-    const rows = await fetchAnswers(
-      lessonId,
-      exId,
-      targetStudentId || undefined,
-    );
+    const rows = await fetchAnswers(lessonId, exId, targetStudentId);
     const map = toAnswersMap(rows);
     if (mountedRef.current) {
       setAnswers(map);
     }
     return map;
-  }, [lessonId, exId, targetStudentId]);
+  }, [canFetch, lessonId, exId, targetStudentId]);
 
   const writeAnswer = useCallback(
     async (q_id: number | string, answer: string) => {
-      if (!targetStudentId || !lessonId || !exId) {
+      if (!canFetch) {
         return;
       }
       const job = writeAnswerApi({
@@ -79,26 +86,32 @@ export function useExAnswer({
         [String(q_id)]: {...(prev[String(q_id)] || {}), q_id, answer},
       }));
     },
-    [lessonId, exId, targetStudentId],
+    [canFetch, lessonId, exId, targetStudentId],
   );
 
   useEffect(() => {
     mountedRef.current = true;
+    if (!canFetch) {
+      setAnswers({});
+      return () => {
+        mountedRef.current = false;
+      };
+    }
     void getAnswers();
     return () => {
       mountedRef.current = false;
     };
-  }, [getAnswers]);
+  }, [canFetch, getAnswers]);
 
   useEffect(() => {
-    if (!enablePolling || !targetStudentId) {
+    if (!enablePolling || !canFetch) {
       return;
     }
     const timer = setInterval(() => {
       void getAnswers();
     }, pollMs);
     return () => clearInterval(timer);
-  }, [enablePolling, getAnswers, pollMs, targetStudentId]);
+  }, [enablePolling, canFetch, getAnswers, pollMs]);
 
   return {answers, setAnswers, getAnswers, writeAnswer, targetStudentId};
 }

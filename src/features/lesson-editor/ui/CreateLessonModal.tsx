@@ -11,11 +11,18 @@ import {
   Text,
   View,
 } from 'react-native';
+import {useNavigation} from '@react-navigation/native';
+import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
+import {useAuth} from '../../../entities/session';
 import {useI18n} from '../../../shared/i18n';
 import {colors, radii} from '../../../shared/config/theme';
+import type {RootStackParamList} from '../../../shared/navigation/types';
 import {AppDialog, Button, TextField} from '../../../shared/ui';
+import {canUseAi} from '../../ai/lib/canUseAi';
+import {CreateLessonWithAiModal} from '../../ai/ui/CreateLessonWithAiModal';
+import {useSubscription} from '../../home/model/useSubscription';
 import {
   createLesson,
   uploadPhotos,
@@ -36,6 +43,8 @@ type Props = {
   initialTags?: string;
 };
 
+type Nav = NativeStackNavigationProp<RootStackParamList>;
+
 export function CreateLessonModal({
   visible,
   onClose,
@@ -46,7 +55,11 @@ export function CreateLessonModal({
   initialTags = '',
 }: Props) {
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation<Nav>();
   const {t} = useI18n();
+  const {profile} = useAuth();
+  const {hasPaidTariff} = useSubscription();
+  const showAi = canUseAi(profile);
   const [title, setTitle] = useState(initialTitle);
   const [description, setDescription] = useState(initialDescription);
   const [tags, setTags] = useState(initialTags);
@@ -54,6 +67,8 @@ export function CreateLessonModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [aiOpen, setAiOpen] = useState(false);
+  const [aiGateMessage, setAiGateMessage] = useState('');
 
   useEffect(() => {
     if (!visible) {
@@ -203,20 +218,69 @@ export function CreateLessonModal({
                 ) : null}
               </View>
 
-              <Button
-                title={t('editor.createLesson')}
-                onPress={() => {
-                  void onSubmit();
-                }}
-                loading={saving}
-              />
-              <Pressable onPress={onClose} style={styles.cancelWrap}>
-                <Text style={styles.cancel}>{t('common.cancel')}</Text>
-              </Pressable>
+              <View style={styles.actions}>
+                <Button
+                  title={t('editor.createLesson')}
+                  onPress={() => {
+                    void onSubmit();
+                  }}
+                  loading={saving}
+                />
+                {showAi ? (
+                  <Button
+                    title={t('ai.createWithAi')}
+                    variant="secondary"
+                    style={styles.aiButton}
+                    onPress={() => {
+                      if (!hasPaidTariff) {
+                        setAiGateMessage(t('ai.needPaidSubscription'));
+                        return;
+                      }
+                      onClose();
+                      setAiOpen(true);
+                    }}
+                  />
+                ) : null}
+                <Pressable onPress={onClose} style={styles.cancelWrap}>
+                  <Text style={styles.cancel}>{t('common.cancel')}</Text>
+                </Pressable>
+              </View>
             </ScrollView>
           </View>
         </KeyboardAvoidingView>
       </Modal>
+      {showAi ? (
+        <CreateLessonWithAiModal
+          visible={aiOpen}
+          courseId={courseId}
+          onClose={() => setAiOpen(false)}
+          onCreated={lessonId => {
+            setAiOpen(false);
+            onCreated(lessonId);
+          }}
+        />
+      ) : null}
+      <AppDialog
+        visible={!!aiGateMessage}
+        title={t('ai.createWithAi')}
+        message={aiGateMessage}
+        onClose={() => setAiGateMessage('')}
+        actions={[
+          {
+            label: t('lessons.chooseTariff'),
+            variant: 'primary',
+            onPress: () => {
+              setAiGateMessage('');
+              navigation.navigate('Subscription');
+            },
+          },
+          {
+            label: t('common.cancel'),
+            variant: 'ghost',
+            onPress: () => setAiGateMessage(''),
+          },
+        ]}
+      />
       <AppDialog
         visible={!!error && !!title.trim()}
         title={t('editor.createLesson')}
@@ -280,6 +344,14 @@ const styles = StyleSheet.create({
     marginTop: 8,
     backgroundColor: colors.primarySoft,
   },
-  cancelWrap: {alignItems: 'center', paddingVertical: 14},
+  actions: {
+    gap: 12,
+    marginTop: 4,
+  },
+  aiButton: {
+    backgroundColor: colors.white,
+    borderColor: colors.primary,
+  },
+  cancelWrap: {alignItems: 'center', paddingVertical: 6},
   cancel: {color: colors.muted, fontWeight: '600'},
 });

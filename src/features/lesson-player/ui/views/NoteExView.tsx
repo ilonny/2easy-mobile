@@ -7,7 +7,6 @@ type Props = {data: any};
 
 export function NoteExView({data}: Props) {
   const desc = data?.description || '';
-  const looksLikeHtml = /<\/?[a-z][\s\S]*>/i.test(desc);
 
   return (
     <View style={styles.card}>
@@ -15,11 +14,12 @@ export function NoteExView({data}: Props) {
         <Text style={styles.icon}>ℹ</Text>
         <Text style={styles.title}>{data?.title}</Text>
       </View>
-      {looksLikeHtml ? (
-        <HtmlContent html={desc} />
-      ) : !!desc ? (
-        <Text style={styles.desc}>{desc}</Text>
-      ) : null}
+      {!!desc && (
+        <HtmlContent
+          html={desc}
+          baseStyle={{color: '#8580A1', fontSize: 16, lineHeight: 22}}
+        />
+      )}
     </View>
   );
 }
@@ -48,10 +48,5 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 18,
     color: '#8580A1',
-  },
-  desc: {
-    fontSize: 16,
-    color: '#8580A1',
-    lineHeight: 22,
   },
 });

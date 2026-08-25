@@ -46,19 +46,6 @@ export type LessonDetail = {
   course_id?: number | null;
 };
 
-export const ANSWER_EX_TYPES = new Set([
-  'text-checklist',
-  'fill-gaps-select',
-  'fill-gaps-input',
-  'fill-gaps-drag',
-  'FILL_GAPS_NEW',
-  'match-word-word',
-  'match-word-image',
-  'match-word-column',
-  'test',
-  'free-input-form',
-]);
-
 export type ExListChromeHandlers = {
   onPressEdit?: (ex: Exercise) => void;
   onPressDelete?: (exId: number) => void;

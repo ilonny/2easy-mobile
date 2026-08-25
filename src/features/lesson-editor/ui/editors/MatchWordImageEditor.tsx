@@ -1,4 +1,4 @@
-import {useEffect, useState} from 'react';
+import {useEffect, useMemo, useState} from 'react';
 import {Pressable, Text, View} from 'react-native';
 
 import {useI18n} from '../../../../shared/i18n';
@@ -15,6 +15,7 @@ import {
   persistExercise,
   resolvePickedAttachments,
   type EditorCommonProps,
+  pickedToPreviewMedia,
 } from './editorShared';
 
 type MatchRow = {
@@ -129,6 +130,26 @@ export function MatchWordImageEditor({
     }
   };
 
+  const previewData = useMemo(() => {
+    const imgs = matches
+      .filter(m => m.image)
+      .map(m => ({
+        id: m.id,
+        text: m.value,
+        path: m.image?.path,
+        dataURL: m.image?.uri,
+      }));
+    return {
+      title,
+      titleColor: TITLE_COLOR,
+      subtitle,
+      description,
+      viewType,
+      attachments: imgs,
+      images: imgs,
+    };
+  }, [title, subtitle, description, viewType, matches]);
+
   return (
     <EditorShell
       visible={visible}
@@ -137,7 +158,10 @@ export function MatchWordImageEditor({
       onSave={() => {
         void onSave();
       }}
-      saving={saving}>
+      saving={saving}
+      previewType="match-word-image"
+      previewLessonId={lessonId}
+      previewData={previewData}>
       <View style={editorStyles.card}>
         <TextField
           label={t('editor.fieldTitle')}

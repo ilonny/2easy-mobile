@@ -1,4 +1,4 @@
-import {useEffect, useState} from 'react';
+import {useEffect, useMemo, useState} from 'react';
 import {Pressable, Text, View} from 'react-native';
 
 import {useI18n} from '../../../../shared/i18n';
@@ -15,6 +15,7 @@ import {
   persistExercise,
   resolvePickedAttachments,
   type EditorCommonProps,
+  pickedToPreviewMedia,
 } from './editorShared';
 
 type Question = {id: string; text: string};
@@ -85,6 +86,22 @@ export function FreeInputFormEditor({
     }
   };
 
+  const previewData = useMemo(
+    () => ({
+      title,
+      titleColor: TITLE_COLOR,
+      subtitle,
+      description,
+      images: pickedToPreviewMedia(images),
+      questions: questions.map(q => ({
+        id: q.id,
+        value: q.text,
+        images: [],
+      })),
+    }),
+    [title, subtitle, description, images, questions],
+  );
+
   return (
     <EditorShell
       visible={visible}
@@ -93,7 +110,10 @@ export function FreeInputFormEditor({
       onSave={() => {
         void onSave();
       }}
-      saving={saving}>
+      saving={saving}
+      previewType="free-input-form"
+      previewLessonId={lessonId}
+      previewData={previewData}>
       <TextField label={t('editor.fieldTitle')} value={title} onChangeText={setTitle} />
       <TextField
         label={t('editor.fieldSubtitle')}

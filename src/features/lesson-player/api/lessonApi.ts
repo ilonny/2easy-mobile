@@ -115,15 +115,46 @@ export async function copyLesson(lessonId: number) {
   });
 }
 
+export async function deleteLesson(lessonId: number) {
+  return postJson<{success?: boolean; message?: string}>({
+    path: '/lesson/delete-lesson',
+    isSecure: true,
+    data: {id: lessonId},
+  });
+}
+
+export async function addLessonToCourse(payload: {
+  lesson_id: number;
+  courses_ids: number[];
+}) {
+  return postJson<{success?: boolean; message?: string}>({
+    path: '/course/add-lesson',
+    isSecure: true,
+    data: {
+      lesson_id: payload.lesson_id,
+      courses_ids: JSON.stringify(payload.courses_ids),
+    },
+  });
+}
+
 export async function fetchAnswers(
   lessonId: number,
   exId: number,
   studentId?: number,
 ) {
-  let path = `/answer?lesson_id=${lessonId}&ex_id=${exId}`;
-  if (studentId) {
-    path += `&student_id=${studentId}`;
+  if (
+    !Number.isFinite(lessonId) ||
+    lessonId <= 0 ||
+    !Number.isFinite(exId) ||
+    exId <= 0 ||
+    !studentId ||
+    !Number.isFinite(studentId) ||
+    studentId <= 0
+  ) {
+    // Backend always filters by student_id; missing/NaN ids crash MySQL.
+    return [];
   }
+  const path = `/answer?lesson_id=${lessonId}&ex_id=${exId}&student_id=${studentId}`;
   const data = await getJson<unknown>({path, isSecure: true});
   return Array.isArray(data) ? data : [];
 }
@@ -135,6 +166,17 @@ export async function writeAnswerApi(payload: {
   answer: string;
   student_id: number;
 }) {
+  const {lesson_id, ex_id, student_id} = payload;
+  if (
+    !Number.isFinite(lesson_id) ||
+    lesson_id <= 0 ||
+    !Number.isFinite(ex_id) ||
+    ex_id <= 0 ||
+    !Number.isFinite(student_id) ||
+    student_id <= 0
+  ) {
+    return;
+  }
   return postJson({
     path: '/answer',
     isSecure: true,
@@ -147,6 +189,17 @@ export async function resetAnswers(payload: {
   ex_id: number;
   student_id: number;
 }) {
+  const {lesson_id, ex_id, student_id} = payload;
+  if (
+    !Number.isFinite(lesson_id) ||
+    lesson_id <= 0 ||
+    !Number.isFinite(ex_id) ||
+    ex_id <= 0 ||
+    !Number.isFinite(student_id) ||
+    student_id <= 0
+  ) {
+    return;
+  }
   return postJson({
     path: '/answer/reset',
     isSecure: true,

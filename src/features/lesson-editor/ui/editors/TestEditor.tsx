@@ -1,4 +1,4 @@
-import {useEffect, useState} from 'react';
+import {useEffect, useMemo, useState} from 'react';
 import {Pressable, Text, View} from 'react-native';
 
 import {useI18n} from '../../../../shared/i18n';
@@ -15,6 +15,7 @@ import {
   persistExercise,
   resolvePickedAttachments,
   type EditorCommonProps,
+  pickedToPreviewMedia,
 } from './editorShared';
 
 type Option = {id: string; text: string; isCorrect: boolean};
@@ -119,6 +120,27 @@ export function TestEditor({
     }
   };
 
+  const previewData = useMemo(
+    () => ({
+      title,
+      titleColor: TITLE_COLOR,
+      subtitle,
+      description,
+      images: pickedToPreviewMedia(images),
+      questions: questions.map(q => ({
+        id: q.id,
+        value: q.text,
+        images: pickedToPreviewMedia(q.images),
+        options: q.options.map(o => ({
+          id: o.id,
+          value: o.text,
+          isCorrect: o.isCorrect,
+        })),
+      })),
+    }),
+    [title, subtitle, description, images, questions],
+  );
+
   return (
     <EditorShell
       visible={visible}
@@ -127,7 +149,10 @@ export function TestEditor({
       onSave={() => {
         void onSave();
       }}
-      saving={saving}>
+      saving={saving}
+      previewType="test"
+      previewLessonId={lessonId}
+      previewData={previewData}>
       <TextField label={t('editor.fieldTitle')} value={title} onChangeText={setTitle} />
       <TextField
         label={t('editor.fieldSubtitle')}

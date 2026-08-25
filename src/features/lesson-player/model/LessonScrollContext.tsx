@@ -2,6 +2,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -15,6 +16,8 @@ import {
 } from 'react-native';
 import {ScrollView as GHScrollView} from 'react-native-gesture-handler';
 
+import {ChipDragProvider} from '../ui/interaction/ChipDragContext';
+
 type StickyPayload = {
   id: string;
   node: ReactNode;
@@ -23,8 +26,13 @@ type StickyPayload = {
 
 type LessonScrollContextValue = {
   scrollY: Animated.Value;
+  /** Current pin offset from the top (updates when header collapses). */
   stickyTop: number;
-  setStickyOverlay: (payload: StickyPayload | null) => void;
+  /** Pin offset while the collapsing header is fully visible. */
+  stickyTopExpanded: number;
+  setStickyOverlay: (payload: StickyPayload) => void;
+  /** Clears sticky chips only if they still belong to this pool id. */
+  releaseStickyOverlay: (id: string) => void;
   stickyOverlay: StickyPayload | null;
 };
 
@@ -37,20 +45,35 @@ const AnimatedGHScrollView = Animated.createAnimatedComponent(GHScrollView);
 export function LessonScrollProvider({
   children,
   stickyTop = 0,
+  stickyTopCollapsed,
+  /**
+   * 0 = header fully visible (pin at stickyTop),
+   * 1 = header fully hidden (pin at stickyTopCollapsed).
+   * Drive with useNativeDriver: false so `top` can animate.
+   */
+  headerCollapseProgress,
+  onStickyChange,
 }: {
   children: ReactNode;
-  /** Distance from top of this provider where sticky chips pin. */
+  /** Distance from top where sticky chips pin while header is visible. */
   stickyTop?: number;
+  /**
+   * Pin offset when the header is fully hidden (usually safe-area inset).
+   * Defaults to stickyTop (no collapse).
+   */
+  stickyTopCollapsed?: number;
+  headerCollapseProgress?: Animated.Value;
+  /** Fires when sticky chip pool pins/unpins at the top. */
+  onStickyChange?: (active: boolean) => void;
 }) {
   const scrollY = useRef(new Animated.Value(0)).current;
   const [stickyOverlay, setStickyOverlayState] =
     useState<StickyPayload | null>(null);
+  const collapsed = stickyTopCollapsed ?? stickyTop;
+  const [liveStickyTop, setLiveStickyTop] = useState(stickyTop);
 
-  const setStickyOverlay = useCallback((payload: StickyPayload | null) => {
+  const setStickyOverlay = useCallback((payload: StickyPayload) => {
     setStickyOverlayState(prev => {
-      if (!payload) {
-        return prev ? null : prev;
-      }
       if (
         prev &&
         prev.id === payload.id &&
@@ -63,24 +86,73 @@ export function LessonScrollProvider({
     });
   }, []);
 
+  const releaseStickyOverlay = useCallback((overlayId: string) => {
+    setStickyOverlayState(prev => (prev?.id === overlayId ? null : prev));
+  }, []);
+
+  useEffect(() => {
+    onStickyChange?.(!!stickyOverlay);
+  }, [stickyOverlay, onStickyChange]);
+
+  useEffect(() => {
+    setLiveStickyTop(stickyTop);
+  }, [stickyTop]);
+
+  useEffect(() => {
+    if (!headerCollapseProgress || stickyTop <= collapsed) {
+      return;
+    }
+    const range = stickyTop - collapsed;
+    const listener = headerCollapseProgress.addListener(({value}) => {
+      const progress = Math.min(1, Math.max(0, value));
+      setLiveStickyTop(stickyTop - progress * range);
+    });
+    return () => headerCollapseProgress.removeListener(listener);
+  }, [headerCollapseProgress, stickyTop, collapsed]);
+
+  const overlayTop =
+    headerCollapseProgress && stickyTop > collapsed
+      ? headerCollapseProgress.interpolate({
+          inputRange: [0, 1],
+          outputRange: [stickyTop, collapsed],
+          extrapolate: 'clamp',
+        })
+      : stickyTop;
+
   const value = useMemo(
-    () => ({scrollY, stickyTop, setStickyOverlay, stickyOverlay}),
-    [scrollY, stickyTop, setStickyOverlay, stickyOverlay],
+    () => ({
+      scrollY,
+      stickyTop: liveStickyTop,
+      stickyTopExpanded: stickyTop,
+      setStickyOverlay,
+      releaseStickyOverlay,
+      stickyOverlay,
+    }),
+    [
+      scrollY,
+      liveStickyTop,
+      stickyTop,
+      setStickyOverlay,
+      releaseStickyOverlay,
+      stickyOverlay,
+    ],
   );
 
   return (
-    <LessonScrollContext.Provider value={value}>
-      <View style={styles.flex}>
-        {children}
-        {stickyOverlay ? (
-          <View
-            pointerEvents="box-none"
-            style={[styles.overlay, {top: stickyTop}]}>
-            <View style={styles.overlayInner}>{stickyOverlay.node}</View>
-          </View>
-        ) : null}
-      </View>
-    </LessonScrollContext.Provider>
+    <ChipDragProvider>
+      <LessonScrollContext.Provider value={value}>
+        <View style={styles.flex}>
+          {children}
+          {stickyOverlay ? (
+            <Animated.View
+              pointerEvents="box-none"
+              style={[styles.overlay, {top: overlayTop}]}>
+              <View style={styles.overlayInner}>{stickyOverlay.node}</View>
+            </Animated.View>
+          ) : null}
+        </View>
+      </LessonScrollContext.Provider>
+    </ChipDragProvider>
   );
 }
 
@@ -116,7 +188,9 @@ export function useLessonScroll() {
     return {
       scrollY: fallbackScrollY,
       stickyTop: 0,
+      stickyTopExpanded: 0,
       setStickyOverlay: () => undefined,
+      releaseStickyOverlay: () => undefined,
       stickyOverlay: null,
     };
   }
@@ -129,8 +203,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 12,
     right: 12,
-    zIndex: 1000,
-    elevation: 20,
+    zIndex: 80,
+    elevation: 16,
     overflow: 'visible',
   },
   overlayInner: {

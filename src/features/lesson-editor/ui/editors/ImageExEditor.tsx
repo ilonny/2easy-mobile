@@ -1,4 +1,4 @@
-import {useEffect, useState} from 'react';
+import {useEffect, useMemo, useState} from 'react';
 import {Pressable, Text, View} from 'react-native';
 
 import {useI18n} from '../../../../shared/i18n';
@@ -15,6 +15,7 @@ import {
   persistExercise,
   resolvePickedAttachments,
   type EditorCommonProps,
+  pickedToPreviewMedia,
 } from './editorShared';
 
 type ViewType = 'carousel' | '2-col' | '3-col';
@@ -98,6 +99,19 @@ export function ImageExEditor({
     {key: '3-col', label: t('editor.layout3Col')},
   ];
 
+  const previewData = useMemo(
+    () => ({
+      title,
+      titleColor: TITLE_COLOR,
+      subtitle,
+      description,
+      viewType,
+      attachments: pickedToPreviewMedia(images),
+      images: pickedToPreviewMedia(images),
+    }),
+    [title, subtitle, description, viewType, images],
+  );
+
   return (
     <EditorShell
       visible={visible}
@@ -106,7 +120,10 @@ export function ImageExEditor({
       onSave={() => {
         void onSave();
       }}
-      saving={saving}>
+      saving={saving}
+      previewType="image"
+      previewLessonId={lessonId}
+      previewData={previewData}>
       <View style={editorStyles.card}>
         <TextField label={t('editor.fieldTitle')} value={title} onChangeText={setTitle} />
         <TextField

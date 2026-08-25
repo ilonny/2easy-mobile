@@ -14,7 +14,9 @@ import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
 import {useI18n} from '../../../../shared/i18n';
 import {colors, radii} from '../../../../shared/config/theme';
+import {useLayout} from '../../../../shared/lib/layout';
 import {Button} from '../../../../shared/ui';
+import {ExercisePreview} from './ExercisePreview';
 
 type Props = {
   visible: boolean;
@@ -23,6 +25,10 @@ type Props = {
   onSave: () => void;
   saving?: boolean;
   children: ReactNode;
+  /** Exercise type for live preview at the bottom (site parity). */
+  previewType?: string;
+  previewData?: Record<string, unknown>;
+  previewLessonId?: number;
 };
 
 export function EditorShell({
@@ -32,9 +38,13 @@ export function EditorShell({
   onSave,
   saving,
   children,
+  previewType,
+  previewData,
+  previewLessonId,
 }: Props) {
   const insets = useSafeAreaInsets();
   const {t} = useI18n();
+  const {isTablet, authFormMaxWidth, pageGutter} = useLayout();
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   useEffect(() => {
@@ -69,17 +79,24 @@ export function EditorShell({
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}>
         <View style={[styles.root, {paddingTop: insets.top + 8}]}>
-          <View style={styles.header}>
+          <View
+            style={[
+              styles.header,
+              {paddingHorizontal: pageGutter},
+              isTablet && styles.headerTablet,
+            ]}>
             <View style={styles.headerText}>
               <Text style={styles.kicker}>{t('editor.exerciseEditor')}</Text>
-              <Text style={styles.title} numberOfLines={2}>
+              <Text
+                style={[styles.title, isTablet && styles.titleTablet]}
+                numberOfLines={2}>
                 {title}
               </Text>
             </View>
             <Pressable
               onPress={onClose}
               hitSlop={10}
-              style={styles.closeBtn}>
+              style={[styles.closeBtn, isTablet && styles.closeBtnTablet]}>
               <Text style={styles.close}>✕</Text>
             </Pressable>
           </View>
@@ -88,24 +105,48 @@ export function EditorShell({
             contentContainerStyle={[
               styles.body,
               {
+                paddingHorizontal: pageGutter,
                 paddingBottom:
-                  insets.bottom + 32 + (Platform.OS === 'android' ? keyboardHeight : 0),
+                  insets.bottom +
+                  32 +
+                  (Platform.OS === 'android' ? keyboardHeight : 0),
               },
             ]}
+            nestedScrollEnabled
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="interactive"
             automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
             contentInsetAdjustmentBehavior="always">
-            {children}
-            <View style={styles.footerActions}>
-              <Button
-                title={t('common.save')}
-                onPress={onSave}
-                loading={saving}
-              />
-              <Pressable onPress={onClose} style={styles.cancelWrap}>
-                <Text style={styles.cancel}>{t('common.cancel')}</Text>
-              </Pressable>
+            <View
+              style={[
+                styles.formColumn,
+                {
+                  maxWidth: authFormMaxWidth,
+                  width: '100%',
+                  alignSelf: 'center',
+                },
+              ]}>
+              {children}
+              {!!previewType && !!previewData && (
+                <View style={styles.previewBlock}>
+                  <Text style={styles.previewLabel}>{t('editor.preview')}</Text>
+                  <ExercisePreview
+                    type={previewType}
+                    data={previewData}
+                    lessonId={previewLessonId}
+                  />
+                </View>
+              )}
+              <View style={styles.footerActions}>
+                <Button
+                  title={t('common.save')}
+                  onPress={onSave}
+                  loading={saving}
+                />
+                <Pressable onPress={onClose} style={styles.cancelWrap}>
+                  <Text style={styles.cancel}>{t('common.cancel')}</Text>
+                </Pressable>
+              </View>
             </View>
           </ScrollView>
         </View>
@@ -126,6 +167,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
+  headerTablet: {paddingBottom: 18},
   headerText: {flex: 1, marginRight: 12, gap: 2},
   kicker: {
     fontSize: 12,
@@ -139,6 +181,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: colors.primary,
   },
+  titleTablet: {fontSize: 24},
   closeBtn: {
     width: 36,
     height: 36,
@@ -147,8 +190,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  closeBtnTablet: {width: 44, height: 44, borderRadius: 22},
   close: {fontSize: 16, color: colors.muted, fontWeight: '700'},
-  body: {padding: 16, gap: 4},
+  body: {paddingVertical: 16, gap: 4},
+  formColumn: {gap: 4},
+  previewBlock: {
+    marginTop: 16,
+    marginBottom: 4,
+    gap: 8,
+  },
+  previewLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
   footerActions: {
     marginTop: 12,
     backgroundColor: colors.white,

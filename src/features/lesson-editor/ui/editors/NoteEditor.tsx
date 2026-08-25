@@ -1,4 +1,4 @@
-import {useEffect, useState} from 'react';
+import {useEffect, useMemo, useState} from 'react';
 import {View} from 'react-native';
 
 import {useI18n} from '../../../../shared/i18n';
@@ -13,6 +13,7 @@ import {
   persistExercise,
   resolvePickedAttachments,
   type EditorCommonProps,
+  pickedToPreviewMedia,
 } from './editorShared';
 
 export function NoteEditor({
@@ -60,6 +61,15 @@ export function NoteEditor({
     }
   };
 
+  const previewData = useMemo(
+    () => ({
+      title,
+      description,
+      images: pickedToPreviewMedia(images),
+    }),
+    [title, description, images],
+  );
+
   return (
     <EditorShell
       visible={visible}
@@ -68,7 +78,10 @@ export function NoteEditor({
       onSave={() => {
         void onSave();
       }}
-      saving={saving}>
+      saving={saving}
+      previewType="note"
+      previewLessonId={lessonId}
+      previewData={previewData}>
       <TextField label={t('editor.fieldTitle')} value={title} onChangeText={setTitle} />
       <TextField
         label={t('editor.fieldDescription')}

@@ -1,4 +1,4 @@
-import {useEffect, useState} from 'react';
+import {useEffect, useMemo, useState} from 'react';
 import {Pressable, Text, View} from 'react-native';
 
 import {useI18n} from '../../../../shared/i18n';
@@ -15,6 +15,7 @@ import {
   persistExercise,
   resolvePickedAttachments,
   type EditorCommonProps,
+  pickedToPreviewMedia,
 } from './editorShared';
 
 type Sticker = {id: string; text: string};
@@ -95,6 +96,20 @@ export function TextStickerEditor({
     }
   };
 
+  const previewData = useMemo(
+    () => ({
+      title,
+      titleColor: TITLE_COLOR,
+      subtitle,
+      description,
+      stickers: stickers.map(s => s.text).filter(Boolean),
+      images: pickedToPreviewMedia(images),
+      stickerBgColor,
+      stickerTextColor,
+    }),
+    [title, subtitle, description, stickers, images, stickerBgColor, stickerTextColor],
+  );
+
   return (
     <EditorShell
       visible={visible}
@@ -103,7 +118,10 @@ export function TextStickerEditor({
       onSave={() => {
         void onSave();
       }}
-      saving={saving}>
+      saving={saving}
+      previewType="text-sticker"
+      previewLessonId={lessonId}
+      previewData={previewData}>
       <TextField label={t('editor.fieldTitle')} value={title} onChangeText={setTitle} />
       <TextField
         label={t('editor.fieldSubtitle')}

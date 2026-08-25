@@ -9,6 +9,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import {colors} from '../../../../shared/config/theme';
+import {useChipDrag} from './ChipDragContext';
 
 export type DropTarget = {
   id: string;
@@ -24,10 +25,6 @@ type Props = {
   disabled?: boolean;
   selected?: boolean;
   onSelect?: () => void;
-  /**
-   * Return true when the chip was consumed (correct placement) so it
-   * does not animate back into the pool.
-   */
   onDropOnTarget?: (
     targetId: string,
     chipId: string,
@@ -40,10 +37,6 @@ type Props = {
   ) => void;
 };
 
-/**
- * Drag the chip itself (no Modal ghost) so the finger and chip stay aligned
- * under SafeArea / sticky overlays / status bar.
- */
 export function DraggableChip({
   id,
   label,
@@ -53,6 +46,7 @@ export function DraggableChip({
   onDropOnTarget,
   hitTestDropTarget,
 }: Props) {
+  const {beginDrag, endDrag} = useChipDrag();
   const tx = useSharedValue(0);
   const ty = useSharedValue(0);
   const scale = useSharedValue(1);
@@ -63,6 +57,7 @@ export function DraggableChip({
 
   const resetHome = useCallback(
     (consumed: boolean) => {
+      endDrag();
       if (consumed) {
         opacity.value = 0;
         tx.value = 0;
@@ -81,18 +76,41 @@ export function DraggableChip({
       settling.value = false;
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
+    [endDrag],
   );
 
   const finishDrop = useCallback(
-    (pageX: number, pageY: number) => {
-      hitTestDropTarget(pageX, pageY, targetId => {
-        let consumed = false;
-        if (targetId && onDropOnTarget) {
-          consumed = !!onDropOnTarget(targetId, id, label);
-        }
-        resetHome(consumed);
-      });
+    (pageX: number, pageY: number, translationX: number, translationY: number) => {
+      const tryHit = (x: number, y: number, next?: () => void) => {
+        hitTestDropTarget(x, y, targetId => {
+          if (targetId && onDropOnTarget) {
+            const consumed = !!onDropOnTarget(targetId, id, label);
+            resetHome(consumed);
+            return;
+          }
+          if (next) {
+            next();
+            return;
+          }
+          resetHome(false);
+        });
+      };
+
+      // 1) Finger tip  2) Estimated chip center (layout + pan translation)
+      const runChipCenter = () => {
+        chipRef.current?.measureInWindow((x, y, width, height) => {
+          if (width > 0 && height > 0) {
+            tryHit(
+              x + width / 2 + translationX,
+              y + height / 2 + translationY,
+            );
+          } else {
+            resetHome(false);
+          }
+        });
+      };
+
+      tryHit(pageX, pageY, runChipCenter);
     },
     [hitTestDropTarget, id, label, onDropOnTarget, resetHome],
   );
@@ -109,6 +127,7 @@ export function DraggableChip({
           opacity.value = 1;
           dragging.value = true;
           scale.value = withTiming(1.05, {duration: 100});
+          runOnJS(beginDrag)();
         })
         .onUpdate(e => {
           if (!dragging.value) {
@@ -122,16 +141,20 @@ export function DraggableChip({
             return;
           }
           dragging.value = false;
-          runOnJS(finishDrop)(e.absoluteX, e.absoluteY);
+          runOnJS(finishDrop)(
+            e.absoluteX,
+            e.absoluteY,
+            e.translationX,
+            e.translationY,
+          );
         })
         .onFinalize((_e, success) => {
-          // Cancelled / failed gesture — ease home without rubber-band.
           if (!success && dragging.value) {
             runOnJS(resetHome)(false);
           }
         }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [disabled, finishDrop, resetHome],
+    [beginDrag, disabled, finishDrop, resetHome],
   );
 
   const tap = useMemo(
@@ -156,9 +179,9 @@ export function DraggableChip({
       {scale: scale.value},
     ],
     opacity: opacity.value * (dragging.value ? 0.95 : 1),
-    zIndex: dragging.value ? 999 : 1,
-    elevation: dragging.value ? 24 : 0,
-    shadowOpacity: dragging.value ? 0.28 : 0,
+    zIndex: dragging.value ? 9999 : 1,
+    elevation: dragging.value ? 48 : 0,
+    shadowOpacity: dragging.value ? 0.32 : 0,
   }));
 
   return (
@@ -202,8 +225,9 @@ export function DropZone({
   );
 }
 
-export function useDropTargetRegistry() {
+export function useDropTargetRegistry(hitPadding = 32) {
   const refs = useRef(new Map<string, View | null>());
+  const pad = hitPadding;
 
   const registerRef = useCallback((id: string, node: View | null) => {
     if (node) {
@@ -227,26 +251,35 @@ export function useDropTargetRegistry() {
         return;
       }
       let pending = entries.length;
-      let found: string | null = null;
+      let bestId: string | null = null;
+      let bestDist = Number.POSITIVE_INFINITY;
+      const maxSnap = Math.max(56, pad * 1.75);
+
       entries.forEach(([id, node]) => {
         node!.measureInWindow((x, y, width, height) => {
-          if (
-            !found &&
-            pageX >= x &&
-            pageX <= x + width &&
-            pageY >= y &&
-            pageY <= y + height
-          ) {
-            found = id;
+          const cx = x + width / 2;
+          const cy = y + height / 2;
+          const dx = pageX - cx;
+          const dy = pageY - cy;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          const inside =
+            pageX >= x - pad &&
+            pageX <= x + width + pad &&
+            pageY >= y - pad &&
+            pageY <= y + height + pad;
+          const near = dist <= maxSnap;
+          if ((inside || near) && dist < bestDist) {
+            bestDist = dist;
+            bestId = id;
           }
           pending -= 1;
           if (pending === 0) {
-            cb(found);
+            cb(bestId);
           }
         });
       });
     },
-    [],
+    [pad],
   );
 
   return {registerRef, hitTestDropTarget};
