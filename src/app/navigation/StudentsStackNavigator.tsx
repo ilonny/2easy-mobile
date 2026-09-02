@@ -3,7 +3,8 @@ import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import {useAuth} from '../../entities/session';
 import {StudentsScreen} from '../../features/students/ui/StudentsScreen';
 import {StudentCabinetScreen} from '../../features/students/ui/StudentCabinetScreen';
-import type {StudentsStackParamList} from './types';
+import {StudentCourseScreen} from '../../features/students/ui/StudentCourseScreen';
+import type {StudentsStackParamList} from '../../shared/navigation/types';
 
 const Stack = createNativeStackNavigator<StudentsStackParamList>();
 
@@ -15,22 +16,31 @@ function StudentCabinetRoute({
   return <StudentCabinetScreen studentId={route.params.studentId} />;
 }
 
+function StudentCourseRoute({
+  route,
+}: {
+  route: {params: {courseId: number; studentId: number}};
+}) {
+  return (
+    <StudentCourseScreen
+      courseId={route.params.courseId}
+      studentId={route.params.studentId}
+    />
+  );
+}
+
 /**
- * Teacher: list → cabinet.
- * Student: lands directly on own cabinet (no list).
+ * Teacher: list → cabinet → course.
+ * Student: own cabinet → course (same stack, no list).
  */
 export function StudentsStackNavigator() {
   const {profile} = useAuth();
   const isStudent = !!profile?.isStudent && !!profile.studentId;
   const studentId = Number(profile?.studentId) || 0;
 
-  if (isStudent && studentId > 0) {
-    return <StudentCabinetScreen studentId={studentId} />;
-  }
-
   return (
     <Stack.Navigator
-      initialRouteName="StudentsList"
+      initialRouteName={isStudent ? 'StudentCabinet' : 'StudentsList'}
       screenOptions={{
         headerShown: false,
         gestureEnabled: true,
@@ -38,8 +48,17 @@ export function StudentsStackNavigator() {
         animation: 'slide_from_right',
         contentStyle: {backgroundColor: '#F9F9F9'},
       }}>
-      <Stack.Screen name="StudentsList" component={StudentsScreen} />
-      <Stack.Screen name="StudentCabinet" component={StudentCabinetRoute} />
+      {!isStudent ? (
+        <Stack.Screen name="StudentsList" component={StudentsScreen} />
+      ) : null}
+      <Stack.Screen
+        name="StudentCabinet"
+        component={StudentCabinetRoute}
+        initialParams={
+          isStudent && studentId > 0 ? {studentId} : undefined
+        }
+      />
+      <Stack.Screen name="StudentCourse" component={StudentCourseRoute} />
     </Stack.Navigator>
   );
 }

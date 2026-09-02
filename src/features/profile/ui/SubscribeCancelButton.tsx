@@ -12,6 +12,7 @@ import {
 import {postJson} from '../../../shared/api';
 import {useI18n} from '../../../shared/i18n';
 import {colors, radii} from '../../../shared/config/theme';
+import {useKeyboardBottomOffset} from '../../../shared/lib/useKeyboardBottomOffset';
 import {Button} from '../../../shared/ui';
 import {useSubscription} from '../../home/model/useSubscription';
 
@@ -49,6 +50,7 @@ export function SubscribeCancelButton() {
   const [selected, setSelected] = useState('');
   const [otherText, setOtherText] = useState('');
   const [loading, setLoading] = useState(false);
+  const keyboardHeight = useKeyboardBottomOffset(open);
 
   const close = useCallback(() => {
     setOpen(false);
@@ -87,7 +89,9 @@ export function SubscribeCancelButton() {
       </Pressable>
 
       <Modal visible={open} transparent animationType="fade" onRequestClose={close}>
-        <Pressable style={styles.backdrop} onPress={close}>
+        <Pressable
+          style={[styles.backdrop, {paddingBottom: keyboardHeight}]}
+          onPress={close}>
           <Pressable style={styles.card} onPress={e => e.stopPropagation()}>
             <ScrollView showsVerticalScrollIndicator={false}>
               <Text style={styles.title}>

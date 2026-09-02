@@ -81,6 +81,32 @@ export function TestEditor({
     );
   }, [visible, exercise]);
 
+  const applyAiData = (data: Record<string, unknown>) => {
+    setTitle(String(data.title || ''));
+    setSubtitle(String(data.subtitle || ''));
+    setDescription(String(data.description || ''));
+    if (data.images) {
+      setImages(attachmentsToPicked(data.images as never));
+    }
+    const raw = (data.questions as Array<Record<string, unknown>>) || [];
+    setQuestions(
+      raw.length
+        ? raw.map(q => ({
+            id: String(q.id || newId()),
+            text: String(q.text || q.value || ''),
+            images: attachmentsToPicked(q.images),
+            options: (
+              (q.options as Array<Record<string, unknown>>) || []
+            ).map(o => ({
+              id: String(o.id || newId()),
+              text: String(o.text || o.value || ''),
+              isCorrect: Boolean(o.isCorrect),
+            })),
+          }))
+        : [emptyQuestion()],
+    );
+  };
+
   const onSave = async () => {
     setSaving(true);
     try {
@@ -152,7 +178,28 @@ export function TestEditor({
       saving={saving}
       previewType="test"
       previewLessonId={lessonId}
-      previewData={previewData}>
+      previewData={previewData}
+      ai={{
+        type: 'test',
+        lessonId,
+        currentData: {
+          id: exercise?.id,
+          title,
+          subtitle,
+          description,
+          titleColor: TITLE_COLOR,
+          questions: questions.map(q => ({
+            id: q.id,
+            value: q.text,
+            options: q.options.map(o => ({
+              id: o.id,
+              value: o.text,
+              isCorrect: o.isCorrect,
+            })),
+          })),
+        },
+        onApply: applyAiData,
+      }}>
       <TextField label={t('editor.fieldTitle')} value={title} onChangeText={setTitle} />
       <TextField
         label={t('editor.fieldSubtitle')}
@@ -169,8 +216,8 @@ export function TestEditor({
           label={t('editor.coverImage')}
           images={images}
           onChange={setImages}
-          multiple
-          max={4}
+          multiple={false}
+          max={1}
         />
       </View>
       {questions.map((q, qIndex) => (

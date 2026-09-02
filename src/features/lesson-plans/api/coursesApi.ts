@@ -1,5 +1,5 @@
-import {getJson} from '../../../shared/api';
-import type {Lesson} from '../../../entities/lesson';
+import {getJson, postJson} from '../../../shared/api';
+import type {Lesson, LessonRelationStatus} from '../../../entities/lesson';
 
 export type Course = {
   id: number;
@@ -10,17 +10,25 @@ export type Course = {
   tags?: string;
   canEdit?: boolean;
   lesson_ids?: string | number[];
+  'lesson_relations.status'?: LessonRelationStatus;
+  'lesson_relations.id'?: number;
 };
 
 export async function fetchCourses(options?: {
   isSecure?: boolean;
+  studentId?: number;
 }): Promise<Course[]> {
+  const qs = new URLSearchParams();
+  if (options?.studentId) {
+    qs.set('student_id', String(options.studentId));
+  }
+  const query = qs.toString();
   const res = await getJson<{
     success?: boolean;
     courses?: Course[];
     message?: string;
   }>({
-    path: '/course/list',
+    path: query ? `/course/list?${query}` : '/course/list',
     isSecure: options?.isSecure ?? true,
   });
   if (res.success === false) {
@@ -52,4 +60,28 @@ export async function fetchCourseLessons(
     return [];
   }
   return res.lessons;
+}
+
+export async function saveCourse(payload: {
+  id?: number;
+  title: string;
+  description?: string;
+  tags?: string;
+  image_id?: number;
+  lesson_ids: number[];
+}) {
+  const {id, lesson_ids, ...rest} = payload;
+  return postJson<{
+    success?: boolean;
+    message?: string;
+    createdCourse?: {id?: number};
+  }>({
+    path: id ? '/course/edit' : '/course/create',
+    isSecure: true,
+    data: {
+      ...rest,
+      ...(id ? {id} : {}),
+      lesson_ids: JSON.stringify(lesson_ids),
+    },
+  });
 }

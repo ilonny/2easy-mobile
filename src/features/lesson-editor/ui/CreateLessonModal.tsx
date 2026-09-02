@@ -1,7 +1,6 @@
 import {useEffect, useState} from 'react';
 import {
   Image,
-  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -18,6 +17,7 @@ import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {useAuth} from '../../../entities/session';
 import {useI18n} from '../../../shared/i18n';
 import {colors, radii} from '../../../shared/config/theme';
+import {useKeyboardBottomOffset} from '../../../shared/lib/useKeyboardBottomOffset';
 import type {RootStackParamList} from '../../../shared/navigation/types';
 import {AppDialog, Button, TextField} from '../../../shared/ui';
 import {canUseAi} from '../../ai/lib/canUseAi';
@@ -66,7 +66,7 @@ export function CreateLessonModal({
   const [cover, setCover] = useState<PickedImage[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const keyboardHeight = useKeyboardBottomOffset(visible);
   const [aiOpen, setAiOpen] = useState(false);
   const [aiGateMessage, setAiGateMessage] = useState('');
 
@@ -80,27 +80,6 @@ export function CreateLessonModal({
     setCover([]);
     setError('');
   }, [visible, initialTitle, initialDescription, initialTags]);
-
-  useEffect(() => {
-    if (!visible) {
-      setKeyboardHeight(0);
-      return;
-    }
-    const showEvent =
-      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const hideEvent =
-      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-    const onShow = Keyboard.addListener(showEvent, e => {
-      setKeyboardHeight(e.endCoordinates.height);
-    });
-    const onHide = Keyboard.addListener(hideEvent, () => {
-      setKeyboardHeight(0);
-    });
-    return () => {
-      onShow.remove();
-      onHide.remove();
-    };
-  }, [visible]);
 
   const onSubmit = async () => {
     if (!title.trim()) {

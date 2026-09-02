@@ -11,6 +11,7 @@ import {useLayout} from '../../../shared/lib/layout';
 import {colors, radii} from '../../../shared/config/theme';
 import {AppDialog, Button, PasswordField, TextField} from '../../../shared/ui';
 import type {RootStackParamList} from '../../../shared/navigation/types';
+import {resetAfterAuth} from '../../../shared/navigation/resetToLessonPlans';
 import {
   loginRequest,
   studentForgotPasswordRequest,
@@ -104,6 +105,7 @@ export function LoginForm() {
 
       if (res.token) {
         await setSession(res);
+        resetAfterAuth(navigation, res);
         return;
       }
 

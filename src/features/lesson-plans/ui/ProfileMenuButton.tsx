@@ -7,11 +7,17 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import {useNavigation} from '@react-navigation/native';
+import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 
 import {useAuth} from '../../../entities/session';
 import {useI18n} from '../../../shared/i18n';
 import {colors, radii} from '../../../shared/config/theme';
+import type {RootStackParamList} from '../../../shared/navigation/types';
+import {resetToRoute} from '../../../shared/navigation/resetToLessonPlans';
 import {LanguageSwitcher} from '../../../shared/ui';
+
+type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 type Props = {
   onLogin: () => void;
@@ -19,6 +25,7 @@ type Props = {
 };
 
 export function ProfileMenuButton({onLogin, onRegister}: Props) {
+  const navigation = useNavigation<Nav>();
   const {isAuthorized, clearSession, profile} = useAuth();
   const {t} = useI18n();
   const {width: windowWidth} = useWindowDimensions();
@@ -39,6 +46,13 @@ export function ProfileMenuButton({onLogin, onRegister}: Props) {
 
   const close = () => setOpen(false);
   const initial = (profile?.name?.trim()?.[0] || '?').toUpperCase();
+
+  const onLogout = async () => {
+    close();
+    // Reset while nav is still mounted, then clear session (guest stack remounts on Home).
+    resetToRoute(navigation, 'Home');
+    await clearSession();
+  };
 
   return (
     <>
@@ -73,12 +87,7 @@ export function ProfileMenuButton({onLogin, onRegister}: Props) {
                     {profile.name}
                   </Text>
                 )}
-                <Pressable
-                  style={styles.item}
-                  onPress={async () => {
-                    close();
-                    await clearSession();
-                  }}>
+                <Pressable style={styles.item} onPress={() => void onLogout()}>
                   <Text style={styles.itemLabel}>{t('auth.logout')}</Text>
                 </Pressable>
               </>

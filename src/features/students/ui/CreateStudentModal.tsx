@@ -3,6 +3,7 @@ import {Modal, Pressable, StyleSheet, Text, View} from 'react-native';
 
 import {useI18n} from '../../../shared/i18n';
 import {colors, radii} from '../../../shared/config/theme';
+import {useKeyboardBottomOffset} from '../../../shared/lib/useKeyboardBottomOffset';
 import {isOutlookEmail, isValidEmail} from '../../../shared/lib/validation';
 import {AppDialog, Button, TextField} from '../../../shared/ui';
 import {
@@ -30,6 +31,7 @@ export function CreateStudentModal({
 }: Props) {
   const {t} = useI18n();
   const isEdit = !!student?.id;
+  const keyboardHeight = useKeyboardBottomOffset(visible);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [tag, setTag] = useState('');
@@ -119,7 +121,9 @@ export function CreateStudentModal({
         transparent
         animationType="fade"
         onRequestClose={close}>
-        <Pressable style={styles.backdrop} onPress={close}>
+        <Pressable
+          style={[styles.backdrop, {paddingBottom: keyboardHeight}]}
+          onPress={close}>
           <Pressable style={styles.card} onPress={e => e.stopPropagation()}>
             <Text style={styles.title}>
               {name.trim() || t('students.newStudent')}

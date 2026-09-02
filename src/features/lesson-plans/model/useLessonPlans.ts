@@ -78,17 +78,16 @@ export function useLessonPlans() {
   );
 
   useEffect(() => {
-    if (tab === 'myCourses' && !hasMyCourses) {
-      setTab(isAuthorized ? 'my' : 'twoEasy');
-    } else if (tab === 'twoEasyCourses' && !hasTwoEasyCourses) {
+    if (tab === 'twoEasyCourses' && !hasTwoEasyCourses) {
       setTab(isAuthorized ? 'my' : 'twoEasy');
     }
-  }, [tab, hasMyCourses, hasTwoEasyCourses, isAuthorized]);
+  }, [tab, hasTwoEasyCourses, isAuthorized]);
 
   const isCoursesTab = tab === 'myCourses' || tab === 'twoEasyCourses';
+  const isBoardsTab = tab === 'myBoards';
 
   const visibleLessons = useMemo(() => {
-    if (isCoursesTab) {
+    if (isCoursesTab || isBoardsTab) {
       return [] as Lesson[];
     }
     let list = lessons;
@@ -103,10 +102,10 @@ export function useLessonPlans() {
       lesson =>
         matchesLevelFilter(lesson, levelFilter) && matchesSearch(lesson, search),
     );
-  }, [isAuthorized, lessons, tab, levelFilter, search, isCoursesTab]);
+  }, [isAuthorized, lessons, tab, levelFilter, search, isCoursesTab, isBoardsTab]);
 
   const visibleCourses = useMemo(() => {
-    if (!isCoursesTab) {
+    if (!isCoursesTab || isBoardsTab) {
       return [] as Course[];
     }
     const list =
@@ -115,12 +114,13 @@ export function useLessonPlans() {
         : courses.filter(c => Number(c.user_id) === TWO_EASY_USER_ID);
 
     return list.filter(course => matchesCourseSearch(course, search));
-  }, [courses, tab, search, isCoursesTab]);
+  }, [courses, tab, search, isCoursesTab, isBoardsTab]);
 
   return {
     lessons: visibleLessons,
     courses: visibleCourses,
     isCoursesTab,
+    isBoardsTab,
     hasMyCourses,
     hasTwoEasyCourses,
     loading: loading || authIsLoading,

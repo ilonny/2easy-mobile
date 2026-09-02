@@ -71,6 +71,8 @@ export function MatchWordColumnExView({data}: Props) {
     try {
       const raw = answers[String(data?.id)]?.answer;
       if (!raw) {
+        setCorrectChips([]);
+        setIncorrectIdsMap({});
         return;
       }
       const parsed = JSON.parse(raw);

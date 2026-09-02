@@ -1,3 +1,4 @@
+import {useState} from 'react';
 import {Image, StyleSheet, View} from 'react-native';
 
 import {colors, radii} from '../../../../shared/config/theme';
@@ -15,8 +16,16 @@ function Col({
   html?: string;
   image?: {dataURL?: string};
 }) {
+  const [colW, setColW] = useState(0);
   return (
-    <View style={styles.col}>
+    <View
+      style={styles.col}
+      onLayout={e => {
+        const w = Math.floor(e.nativeEvent.layout.width);
+        if (w > 0 && w !== colW) {
+          setColW(w);
+        }
+      }}>
       {!!image?.dataURL && (
         <Image
           source={{uri: image.dataURL}}
@@ -24,7 +33,7 @@ function Col({
           resizeMode="contain"
         />
       )}
-      <HtmlContent html={html} />
+      <HtmlContent html={html} contentWidth={colW > 0 ? colW : undefined} />
     </View>
   );
 }
@@ -58,14 +67,15 @@ export function Text2ColExView({data}: Props) {
 
 const styles = StyleSheet.create({
   root: {gap: 12},
-  cols: {gap: 12},
-  colsRow: {flexDirection: 'row', alignItems: 'flex-start'},
+  cols: {gap: 12, width: '100%'},
+  colsRow: {flexDirection: 'row', alignItems: 'flex-start', width: '100%'},
   col: {
     backgroundColor: colors.white,
     borderRadius: radii.lg,
     padding: 14,
     flex: 1,
     minWidth: 0,
+    overflow: 'hidden',
   },
   editorImg: {
     width: '100%',

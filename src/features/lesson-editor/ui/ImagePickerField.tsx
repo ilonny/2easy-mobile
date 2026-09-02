@@ -64,6 +64,13 @@ export function ImagePickerField({
     }
   }, [searchOpen]);
 
+  // Keep stored list within max (e.g. legacy multi cover → single).
+  useEffect(() => {
+    if (images.length > max) {
+      onChange(images.slice(0, max));
+    }
+  }, [images, max, onChange]);
+
   const canAddMore = images.length < max;
 
   const pickFromDevice = async () => {

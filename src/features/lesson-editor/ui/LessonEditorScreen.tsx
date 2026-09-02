@@ -14,6 +14,7 @@ import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
 import {useAuth} from '../../../entities/session';
+import {isLessonLockedOnFreeTariff} from '../../../entities/lesson';
 import {useI18n} from '../../../shared/i18n';
 import {colors} from '../../../shared/config/theme';
 import type {RootStackParamList} from '../../../shared/navigation/types';
@@ -24,6 +25,12 @@ import {
 import {AppDialog, Breadcrumbs, Button} from '../../../shared/ui';
 import {AppHeader} from '../../app-shell';
 import {useLayout} from '../../../shared/lib/layout';
+import {
+  CreateHomeworkModal,
+  isHomeworkLesson,
+  positiveId,
+  resolveHomeworkForStudent,
+} from '../../homework';
 import {useSubscription} from '../../home/model/useSubscription';
 import {
   changeExSortIndex,
@@ -70,7 +77,7 @@ export function LessonEditorScreen({lessonId}: Props) {
   const {isAuthorized, profile} = useAuth();
   const {t} = useI18n();
   const {isTablet, pageGutter, pageContentMaxWidth} = useLayout();
-  const {hasSubscription} = useSubscription();
+  const {hasSubscription, subscription} = useSubscription();
 
   const [lesson, setLesson] = useState<LessonDetail | null>(null);
   const [exercises, setExercises] = useState<Exercise[]>([]);
@@ -79,6 +86,7 @@ export function LessonEditorScreen({lessonId}: Props) {
   const [metaOpen, setMetaOpen] = useState(false);
   const [templateOpen, setTemplateOpen] = useState(false);
   const [startStudentsOpen, setStartStudentsOpen] = useState(false);
+  const [homeworkModalOpen, setHomeworkModalOpen] = useState(false);
   const [insertAt, setInsertAt] = useState<number | undefined>();
   const [editor, setEditor] = useState<EditorState>(null);
   const [deleteId, setDeleteId] = useState<number | null>(null);
@@ -94,8 +102,10 @@ export function LessonEditorScreen({lessonId}: Props) {
   const lastScrollY = useRef(0);
   const headerVisible = useRef(true);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (opts?: {silent?: boolean}) => {
+    if (!opts?.silent) {
+      setLoading(true);
+    }
     setError('');
     try {
       const [lessonRes, list] = await Promise.all([
@@ -117,6 +127,18 @@ export function LessonEditorScreen({lessonId}: Props) {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const isLockedOnTrial = isLessonLockedOnFreeTariff(
+    lesson,
+    subscription?.subscribe_type_id === 1,
+    !!profile?.isStudent,
+  );
+
+  useEffect(() => {
+    if (isLockedOnTrial) {
+      navigation.replace('Subscription');
+    }
+  }, [isLockedOnTrial, navigation]);
 
   useEffect(() => {
     void (async () => {
@@ -234,24 +256,21 @@ export function LessonEditorScreen({lessonId}: Props) {
   };
 
   const onChangeVisible = async (ex: Exercise) => {
+    const nextVisible = !isExVisible(ex.is_visible);
+    const prevVisible = ex.is_visible;
+    setExercises(list =>
+      list.map(item =>
+        item.id === ex.id ? {...item, is_visible: nextVisible} : item,
+      ),
+    );
     try {
-      const nextVisible = !isExVisible(ex.is_visible);
       await changeExVisible(ex.id, nextVisible);
-      await load();
-      if (ex.type === 'note') {
-        setNotice(
-          nextVisible
-            ? t('lessons.noteNowVisibleToStudent')
-            : t('lessons.noteNowHiddenFromStudent'),
-        );
-      } else {
-        setNotice(
-          nextVisible
-            ? t('lessons.taskNowVisibleToStudent')
-            : t('lessons.taskNowHiddenFromStudent'),
-        );
-      }
     } catch {
+      setExercises(list =>
+        list.map(item =>
+          item.id === ex.id ? {...item, is_visible: prevVisible} : item,
+        ),
+      );
       setNotice(t('editor.saveFailed'));
     }
   };
@@ -339,6 +358,9 @@ export function LessonEditorScreen({lessonId}: Props) {
     return isOwner || lesson.canEdit === true;
   }, [lesson, is2easy, isAdmin, isOwner]);
 
+  const lessonIsHomework = !!lesson && isHomeworkLesson(lesson);
+  const linkedHomeworkId = positiveId(lesson?.homework_lesson_id);
+
   const startLesson = () => {
     if (!hasSubscription) {
       setNotice(t('lessons.needSubscriptionToStart'));
@@ -350,6 +372,34 @@ export function LessonEditorScreen({lessonId}: Props) {
 
   const onStartLessonWithStudents = (selectedIds: number[]) => {
     setStartStudentsOpen(false);
+    if (lessonIsHomework) {
+      const studentId = Number(selectedIds[0] || 0);
+      const parentLessonId =
+        positiveId(lesson?.lesson_id_homework) || lessonId;
+      void (async () => {
+        let homeworkId = lessonId;
+        if (studentId > 0 && parentLessonId > 0) {
+          try {
+            const data = await resolveHomeworkForStudent(
+              parentLessonId,
+              studentId,
+            );
+            const resolvedId = positiveId(data?.homework_lesson_id);
+            if (data?.success && resolvedId) {
+              homeworkId = resolvedId;
+            }
+          } catch {
+            /* keep current homework lesson */
+          }
+        }
+        navigation.navigate('LessonViewer', {
+          lessonId: homeworkId,
+          from: 'Lessons',
+          ...(studentId > 0 ? {studentId} : {}),
+        });
+      })();
+      return;
+    }
     navigation.navigate('LessonViewer', {
       lessonId,
       from: 'Lessons',
@@ -376,6 +426,10 @@ export function LessonEditorScreen({lessonId}: Props) {
   };
 
   const listPaddingTop = headerHeight > 0 ? headerHeight + 8 : insets.top + 120;
+
+  if (isLockedOnTrial) {
+    return null;
+  }
 
   return (
     <LessonPlayerProvider
@@ -426,10 +480,17 @@ export function LessonEditorScreen({lessonId}: Props) {
                     styles.headerActions,
                     isTablet && styles.headerActionsTablet,
                   ]}>
-                  <Button
-                    title={t('lessons.startLesson')}
-                    onPress={startLesson}
-                  />
+                  {lessonIsHomework && isOwner ? (
+                    <Button
+                      title={t('lessons.checkHomework')}
+                      onPress={startLesson}
+                    />
+                  ) : !lessonIsHomework ? (
+                    <Button
+                      title={t('lessons.startLesson')}
+                      onPress={startLesson}
+                    />
+                  ) : null}
                   {canEditContent ? (
                     <Button
                       title={t('editor.editLesson')}
@@ -502,6 +563,28 @@ export function LessonEditorScreen({lessonId}: Props) {
                       : undefined
                   }
                 />
+
+                {isOwner && !lessonIsHomework ? (
+                  <View style={styles.homeworkWrap}>
+                    <Button
+                      title={
+                        linkedHomeworkId
+                          ? t('lessons.homeworkLabel')
+                          : t('lessons.createHomework')
+                      }
+                      variant="secondary"
+                      onPress={() => {
+                        if (linkedHomeworkId) {
+                          navigation.navigate('LessonEditor', {
+                            lessonId: linkedHomeworkId,
+                          });
+                          return;
+                        }
+                        setHomeworkModalOpen(true);
+                      }}
+                    />
+                  </View>
+                ) : null}
               </View>
             </LessonScrollView>
           </LessonScrollProvider>
@@ -566,9 +649,30 @@ export function LessonEditorScreen({lessonId}: Props) {
         <StartLessonStudentsModal
           visible={startStudentsOpen}
           lessonId={lessonId}
+          mode={lessonIsHomework ? 'homeworkCheck' : 'start'}
           onClose={() => setStartStudentsOpen(false)}
           onStarted={onStartLessonWithStudents}
         />
+
+        {!!lesson && (
+          <CreateHomeworkModal
+            visible={homeworkModalOpen}
+            lessonId={lessonId}
+            exList={exercises.map(ex => ({
+              id: ex.id,
+              type: ex.type,
+              data: ex.data,
+              sortIndex: ex.sortIndex,
+            }))}
+            onClose={() => setHomeworkModalOpen(false)}
+            onOpenEditor={hwId => {
+              navigation.navigate('LessonEditor', {lessonId: hwId});
+            }}
+            onSuccess={() => {
+              void load();
+            }}
+          />
+        )}
 
         <AppDialog
           visible={!!notice}
@@ -613,6 +717,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   pageColumn: {gap: 0},
+  homeworkWrap: {marginTop: 16, marginBottom: 8},
   centered: {
     flex: 1,
     alignItems: 'center',

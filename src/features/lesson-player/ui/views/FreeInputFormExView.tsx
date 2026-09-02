@@ -1,4 +1,4 @@
-import {useEffect, useState} from 'react';
+import {useEffect, useRef, useState} from 'react';
 import {StyleSheet, TextInput, View} from 'react-native';
 
 import {colors, radii} from '../../../../shared/config/theme';
@@ -20,19 +20,46 @@ export function FreeInputFormExView({data}: Props) {
     studentId,
     activeStudentId,
     isTeacher,
+    // Live teacher corrections while student is not focused on the field.
+    syncRemoteToStudent: true,
   });
 
   const questions: Question[] = data?.questions || [];
   const bgImages = data?.images?.length ? [data.images[0]] : [];
   const [local, setLocal] = useState<Record<string, string>>({});
+  const focusedKeyRef = useRef<string | null>(null);
+  const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   useEffect(() => {
     const next: Record<string, string> = {};
     (data?.questions || []).forEach((q: Question) => {
-      next[String(q.id)] = answers[String(q.id)]?.answer || '';
+      const key = String(q.id);
+      // Don't overwrite the field the student is currently editing.
+      if (focusedKeyRef.current === key) {
+        next[key] = local[key] ?? answers[key]?.answer ?? '';
+        return;
+      }
+      next[key] = answers[key]?.answer || '';
     });
     setLocal(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only sync from remote answers
   }, [answers, data?.questions]);
+
+  useEffect(() => {
+    return () => {
+      Object.values(saveTimers.current).forEach(clearTimeout);
+    };
+  }, []);
+
+  const scheduleSave = (questionId: string | number, value: string) => {
+    const key = String(questionId);
+    if (saveTimers.current[key]) {
+      clearTimeout(saveTimers.current[key]);
+    }
+    saveTimers.current[key] = setTimeout(() => {
+      void writeAnswer(questionId, value);
+    }, 500);
+  };
 
   return (
     <View style={styles.root}>
@@ -57,10 +84,21 @@ export function FreeInputFormExView({data}: Props) {
               multiline
               textAlignVertical="top"
               value={local[key] ?? ''}
-              onChangeText={val =>
-                setLocal(prev => ({...prev, [key]: val}))
-              }
-              onBlur={() => writeAnswer(question.id, local[key] ?? '')}
+              onFocus={() => {
+                focusedKeyRef.current = key;
+              }}
+              onChangeText={val => {
+                setLocal(prev => ({...prev, [key]: val}));
+                scheduleSave(question.id, val);
+              }}
+              onBlur={() => {
+                focusedKeyRef.current = null;
+                if (saveTimers.current[key]) {
+                  clearTimeout(saveTimers.current[key]);
+                  delete saveTimers.current[key];
+                }
+                void writeAnswer(question.id, local[key] ?? '');
+              }}
               placeholder="Your answer..."
               placeholderTextColor={colors.muted}
             />

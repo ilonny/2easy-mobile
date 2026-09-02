@@ -3,7 +3,7 @@ import {Pressable, StyleSheet, Text, View} from 'react-native';
 
 import {useI18n} from '../../../shared/i18n';
 import {colors, radii} from '../../../shared/config/theme';
-import {ActionMenuModal, type ActionMenuItem} from '../../../shared/ui';
+import {ActionMenuModal, EyeIcon, type ActionMenuItem} from '../../../shared/ui';
 import {getExerciseTypeLabel} from '../../lesson-editor/model/templates';
 import {
   type Exercise,
@@ -133,7 +133,25 @@ export function ExList({list, chrome}: Props) {
                 styles.card,
                 !visible && styles.cardHidden,
                 isDragging && styles.cardDragging,
+                !!chrome?.onChangeIsVisible &&
+                  isView &&
+                  !isEdit &&
+                  styles.cardWithEye,
               ]}>
+              {chrome?.onChangeIsVisible ? (
+                <Pressable
+                  onPress={() => chrome?.onChangeIsVisible?.(ex)}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel={visibilityLabel(ex.type, visible, t)}
+                  style={[
+                    styles.eyeBtn,
+                    isEdit ? styles.eyeBtnEdit : styles.eyeBtnView,
+                  ]}>
+                  <EyeIcon enabled={visible} size={24} />
+                </Pressable>
+              ) : null}
+
               {isEdit ? (
                 <View style={styles.chrome}>
                   <View style={styles.chromeTop}>
@@ -161,18 +179,6 @@ export function ExList({list, chrome}: Props) {
                       <Text style={styles.moreBtnText}>⋯</Text>
                     </Pressable>
                   </View>
-
-                  <Pressable
-                    onPress={() => chrome?.onChangeIsVisible?.(ex)}
-                    style={styles.visibilityBtn}>
-                    <Text
-                      style={[
-                        styles.visibilityText,
-                        !visible && styles.visibilityTextOff,
-                      ]}>
-                      {visibilityLabel(ex.type, visible, t)}
-                    </Text>
-                  </Pressable>
                 </View>
               ) : null}
 
@@ -256,10 +262,15 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
     borderRadius: radii.xl,
     padding: 16,
+    paddingTop: 18,
     borderWidth: 1,
     borderColor: colors.border,
     overflow: 'visible',
     zIndex: 1,
+    position: 'relative',
+  },
+  cardWithEye: {
+    paddingLeft: 44,
   },
   cardDragging: {
     zIndex: 50,
@@ -307,14 +318,22 @@ const styles = StyleSheet.create({
     color: colors.primary,
     marginTop: -4,
   },
-  visibilityBtn: {alignSelf: 'flex-start'},
-  visibilityText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.primary,
-    lineHeight: 18,
+  eyeBtn: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 2,
   },
-  visibilityTextOff: {color: '#B3B3B3'},
+  eyeBtnEdit: {
+    alignSelf: 'flex-start',
+    marginBottom: 6,
+  },
+  eyeBtnView: {
+    position: 'absolute',
+    left: 8,
+    top: 8,
+  },
   between: {
     flexDirection: 'row',
     flexWrap: 'wrap',

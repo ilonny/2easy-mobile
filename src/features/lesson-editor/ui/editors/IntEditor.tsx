@@ -1,7 +1,8 @@
 import {useEffect, useMemo, useState} from 'react';
-import {View} from 'react-native';
+import {StyleSheet, Text, View} from 'react-native';
 
 import {useI18n} from '../../../../shared/i18n';
+import {colors} from '../../../../shared/config/theme';
 import {TextField} from '../../../../shared/ui';
 import {
   ImagePickerField,
@@ -84,7 +85,11 @@ export function IntEditor({
   return (
     <EditorShell
       visible={visible}
-      title={exercise ? t('common.edit') : 'Integration'}
+      title={
+        exercise
+          ? t('common.edit')
+          : t('templates.integrations')
+      }
       onClose={onClose}
       onSave={() => {
         void onSave();
@@ -105,22 +110,34 @@ export function IntEditor({
         onChangeText={setDescription}
       />
       <TextField
-        label="Iframe HTML"
+        label={t('editor.embedCode')}
         value={iframe}
         onChangeText={setIframe}
         multiline
         style={editorStyles.multiline}
         autoCapitalize="none"
+        placeholder="<iframe …>"
       />
+      <Text style={styles.hint}>{t('editor.embedCodeHint')}</Text>
       <View style={editorStyles.card}>
         <ImagePickerField
           label={t('editor.coverImage')}
           images={images}
           onChange={setImages}
-          multiple
-          max={4}
+          multiple={false}
+          max={1}
         />
       </View>
     </EditorShell>
   );
 }
+
+const styles = StyleSheet.create({
+  hint: {
+    marginTop: -8,
+    marginBottom: 16,
+    color: colors.textSecondary,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+});

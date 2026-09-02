@@ -69,6 +69,18 @@ export function TextStickerEditor({
     setStickerTextColor(String(d.stickerTextColor || '#000000'));
   }, [visible, exercise]);
 
+  const applyAiData = (data: Record<string, unknown>) => {
+    setTitle(String(data.title || ''));
+    setSubtitle(String(data.subtitle || ''));
+    setDescription(String(data.description || ''));
+    setStickers(normalizeStickers(data.stickers));
+    if (data.images) {
+      setImages(attachmentsToPicked(data.images as never));
+    }
+    setStickerBgColor(String(data.stickerBgColor || '#FFF7D6'));
+    setStickerTextColor(String(data.stickerTextColor || '#000000'));
+  };
+
   const onSave = async () => {
     setSaving(true);
     try {
@@ -121,7 +133,22 @@ export function TextStickerEditor({
       saving={saving}
       previewType="text-sticker"
       previewLessonId={lessonId}
-      previewData={previewData}>
+      previewData={previewData}
+      ai={{
+        type: 'text-sticker',
+        lessonId,
+        currentData: {
+          id: exercise?.id,
+          title,
+          subtitle,
+          description,
+          stickers: stickers.map(s => s.text).filter(Boolean),
+          stickerBgColor,
+          stickerTextColor,
+          titleColor: TITLE_COLOR,
+        },
+        onApply: applyAiData,
+      }}>
       <TextField label={t('editor.fieldTitle')} value={title} onChangeText={setTitle} />
       <TextField
         label={t('editor.fieldSubtitle')}
@@ -205,8 +232,8 @@ export function TextStickerEditor({
           label={t('editor.coverImage')}
           images={images}
           onChange={setImages}
-          multiple
-          max={6}
+          multiple={false}
+          max={1}
         />
       </View>
     </EditorShell>

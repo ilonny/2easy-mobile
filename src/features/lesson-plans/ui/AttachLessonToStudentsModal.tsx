@@ -15,6 +15,7 @@ import {colors, radii} from '../../../shared/config/theme';
 import {useLayout} from '../../../shared/lib/layout';
 import {Button} from '../../../shared/ui';
 import {
+  createCourseRelation,
   createLessonRelation,
   fetchStudents,
   type Student,
@@ -24,6 +25,8 @@ type Props = {
   visible: boolean;
   lessonId: number;
   lessonTitle?: string;
+  /** When true, attaches a course via /course-relation/create */
+  isCourses?: boolean;
   onClose: () => void;
   onAttached: () => void;
 };
@@ -44,6 +47,7 @@ export function AttachLessonToStudentsModal({
   visible,
   lessonId,
   lessonTitle,
+  isCourses = false,
   onClose,
   onAttached,
 }: Props) {
@@ -98,11 +102,17 @@ export function AttachLessonToStudentsModal({
     try {
       await Promise.all(
         chosenIds.map(student_id =>
-          createLessonRelation({
-            lesson_id: lessonId,
-            student_id,
-            status,
-          }),
+          isCourses
+            ? createCourseRelation({
+                lesson_id: lessonId,
+                student_id,
+                status,
+              })
+            : createLessonRelation({
+                lesson_id: lessonId,
+                student_id,
+                status,
+              }),
         ),
       );
       onAttached();
@@ -125,7 +135,9 @@ export function AttachLessonToStudentsModal({
             <Text style={styles.title}>
               {step === 0
                 ? t('lessons.attachToStudent')
-                : t('lessons.attachStatusLesson')}
+                : isCourses
+                  ? t('lessons.attachStatusCourse')
+                  : t('lessons.attachStatusLesson')}
             </Text>
             {!!lessonTitle && (
               <Text style={styles.subtitle} numberOfLines={2}>
@@ -143,126 +155,159 @@ export function AttachLessonToStudentsModal({
             <ActivityIndicator color={colors.primary} size="large" />
           </View>
         ) : step === 0 ? (
-          <FlatList
-            data={students}
-            keyExtractor={item => String(item.id)}
-            contentContainerStyle={[
-              styles.list,
-              {
-                paddingHorizontal: pageGutter,
-                paddingBottom: insets.bottom + 24,
-                maxWidth: pageContentMaxWidth,
-                width: '100%',
-                alignSelf: 'center',
-                flexGrow: 1,
-              },
-            ]}
-            ListEmptyComponent={
-              <Text style={styles.empty}>{t('students.noStudents')}</Text>
-            }
-            ListFooterComponent={
-              <View style={styles.footer}>
-                {!!error && <Text style={styles.error}>{error}</Text>}
-                <Button
-                  title={t('lessons.next')}
-                  onPress={() => setStep(1)}
-                  disabled={!chosenIds.length}
-                />
-                <Pressable onPress={onClose} style={styles.cancelWrap}>
-                  <Text style={styles.cancel}>{t('common.cancel')}</Text>
-                </Pressable>
-              </View>
-            }
-            renderItem={({item}) => {
-              const selected = chosenIds.includes(item.id);
-              return (
-                <Pressable
-                  onPress={() => toggle(item.id)}
-                  style={[
-                    styles.card,
-                    selected && styles.cardSelected,
-                    isTablet && styles.cardTablet,
-                  ]}>
-                  <View
-                    style={[styles.avatar, selected && styles.avatarSelected]}>
-                    <Text style={styles.avatarText}>
-                      {shortName(item.name) || 'A'}
-                    </Text>
-                  </View>
-                  <View style={styles.meta}>
-                    <Text style={styles.name}>{item.name}</Text>
-                    {!!item.email && (
-                      <Text style={styles.email}>{item.email}</Text>
-                    )}
-                  </View>
-                  <View
-                    style={[styles.check, selected && styles.checkSelected]}>
-                    {selected ? <Text style={styles.checkMark}>✓</Text> : null}
-                  </View>
-                </Pressable>
-              );
-            }}
-          />
-        ) : (
-          <View
-            style={[
-              styles.statusWrap,
-              {
-                paddingHorizontal: pageGutter,
-                paddingBottom: insets.bottom + 24,
-                maxWidth: pageContentMaxWidth,
-                width: '100%',
-                alignSelf: 'center',
-              },
-            ]}>
-            <Text style={styles.statusHint}>
-              {status === 'open'
-                ? t('lessons.availableToStudent')
-                : t('lessons.studentSeesLessonCannotOpen')}
-            </Text>
-            <Pressable
-              onPress={() => setStatus('open')}
-              style={[
-                styles.statusCard,
-                status === 'open' && styles.statusCardActive,
-              ]}>
-              <Text
-                style={[
-                  styles.statusTitle,
-                  status === 'open' && styles.statusTitleActive,
-                ]}>
-                {t('lessons.lessonOpen')}
-              </Text>
-            </Pressable>
-            <Pressable
-              onPress={() => setStatus('close')}
-              style={[
-                styles.statusCard,
-                status === 'close' && styles.statusCardActive,
-              ]}>
-              <Text
-                style={[
-                  styles.statusTitle,
-                  status === 'close' && styles.statusTitleActive,
-                ]}>
-                {t('lessons.lessonClosed')}
-              </Text>
-            </Pressable>
-            {!!error && <Text style={styles.error}>{error}</Text>}
-            <Button
-              title={t('lessons.attachToStudent')}
-              onPress={() => {
-                void onSubmit();
+          <>
+            <FlatList
+              data={students}
+              keyExtractor={item => String(item.id)}
+              style={styles.listFlex}
+              contentContainerStyle={[
+                styles.list,
+                {
+                  paddingHorizontal: pageGutter,
+                  paddingBottom: 16,
+                  maxWidth: pageContentMaxWidth,
+                  width: '100%',
+                  alignSelf: 'center',
+                  flexGrow: 1,
+                },
+              ]}
+              ListEmptyComponent={
+                <Text style={styles.empty}>{t('students.noStudents')}</Text>
+              }
+              renderItem={({item}) => {
+                const selected = chosenIds.includes(item.id);
+                return (
+                  <Pressable
+                    onPress={() => toggle(item.id)}
+                    style={[
+                      styles.card,
+                      selected && styles.cardSelected,
+                      isTablet && styles.cardTablet,
+                    ]}>
+                    <View
+                      style={[
+                        styles.avatar,
+                        selected && styles.avatarSelected,
+                      ]}>
+                      <Text style={styles.avatarText}>
+                        {shortName(item.name) || 'A'}
+                      </Text>
+                    </View>
+                    <View style={styles.meta}>
+                      <Text style={styles.name}>{item.name}</Text>
+                      {!!item.email && (
+                        <Text style={styles.email}>{item.email}</Text>
+                      )}
+                    </View>
+                    <View
+                      style={[styles.check, selected && styles.checkSelected]}>
+                      {selected ? (
+                        <Text style={styles.checkMark}>✓</Text>
+                      ) : null}
+                    </View>
+                  </Pressable>
+                );
               }}
-              loading={submitting}
             />
-            <Button
-              title={t('common.back')}
-              variant="secondary"
-              onPress={() => setStep(0)}
-              disabled={submitting}
-            />
-          </View>
+            <View
+              style={[
+                styles.footerBar,
+                {
+                  paddingHorizontal: pageGutter,
+                  paddingBottom: insets.bottom + 16,
+                  maxWidth: pageContentMaxWidth,
+                  width: '100%',
+                  alignSelf: 'center',
+                },
+              ]}>
+              {!!error && <Text style={styles.error}>{error}</Text>}
+              <Button
+                title={t('lessons.next')}
+                onPress={() => setStep(1)}
+                disabled={!chosenIds.length}
+              />
+              <Pressable onPress={onClose} style={styles.cancelWrap}>
+                <Text style={styles.cancel}>{t('common.cancel')}</Text>
+              </Pressable>
+            </View>
+          </>
+        ) : (
+          <>
+            <View
+              style={[
+                styles.statusWrap,
+                {
+                  paddingHorizontal: pageGutter,
+                  maxWidth: pageContentMaxWidth,
+                  width: '100%',
+                  alignSelf: 'center',
+                },
+              ]}>
+              <Text style={styles.statusHint}>
+                {status === 'open'
+                  ? t('lessons.availableToStudent')
+                  : t('lessons.studentSeesLessonCannotOpen')}
+              </Text>
+              <Pressable
+                onPress={() => setStatus('open')}
+                style={[
+                  styles.statusCard,
+                  status === 'open' && styles.statusCardActive,
+                ]}>
+                <Text
+                  style={[
+                    styles.statusTitle,
+                    status === 'open' && styles.statusTitleActive,
+                  ]}>
+                  {isCourses
+                    ? t('lessons.courseOpen')
+                    : t('lessons.lessonOpen')}
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => setStatus('close')}
+                style={[
+                  styles.statusCard,
+                  status === 'close' && styles.statusCardActive,
+                ]}>
+                <Text
+                  style={[
+                    styles.statusTitle,
+                    status === 'close' && styles.statusTitleActive,
+                  ]}>
+                  {isCourses
+                    ? t('lessons.courseClosed')
+                    : t('lessons.lessonClosed')}
+                </Text>
+              </Pressable>
+            </View>
+            <View
+              style={[
+                styles.footerBar,
+                {
+                  paddingHorizontal: pageGutter,
+                  paddingBottom: insets.bottom + 16,
+                  maxWidth: pageContentMaxWidth,
+                  width: '100%',
+                  alignSelf: 'center',
+                },
+              ]}>
+              {!!error && <Text style={styles.error}>{error}</Text>}
+              <Button
+                title={t('lessons.attachToStudent')}
+                onPress={() => {
+                  void onSubmit();
+                }}
+                loading={submitting}
+              />
+              <Button
+                title={t('common.back')}
+                variant="secondary"
+                onPress={() => setStep(0)}
+                disabled={submitting}
+              />
+            </View>
+          </>
         )}
       </View>
     </Modal>
@@ -297,6 +342,7 @@ const styles = StyleSheet.create({
   },
   close: {fontSize: 22, color: colors.muted},
   centered: {flex: 1, alignItems: 'center', justifyContent: 'center'},
+  listFlex: {flex: 1},
   list: {paddingTop: 8, gap: 10},
   empty: {
     textAlign: 'center',
@@ -346,11 +392,17 @@ const styles = StyleSheet.create({
     borderColor: colors.primary,
   },
   checkMark: {color: colors.white, fontWeight: '800', fontSize: 14},
-  footer: {gap: 12, marginTop: 16},
+  footerBar: {
+    gap: 12,
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+    backgroundColor: '#F9F9F9',
+  },
   error: {color: colors.danger, textAlign: 'center'},
   cancelWrap: {alignItems: 'center', paddingVertical: 8},
   cancel: {color: colors.muted, fontWeight: '600'},
-  statusWrap: {gap: 12, paddingTop: 8},
+  statusWrap: {flex: 1, gap: 12, paddingTop: 8},
   statusHint: {
     color: colors.textSecondary,
     fontSize: 14,

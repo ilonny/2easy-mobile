@@ -65,6 +65,27 @@ export function MatchWordColumnEditor({
     setImages(attachmentsToPicked(d.images));
   }, [visible, exercise]);
 
+  const applyAiData = (data: Record<string, unknown>) => {
+    setTitle(String(data.title || ''));
+    setSubtitle(String(data.subtitle || ''));
+    setDescription(String(data.description || ''));
+    const raw = (data.columns as Array<Record<string, unknown>>) || [];
+    setColumns(
+      raw.length
+        ? raw.map(c => ({
+            id: String(c.id || newId()),
+            title: String(c.title || ''),
+            words: Array.isArray(c.words)
+              ? (c.words as string[]).map(String)
+              : [''],
+          }))
+        : [emptyColumn(), emptyColumn()],
+    );
+    if (data.images) {
+      setImages(attachmentsToPicked(data.images as never));
+    }
+  };
+
   const onSave = async () => {
     setSaving(true);
     try {
@@ -117,7 +138,20 @@ export function MatchWordColumnEditor({
       saving={saving}
       previewType="match-word-column"
       previewLessonId={lessonId}
-      previewData={previewData}>
+      previewData={previewData}
+      ai={{
+        type: 'match-word-column',
+        lessonId,
+        currentData: {
+          id: exercise?.id,
+          title,
+          subtitle,
+          description,
+          columns,
+          titleColor: TITLE_COLOR,
+        },
+        onApply: applyAiData,
+      }}>
       <TextField label={t('editor.fieldTitle')} value={title} onChangeText={setTitle} />
       <TextField
         label={t('editor.fieldSubtitle')}
@@ -212,8 +246,8 @@ export function MatchWordColumnEditor({
           label={t('editor.coverImage')}
           images={images}
           onChange={setImages}
-          multiple
-          max={6}
+          multiple={false}
+          max={1}
         />
       </View>
     </EditorShell>

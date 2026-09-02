@@ -71,15 +71,67 @@ export async function deleteStudent(id: number) {
   });
 }
 
+export type RelationStatus = 'open' | 'close' | 'complete';
+
 export async function createLessonRelation(data: {
   lesson_id: number;
   student_id: number;
-  status: 'open' | 'close';
+  status: RelationStatus;
 }) {
   return postJson<{success?: boolean; message?: string}>({
     path: '/lesson-relation/create',
     isSecure: true,
     data,
+  });
+}
+
+export async function editLessonRelation(data: {
+  relation_id: number;
+  status: RelationStatus;
+}) {
+  return postJson<{success?: boolean; message?: string}>({
+    path: '/lesson-relation/edit',
+    isSecure: true,
+    data,
+  });
+}
+
+export async function deleteLessonRelation(relation_id: number) {
+  return postJson<{success?: boolean; message?: string}>({
+    path: '/lesson-relation/delete',
+    isSecure: true,
+    data: {relation_id},
+  });
+}
+
+export async function createCourseRelation(data: {
+  lesson_id: number;
+  student_id: number;
+  status: 'open' | 'close';
+}) {
+  return postJson<{success?: boolean; message?: string}>({
+    path: '/course-relation/create',
+    isSecure: true,
+    data,
+  });
+}
+
+export async function editCourseRelation(data: {
+  relation_id: number;
+  status: 'open' | 'close';
+}) {
+  return postJson<{success?: boolean; message?: string}>({
+    path: '/course-relation/edit',
+    isSecure: true,
+    data,
+  });
+}
+
+export async function deleteCourseRelation(relation_id: number) {
+  return postJson<{success?: boolean; message?: string}>({
+    path: '/course-relation/delete',
+    isSecure: true,
+    data: {relation_id},
   });
 }
 

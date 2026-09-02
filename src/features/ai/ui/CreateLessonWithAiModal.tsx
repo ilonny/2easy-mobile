@@ -16,6 +16,7 @@ import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {useI18n} from '../../../shared/i18n';
 import {colors, radii} from '../../../shared/config/theme';
 import {useLayout} from '../../../shared/lib/layout';
+import {useKeyboardBottomOffset} from '../../../shared/lib/useKeyboardBottomOffset';
 import {Button, TextField} from '../../../shared/ui';
 import {
   fetchAiMeta,
@@ -71,6 +72,7 @@ export function CreateLessonWithAiModal({
   const {t, language} = useI18n();
   const {isTablet, pageGutter, authFormMaxWidth} = useLayout();
   const scrollRef = useRef<ScrollView>(null);
+  const keyboardHeight = useKeyboardBottomOffset(visible);
 
   const [step, setStep] = useState<Step>('collect');
   const [level, setLevel] = useState<AiLevel | null>(null);
@@ -155,7 +157,15 @@ export function CreateLessonWithAiModal({
       scrollRef.current?.scrollToEnd({animated: true});
     }, 80);
     return () => clearTimeout(timer);
-  }, [messages, isGenerating, draft, suggestedTopic, pendingPreview, visible]);
+  }, [
+    messages,
+    isGenerating,
+    draft,
+    suggestedTopic,
+    pendingPreview,
+    visible,
+    keyboardHeight,
+  ]);
 
   const canGenerate = Boolean(level && selectedTypes.length > 0);
 
@@ -492,14 +502,18 @@ export function CreateLessonWithAiModal({
               {
                 paddingHorizontal: pageGutter,
                 paddingTop: insets.top + 8,
-                paddingBottom: insets.bottom + 28,
+                paddingBottom:
+                  insets.bottom +
+                  28 +
+                  (Platform.OS === 'android' ? keyboardHeight : 0),
                 maxWidth: isTablet ? 720 : undefined,
                 width: '100%',
                 alignSelf: 'center',
               },
             ]}
             keyboardShouldPersistTaps="handled"
-            keyboardDismissMode="interactive">
+            keyboardDismissMode="interactive"
+            automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}>
             <View style={styles.headerText}>
               <Text style={styles.kicker}>{t('ai.createWithAi')}</Text>
               <Text style={styles.title}>

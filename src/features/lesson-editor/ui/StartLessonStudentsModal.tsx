@@ -26,6 +26,8 @@ type Props = {
   lessonId: number;
   onClose: () => void;
   onStarted: (selectedIds: number[]) => void;
+  /** start = attach + open lesson; homeworkCheck = pick one student, no relation. */
+  mode?: 'start' | 'homeworkCheck';
 };
 
 function shortName(name: string) {
@@ -43,10 +45,12 @@ export function StartLessonStudentsModal({
   lessonId,
   onClose,
   onStarted,
+  mode = 'start',
 }: Props) {
   const insets = useSafeAreaInsets();
   const {t} = useI18n();
   const {pageGutter, pageContentMaxWidth, isTablet} = useLayout();
+  const isHomeworkCheck = mode === 'homeworkCheck';
   const [students, setStudents] = useState<Student[]>([]);
   const [chosenIds, setChosenIds] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
@@ -77,32 +81,52 @@ export function StartLessonStudentsModal({
   }, [visible, load]);
 
   const toggle = (id: number) => {
+    if (isHomeworkCheck) {
+      setChosenIds(prev => (prev[0] === id ? [] : [id]));
+      return;
+    }
     setChosenIds(prev =>
       prev.includes(id) ? prev.filter(x => x !== id) : prev.concat(id),
     );
   };
 
   const onSubmit = async () => {
+    if (chosenIds.length === 0) {
+      return;
+    }
     setSubmitting(true);
     setError('');
     try {
-      await Promise.all(
-        chosenIds.map(student_id =>
-          createLessonRelation({
-            lesson_id: lessonId,
-            student_id,
-            status: 'open',
-          }),
-        ),
-      );
+      if (!isHomeworkCheck) {
+        await Promise.all(
+          chosenIds.map(student_id =>
+            createLessonRelation({
+              lesson_id: lessonId,
+              student_id,
+              status: 'open',
+            }),
+          ),
+        );
+      }
       await saveStartLessonSelectedIds(chosenIds);
       onStarted(chosenIds);
     } catch {
-      setError(t('lessons.startLessonAttachFailed'));
+      setError(
+        isHomeworkCheck
+          ? t('lessons.homeworkOpenFailed')
+          : t('lessons.startLessonAttachFailed'),
+      );
     } finally {
       setSubmitting(false);
     }
   };
+
+  const title = isHomeworkCheck
+    ? t('lessons.checkHomework')
+    : t('lessons.startLesson');
+  const subtitle = isHomeworkCheck
+    ? t('lessons.chooseStudentToCheckHomework')
+    : t('lessons.chooseStudentsToStart');
 
   return (
     <Modal
@@ -113,10 +137,8 @@ export function StartLessonStudentsModal({
       <View style={[styles.root, {paddingTop: insets.top + 8}]}>
         <View style={[styles.header, {paddingHorizontal: pageGutter}]}>
           <View style={styles.headerText}>
-            <Text style={styles.title}>{t('lessons.startLesson')}</Text>
-            <Text style={styles.subtitle}>
-              {t('lessons.chooseStudentsToStart')}
-            </Text>
+            <Text style={styles.title}>{title}</Text>
+            <Text style={styles.subtitle}>{subtitle}</Text>
           </View>
           <Pressable onPress={onClose} hitSlop={10} style={styles.closeBtn}>
             <Text style={styles.close}>✕</Text>
@@ -128,68 +150,80 @@ export function StartLessonStudentsModal({
             <ActivityIndicator color={colors.primary} size="large" />
           </View>
         ) : (
-          <FlatList
-            data={students}
-            keyExtractor={item => String(item.id)}
-            contentContainerStyle={[
-              styles.list,
-              {
-                paddingHorizontal: pageGutter,
-                paddingBottom: insets.bottom + 24,
-                maxWidth: pageContentMaxWidth,
-                width: '100%',
-                alignSelf: 'center',
-                flexGrow: 1,
-              },
-            ]}
-            ListEmptyComponent={
-              <Text style={styles.empty}>{t('students.noStudents')}</Text>
-            }
-            ListFooterComponent={
-              <View style={styles.footer}>
-                {!!error && <Text style={styles.error}>{error}</Text>}
-                <Button
-                  title={t('lessons.startLesson')}
-                  onPress={() => {
-                    void onSubmit();
-                  }}
-                  loading={submitting}
-                />
-                <Pressable onPress={onClose} style={styles.cancelWrap}>
-                  <Text style={styles.cancel}>{t('common.cancel')}</Text>
-                </Pressable>
-              </View>
-            }
-            renderItem={({item}) => {
-              const selected = chosenIds.includes(item.id);
-              return (
-                <Pressable
-                  onPress={() => toggle(item.id)}
-                  style={[
-                    styles.card,
-                    selected && styles.cardSelected,
-                    isTablet && styles.cardTablet,
-                  ]}>
-                  <View
-                    style={[styles.avatar, selected && styles.avatarSelected]}>
-                    <Text style={styles.avatarText}>
-                      {shortName(item.name) || 'A'}
-                    </Text>
-                  </View>
-                  <View style={styles.meta}>
-                    <Text style={styles.name}>{item.name}</Text>
-                    {!!item.email && (
-                      <Text style={styles.email}>{item.email}</Text>
-                    )}
-                  </View>
-                  <View
-                    style={[styles.check, selected && styles.checkSelected]}>
-                    {selected ? <Text style={styles.checkMark}>✓</Text> : null}
-                  </View>
-                </Pressable>
-              );
-            }}
-          />
+          <>
+            <FlatList
+              data={students}
+              keyExtractor={item => String(item.id)}
+              style={styles.listFlex}
+              contentContainerStyle={[
+                styles.list,
+                {
+                  paddingHorizontal: pageGutter,
+                  paddingBottom: 16,
+                  maxWidth: pageContentMaxWidth,
+                  width: '100%',
+                  alignSelf: 'center',
+                  flexGrow: 1,
+                },
+              ]}
+              ListEmptyComponent={
+                <Text style={styles.empty}>{t('students.noStudents')}</Text>
+              }
+              renderItem={({item}) => {
+                const selected = chosenIds.includes(item.id);
+                return (
+                  <Pressable
+                    onPress={() => toggle(item.id)}
+                    style={[
+                      styles.card,
+                      selected && styles.cardSelected,
+                      isTablet && styles.cardTablet,
+                    ]}>
+                    <View
+                      style={[styles.avatar, selected && styles.avatarSelected]}>
+                      <Text style={styles.avatarText}>
+                        {shortName(item.name) || 'A'}
+                      </Text>
+                    </View>
+                    <View style={styles.meta}>
+                      <Text style={styles.name}>{item.name}</Text>
+                      {!!item.email && (
+                        <Text style={styles.email}>{item.email}</Text>
+                      )}
+                    </View>
+                    <View
+                      style={[styles.check, selected && styles.checkSelected]}>
+                      {selected ? <Text style={styles.checkMark}>✓</Text> : null}
+                    </View>
+                  </Pressable>
+                );
+              }}
+            />
+            <View
+              style={[
+                styles.footerBar,
+                {
+                  paddingHorizontal: pageGutter,
+                  paddingBottom: insets.bottom + 16,
+                  maxWidth: pageContentMaxWidth,
+                  width: '100%',
+                  alignSelf: 'center',
+                },
+              ]}>
+              {!!error && <Text style={styles.error}>{error}</Text>}
+              <Button
+                title={title}
+                onPress={() => {
+                  void onSubmit();
+                }}
+                loading={submitting}
+                disabled={chosenIds.length === 0}
+              />
+              <Pressable onPress={onClose} style={styles.cancelWrap}>
+                <Text style={styles.cancel}>{t('common.cancel')}</Text>
+              </Pressable>
+            </View>
+          </>
         )}
       </View>
     </Modal>
@@ -224,6 +258,7 @@ const styles = StyleSheet.create({
   },
   close: {fontSize: 22, color: colors.muted},
   centered: {flex: 1, alignItems: 'center', justifyContent: 'center'},
+  listFlex: {flex: 1},
   list: {paddingTop: 8, gap: 10},
   empty: {
     textAlign: 'center',
@@ -273,7 +308,13 @@ const styles = StyleSheet.create({
     borderColor: colors.primary,
   },
   checkMark: {color: colors.white, fontWeight: '800', fontSize: 14},
-  footer: {gap: 12, marginTop: 16},
+  footerBar: {
+    gap: 12,
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+    backgroundColor: '#F9F9F9',
+  },
   error: {color: colors.danger, textAlign: 'center'},
   cancelWrap: {alignItems: 'center', paddingVertical: 8},
   cancel: {color: colors.muted, fontWeight: '600'},

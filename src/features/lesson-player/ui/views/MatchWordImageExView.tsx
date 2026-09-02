@@ -90,6 +90,9 @@ export function MatchWordImageExView({data}: Props) {
     try {
       const raw = answers[String(data?.id)]?.answer;
       if (!raw) {
+        setCorrectIds([]);
+        setIncorrectIdsMap({});
+        setInputs({});
         return;
       }
       const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;

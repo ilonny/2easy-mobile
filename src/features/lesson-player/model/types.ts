@@ -43,7 +43,14 @@ export type LessonDetail = {
   canEdit?: boolean;
   is_my_lesson?: boolean;
   is_homework?: boolean | number | string;
+  /** Parent lesson id when this lesson is homework. */
+  lesson_id_homework?: number | string | null;
+  /** Resolved homework lesson id linked to this parent lesson. */
+  homework_lesson_id?: number | string | null;
+  has_individual_homework?: boolean | number | string | null;
   course_id?: number | null;
+  is_free?: string | boolean | number | null;
+  created_from_2easy?: number | boolean | null;
 };
 
 export type ExListChromeHandlers = {

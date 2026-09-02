@@ -1,5 +1,6 @@
 package com.twoeasy.mobile
 
+import android.content.pm.ActivityInfo
 import android.os.Bundle
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.facebook.react.ReactActivity
@@ -17,6 +18,7 @@ class MainActivity : ReactActivity() {
 
   override fun onCreate(savedInstanceState: Bundle?) {
     installSplashScreen()
+    requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_FULL_USER
     super.onCreate(savedInstanceState)
   }
 

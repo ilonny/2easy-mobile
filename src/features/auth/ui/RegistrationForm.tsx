@@ -11,6 +11,7 @@ import {autofill} from '../../../shared/lib/autofill';
 import {colors} from '../../../shared/config/theme';
 import {Button, Checkbox, PasswordField, TextField} from '../../../shared/ui';
 import {loginRequest, registerRequest} from '../api/authApi';
+import {resetAfterAuth} from '../../../shared/navigation/resetToLessonPlans';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -127,6 +128,7 @@ export function RegistrationForm() {
       if (res.token) {
         await setSession(res);
         await markRegistrationCompleted();
+        resetAfterAuth(navigation, res);
         return;
       }
 

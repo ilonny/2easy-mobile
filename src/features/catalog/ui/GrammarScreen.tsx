@@ -16,7 +16,7 @@ import type {Lesson} from '../../../entities/lesson';
 import {getJson} from '../../../shared/api';
 import {useI18n} from '../../../shared/i18n';
 import {colors, radii} from '../../../shared/config/theme';
-import {useLayout} from '../../../shared/lib/layout';
+import {catalogTileWidth, useLayout} from '../../../shared/lib/layout';
 import type {RootStackParamList} from '../../../shared/navigation/types';
 import {goHome} from '../../../shared/navigation/resetToLessonPlans';
 import {Breadcrumbs, Button} from '../../../shared/ui';
@@ -36,7 +36,8 @@ export function GrammarScreen() {
   const {t} = useI18n();
   const {isAuthorized} = useAuth();
   const {hasSubscription, loading: subLoading} = useSubscription();
-  const {isTablet, pageGutter, pageContentMaxWidth} = useLayout();
+  const {isTablet, pageGutter, pageContentMaxWidth, catalogRowWidth} =
+    useLayout();
 
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [loading, setLoading] = useState(false);
@@ -74,6 +75,7 @@ export function GrammarScreen() {
   }, [lessons, search]);
 
   const gap = isTablet ? 16 : 12;
+  const tileWidth = catalogTileWidth(catalogRowWidth, 2, gap);
   const canBrowse = isAuthorized && hasSubscription;
 
   const header = (
@@ -159,7 +161,7 @@ export function GrammarScreen() {
           }}
           columnWrapperStyle={{gap}}
           renderItem={({item}) => (
-            <View style={[styles.gridItem, {marginBottom: gap}]}>
+            <View style={{width: tileWidth, marginBottom: gap}}>
               <LessonCard
                 item={item}
                 onPress={() =>
@@ -242,8 +244,5 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: colors.muted,
     marginTop: 24,
-  },
-  gridItem: {
-    flex: 1,
   },
 });

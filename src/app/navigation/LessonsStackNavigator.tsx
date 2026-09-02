@@ -10,6 +10,7 @@ import {TutorialPage} from '../../pages/tutorial/ui/TutorialPage';
 import {ContentPlayerPage} from '../../pages/content-player/ui/ContentPlayerPage';
 import {LessonViewerPage} from '../../pages/lesson-viewer/ui/LessonViewerPage';
 import {LessonEditorPage} from '../../pages/lesson-editor/ui/LessonEditorPage';
+import {BoardViewerPage} from '../../pages/board-viewer/ui/BoardViewerPage';
 import {LegalDocumentPage} from '../../pages/legal/ui/LegalDocumentPage';
 import type {LessonsStackParamList} from './types';
 
@@ -44,6 +45,14 @@ export function LessonsStackNavigator() {
       <Stack.Screen name="ContentPlayer" component={ContentPlayerPage} />
       <Stack.Screen name="LessonViewer" component={LessonViewerPage} />
       <Stack.Screen name="LessonEditor" component={LessonEditorPage} />
+      <Stack.Screen
+        name="BoardViewer"
+        component={BoardViewerPage}
+        options={{
+          gestureEnabled: false,
+          contentStyle: {backgroundColor: '#FFFFFF'},
+        }}
+      />
       <Stack.Screen name="LegalDocument" component={LegalDocumentPage} />
     </Stack.Navigator>
   );

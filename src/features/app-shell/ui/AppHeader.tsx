@@ -93,11 +93,17 @@ export function AppHeader({style}: Props) {
   }, [focusedRoute]);
 
   const onBack = () => {
+    if (isStudent) {
+      resetToRoute(navigation, 'Students', {
+        studentId: Number(profile?.studentId || 0),
+      });
+      return;
+    }
     if (navigation.canGoBack()) {
       navigation.goBack();
       return;
     }
-    resetToRoute(navigation, isStudent ? 'Students' : 'Lessons');
+    resetToRoute(navigation, 'Lessons');
   };
 
   if (!isAuthorized) {
@@ -140,9 +146,15 @@ export function AppHeader({style}: Props) {
         {leftControl}
 
         <Pressable
-          onPress={() =>
-            resetToRoute(navigation, isStudent ? 'Students' : 'Lessons')
-          }
+          onPress={() => {
+            if (isStudent) {
+              resetToRoute(navigation, 'Students', {
+                studentId: Number(profile?.studentId || 0),
+              });
+              return;
+            }
+            resetToRoute(navigation, 'Lessons');
+          }}
           hitSlop={8}
           style={styles.logoCenterWrap}>
           <Image

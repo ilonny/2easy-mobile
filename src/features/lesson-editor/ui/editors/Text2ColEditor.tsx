@@ -39,7 +39,8 @@ export function Text2ColEditor({
     [],
   );
   const [saving, setSaving] = useState(false);
-  const editorKey = String(exercise?.id || 'new');
+  const [aiRev, setAiRev] = useState(0);
+  const editorKey = `${exercise?.id || 'new'}-${aiRev}`;
 
   useEffect(() => {
     if (!visible) return;
@@ -53,6 +54,24 @@ export function Text2ColEditor({
     setEditorImages(attachmentsToPicked(d.editorImages));
     setSecondEditorImages(attachmentsToPicked(d.secondEditorImages));
   }, [visible, exercise]);
+
+  const applyAiData = (data: Record<string, unknown>) => {
+    setTitle(String(data.title || ''));
+    setSubtitle(String(data.subtitle || ''));
+    setDescription(String(data.description || ''));
+    setContent(String(data.content || ''));
+    setSecondContent(String(data.secondContent || ''));
+    if (data.images) {
+      setImages(attachmentsToPicked(data.images as never));
+    }
+    if (data.editorImages) {
+      setEditorImages(attachmentsToPicked(data.editorImages as never));
+    }
+    if (data.secondEditorImages) {
+      setSecondEditorImages(attachmentsToPicked(data.secondEditorImages as never));
+    }
+    setAiRev(v => v + 1);
+  };
 
   const onSave = async () => {
     setSaving(true);
@@ -112,7 +131,21 @@ export function Text2ColEditor({
       saving={saving}
       previewType="text-2-col"
       previewLessonId={lessonId}
-      previewData={previewData}>
+      previewData={previewData}
+      ai={{
+        type: 'text-2-col',
+        lessonId,
+        currentData: {
+          id: exercise?.id,
+          title,
+          subtitle,
+          description,
+          content,
+          secondContent,
+          titleColor: TITLE_COLOR,
+        },
+        onApply: applyAiData,
+      }}>
       <TextField label={t('editor.fieldTitle')} value={title} onChangeText={setTitle} />
       <TextField
         label={t('editor.fieldSubtitle')}
@@ -141,8 +174,8 @@ export function Text2ColEditor({
           label={t('editor.heroImages')}
           images={images}
           onChange={setImages}
-          multiple
-          max={8}
+          multiple={false}
+          max={1}
         />
       </View>
       <View style={editorStyles.card}>

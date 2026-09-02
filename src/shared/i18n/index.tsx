@@ -7,6 +7,7 @@ import {
   useState,
   type PropsWithChildren,
 } from 'react';
+import {NativeModules, Platform} from 'react-native';
 
 import {readStorage, writeStorage} from '../lib/storage';
 import {en} from './locales/en';
@@ -30,9 +31,47 @@ type I18nContextValue = {
 
 const I18nContext = createContext<I18nContextValue | null>(null);
 
-function normalizeLanguage(value?: string | null): AppLanguage {
-  const raw = (value || 'ru').toLowerCase();
-  return raw.startsWith('en') ? 'en' : 'ru';
+function getSystemLanguageTag(): string {
+  try {
+    if (Platform.OS === 'ios') {
+      const settings = NativeModules.SettingsManager?.settings;
+      const apple =
+        settings?.AppleLocale ||
+        (Array.isArray(settings?.AppleLanguages)
+          ? settings.AppleLanguages[0]
+          : undefined);
+      if (apple) {
+        return String(apple);
+      }
+    }
+    const android = NativeModules.I18nManager?.localeIdentifier;
+    if (android) {
+      return String(android);
+    }
+    return Intl.DateTimeFormat().resolvedOptions().locale || 'en';
+  } catch {
+    return 'en';
+  }
+}
+
+/** Russian device → ru, otherwise English. */
+export function languageFromSystem(): AppLanguage {
+  const tag = getSystemLanguageTag().toLowerCase().replace('_', '-');
+  return tag.startsWith('ru') ? 'ru' : 'en';
+}
+
+function normalizeStoredLanguage(value?: string | null): AppLanguage | null {
+  if (!value) {
+    return null;
+  }
+  const raw = value.toLowerCase().replace('_', '-');
+  if (raw.startsWith('en')) {
+    return 'en';
+  }
+  if (raw.startsWith('ru')) {
+    return 'ru';
+  }
+  return null;
 }
 
 function translate(tree: TranslationTree, path: string): string {
@@ -48,17 +87,18 @@ function translate(tree: TranslationTree, path: string): string {
 }
 
 export function I18nProvider({children}: PropsWithChildren) {
-  const [language, setLanguageState] = useState<AppLanguage>('ru');
+  const [language, setLanguageState] = useState<AppLanguage>(languageFromSystem);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
     let mounted = true;
     (async () => {
       const stored = await readStorage(LANG_STORAGE_KEY);
-      if (mounted) {
-        setLanguageState(normalizeLanguage(stored));
-        setReady(true);
+      if (!mounted) {
+        return;
       }
+      setLanguageState(normalizeStoredLanguage(stored) ?? languageFromSystem());
+      setReady(true);
     })();
     return () => {
       mounted = false;
@@ -92,6 +132,9 @@ export function useI18n(): I18nContextValue {
 }
 
 /** Static fallback for non-React helpers; prefer useI18n().t in UI. */
-export function t(path: string, language: AppLanguage = 'ru'): string {
+export function t(
+  path: string,
+  language: AppLanguage = languageFromSystem(),
+): string {
   return translate(dictionaries[language], path);
 }

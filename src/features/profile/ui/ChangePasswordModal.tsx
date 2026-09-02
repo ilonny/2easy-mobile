@@ -4,6 +4,7 @@ import {Modal, Pressable, StyleSheet, Text, View} from 'react-native';
 import {postJson} from '../../../shared/api';
 import {useI18n} from '../../../shared/i18n';
 import {colors, radii} from '../../../shared/config/theme';
+import {useKeyboardBottomOffset} from '../../../shared/lib/useKeyboardBottomOffset';
 import {Button, PasswordField} from '../../../shared/ui';
 
 type Props = {
@@ -13,6 +14,7 @@ type Props = {
 
 export function ChangePasswordModal({visible, onClose}: Props) {
   const {t} = useI18n();
+  const keyboardHeight = useKeyboardBottomOffset(visible);
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [repeatPassword, setRepeatPassword] = useState('');
@@ -68,7 +70,9 @@ export function ChangePasswordModal({visible, onClose}: Props) {
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={close}>
-      <Pressable style={styles.backdrop} onPress={close}>
+      <Pressable
+        style={[styles.backdrop, {paddingBottom: keyboardHeight}]}
+        onPress={close}>
         <Pressable style={styles.card} onPress={e => e.stopPropagation()}>
           <Text style={styles.title}>{t('profile.changePassword')}</Text>
           <PasswordField

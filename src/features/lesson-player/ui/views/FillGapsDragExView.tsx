@@ -49,6 +49,8 @@ export function FillGapsDragExView({data}: Props) {
     try {
       const raw = answers[String(data?.id)]?.answer;
       if (!raw) {
+        setCorrectIds([]);
+        setIncorrectIdsMap({});
         return;
       }
       const parsed = JSON.parse(raw);

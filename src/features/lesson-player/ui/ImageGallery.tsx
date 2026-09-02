@@ -7,6 +7,7 @@ import {useLayout} from '../../../shared/lib/layout';
 import {ZoomableImage} from '../../../shared/ui/ZoomableImage';
 import {getImageUrl} from '../lib/getImageUrl';
 import type {ExAttachment} from '../model/types';
+import {LessonCover} from './LessonCover';
 
 type Props = {
   images?: ExAttachment[];
@@ -106,11 +107,7 @@ export function ImageGallery({images = [], viewType = 'carousel'}: Props) {
         )
       ) : isCarousel && items.length === 1 ? (
         <View>
-          <ZoomableImage
-            source={{uri: items[0].uri}}
-            style={[styles.single, {height: imageH}]}
-            resizeMode="contain"
-          />
+          <LessonCover source={{uri: items[0].uri}} />
           {!!items[0].text && (
             <Text style={styles.caption}>{items[0].text}</Text>
           )}

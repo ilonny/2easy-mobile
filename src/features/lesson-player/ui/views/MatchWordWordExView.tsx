@@ -73,7 +73,11 @@ export function MatchWordWordExView({data}: Props) {
   useEffect(() => {
     try {
       const raw = answers[String(data?.id)]?.answer;
-      if (!raw) return;
+      if (!raw) {
+        setCorrectIds([]);
+        setIncorrectIdsMap({});
+        return;
+      }
       const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
       setCorrectIds(parsed?.correctIds || []);
       setIncorrectIdsMap(parsed?.incorrectIdsMap || {});

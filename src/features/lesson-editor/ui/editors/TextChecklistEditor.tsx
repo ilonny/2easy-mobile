@@ -62,6 +62,19 @@ export function TextChecklistEditor({
     setEditorImages(attachmentsToPicked(d.editorImages));
   }, [visible, exercise]);
 
+  const applyAiData = (data: Record<string, unknown>) => {
+    setTitle(String(data.title || ''));
+    setSubtitle(String(data.subtitle || ''));
+    setDescription(String(data.description || ''));
+    setStickers(normalizeItems(data.stickers));
+    if (data.images) {
+      setImages(attachmentsToPicked(data.images as never));
+    }
+    if (data.editorImages) {
+      setEditorImages(attachmentsToPicked(data.editorImages as never));
+    }
+  };
+
   const onSave = async () => {
     setSaving(true);
     try {
@@ -119,7 +132,22 @@ export function TextChecklistEditor({
       saving={saving}
       previewType="text-checklist"
       previewLessonId={lessonId}
-      previewData={previewData}>
+      previewData={previewData}
+      ai={{
+        type: 'text-checklist',
+        lessonId,
+        currentData: {
+          id: exercise?.id,
+          title,
+          subtitle,
+          description,
+          stickers: stickers.map(s => s.text).filter(Boolean),
+          titleColor: TITLE_COLOR,
+          stickerBgColor: '#FFFFFF',
+          stickerTextColor: '#000000',
+        },
+        onApply: applyAiData,
+      }}>
       <TextField label={t('editor.fieldTitle')} value={title} onChangeText={setTitle} />
       <TextField
         label={t('editor.fieldSubtitle')}
@@ -163,8 +191,8 @@ export function TextChecklistEditor({
           label={t('editor.coverImage')}
           images={images}
           onChange={setImages}
-          multiple
-          max={6}
+          multiple={false}
+          max={1}
         />
       </View>
       <View style={editorStyles.card}>

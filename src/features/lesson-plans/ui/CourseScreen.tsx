@@ -13,14 +13,21 @@ import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
 import {useAuth} from '../../../entities/session';
-import type {Lesson} from '../../../entities/lesson';
+import {isLessonLockedOnFreeTariff, type Lesson} from '../../../entities/lesson';
 import type {RootStackParamList} from '../../../shared/navigation/types';
 import {useI18n} from '../../../shared/i18n';
 import {colors} from '../../../shared/config/theme';
-import {useLayout} from '../../../shared/lib/layout';
-import {Breadcrumbs} from '../../../shared/ui';
+import {catalogTileWidth, useLayout} from '../../../shared/lib/layout';
+import {AppDialog, Breadcrumbs, Button} from '../../../shared/ui';
 import {AppHeader} from '../../app-shell';
+import {
+  checkHomework,
+  CreateHomeworkModal,
+  positiveId,
+} from '../../homework';
+import {useSubscription} from '../../home/model/useSubscription';
 import {fetchCourseLessons, fetchCourses, type Course} from '../api/coursesApi';
+import {CreateCourseModal} from './CreateCourseModal';
 import {LessonCard} from './LessonCard';
 import {TryNowModal} from './TryNowModal';
 
@@ -34,9 +41,14 @@ export function CourseScreen({courseId}: Props) {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<Nav>();
   const {isAuthorized, profile} = useAuth();
+  const {subscription} = useSubscription();
   const {t} = useI18n();
   const isTeacher = profile?.role_id === 1 || profile?.role_id === 2;
-  const {isTablet, pageGutter, pageContentMaxWidth} = useLayout();
+  const isStudent = !!profile?.isStudent;
+  const profileUserId = Number(profile?.id || 0);
+  const isFreeTariff = subscription?.subscribe_type_id === 1;
+  const {isTablet, pageGutter, pageContentMaxWidth, catalogColumns, catalogRowWidth} =
+    useLayout();
 
   const [course, setCourse] = useState<Course | null>(null);
   const [lessons, setLessons] = useState<Lesson[]>([]);
@@ -44,8 +56,18 @@ export function CourseScreen({courseId}: Props) {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [tryNowVisible, setTryNowVisible] = useState(false);
+  const [hwCheck, setHwCheck] = useState<
+    Record<number, {loaded: boolean; exists: boolean; homeworkId?: number}>
+  >({});
+  const [createHwLessonId, setCreateHwLessonId] = useState<number | null>(null);
+  const [hwBusyId, setHwBusyId] = useState<number | null>(null);
+  const [notice, setNotice] = useState('');
+  const [editOpen, setEditOpen] = useState(false);
 
   const gap = isTablet ? 16 : 12;
+  const tileWidth = catalogTileWidth(catalogRowWidth, catalogColumns, gap);
+  const isOwnCourse =
+    !!course && profileUserId > 0 && Number(course.user_id) === profileUserId;
 
   const load = useCallback(async () => {
     setError('');
@@ -75,6 +97,50 @@ export function CourseScreen({courseId}: Props) {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    if (!isTeacher || !isOwnCourse || lessons.length === 0) {
+      setHwCheck({});
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const entries = await Promise.all(
+        lessons.map(async lesson => {
+          try {
+            const data = await checkHomework(lesson.id);
+            return [
+              lesson.id,
+              {
+                loaded: true,
+                exists: !!data?.exists,
+                homeworkId: positiveId(data?.first_homework_id),
+              },
+            ] as const;
+          } catch {
+            return [
+              lesson.id,
+              {loaded: true, exists: false},
+            ] as const;
+          }
+        }),
+      );
+      if (cancelled) {
+        return;
+      }
+      const map: Record<
+        number,
+        {loaded: boolean; exists: boolean; homeworkId?: number}
+      > = {};
+      entries.forEach(([id, value]) => {
+        map[id] = value;
+      });
+      setHwCheck(map);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isTeacher, isOwnCourse, lessons]);
+
   const onRefresh = async () => {
     setRefreshing(true);
     await load();
@@ -86,6 +152,10 @@ export function CourseScreen({courseId}: Props) {
       setTryNowVisible(true);
       return;
     }
+    if (isLessonLockedOnFreeTariff(lesson, isFreeTariff, isStudent)) {
+      navigation.navigate('Subscription');
+      return;
+    }
     if (isTeacher) {
       navigation.navigate('LessonEditor', {lessonId: lesson.id});
       return;
@@ -94,6 +164,28 @@ export function CourseScreen({courseId}: Props) {
       lessonId: lesson.id,
       from: 'Lessons',
     });
+  };
+
+  const onHomeworkPress = async (lesson: Lesson) => {
+    const check = hwCheck[lesson.id];
+    if (check?.exists && check.homeworkId) {
+      navigation.navigate('LessonEditor', {lessonId: check.homeworkId});
+      return;
+    }
+    setHwBusyId(lesson.id);
+    try {
+      const data = await checkHomework(lesson.id);
+      const existingId = positiveId(data?.first_homework_id);
+      if (data?.exists && existingId) {
+        navigation.navigate('LessonEditor', {lessonId: existingId});
+        return;
+      }
+      setCreateHwLessonId(lesson.id);
+    } catch {
+      setNotice(t('lessons.homeworkCheckFailed'));
+    } finally {
+      setHwBusyId(null);
+    }
   };
 
   return (
@@ -116,6 +208,13 @@ export function CourseScreen({courseId}: Props) {
           {!!course?.description && (
             <Text style={styles.description}>{course.description}</Text>
           )}
+          {isTeacher && isOwnCourse ? (
+            <Button
+              title={t('lessons.editCourse')}
+              variant="secondary"
+              onPress={() => setEditOpen(true)}
+            />
+          ) : null}
         </View>
       </View>
 
@@ -137,22 +236,48 @@ export function CourseScreen({courseId}: Props) {
           </View>
         ) : (
           <FlatList
+            key={`cols-${catalogColumns}`}
             data={lessons}
             keyExtractor={item => String(item.id)}
-            numColumns={2}
+            numColumns={catalogColumns}
             columnWrapperStyle={[styles.row, {gap}]}
             contentContainerStyle={[
               styles.listContent,
               {paddingBottom: insets.bottom + 24},
             ]}
-            renderItem={({item}) => (
-              <View style={[styles.gridItem, {marginBottom: gap}]}>
-                <LessonCard
-                  item={item}
-                  onPress={() => onPressLesson(item)}
-                />
-              </View>
-            )}
+            renderItem={({item}) => {
+              const check = hwCheck[item.id];
+              const showHw = isTeacher && isOwnCourse;
+              const hwExists = !!(check?.exists && check.homeworkId);
+              return (
+                <View style={{width: tileWidth, marginBottom: gap}}>
+                  <LessonCard
+                    item={item}
+                    locked={isLessonLockedOnFreeTariff(
+                      item,
+                      isFreeTariff,
+                      isStudent,
+                    )}
+                    onPress={() => onPressLesson(item)}
+                    actionLabel={
+                      showHw
+                        ? hwExists
+                          ? t('lessons.homeworkLabel')
+                          : t('lessons.createHomework')
+                        : undefined
+                    }
+                    onActionPress={
+                      showHw
+                        ? () => {
+                            void onHomeworkPress(item);
+                          }
+                        : undefined
+                    }
+                    actionLoading={hwBusyId === item.id}
+                  />
+                </View>
+              );
+            }}
             ListEmptyComponent={
               <Text style={styles.empty}>
                 {isAuthorized
@@ -168,6 +293,31 @@ export function CourseScreen({courseId}: Props) {
         )}
       </View>
 
+      {createHwLessonId != null ? (
+        <CreateHomeworkModal
+          visible={createHwLessonId != null}
+          lessonId={createHwLessonId}
+          onClose={() => setCreateHwLessonId(null)}
+          onOpenEditor={hwId => {
+            setCreateHwLessonId(null);
+            navigation.navigate('LessonEditor', {lessonId: hwId});
+          }}
+          onSuccess={() => {
+            void load();
+          }}
+        />
+      ) : null}
+
+      <CreateCourseModal
+        visible={editOpen}
+        course={course}
+        onClose={() => setEditOpen(false)}
+        onSaved={() => {
+          setEditOpen(false);
+          void load();
+        }}
+      />
+
       <TryNowModal
         visible={tryNowVisible}
         onClose={() => setTryNowVisible(false)}
@@ -180,6 +330,19 @@ export function CourseScreen({courseId}: Props) {
           navigation.navigate('Registration');
         }}
       />
+
+      <AppDialog
+        visible={!!notice}
+        message={notice}
+        onClose={() => setNotice('')}
+        actions={[
+          {
+            label: t('common.close'),
+            variant: 'ghost',
+            onPress: () => setNotice(''),
+          },
+        ]}
+      />
     </View>
   );
 }
@@ -191,36 +354,21 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: '800',
-    color: colors.text,
-    marginTop: 4,
+    color: colors.primary,
   },
   titleTablet: {fontSize: 34},
-  description: {
-    fontSize: 15,
-    lineHeight: 22,
-    color: colors.textSecondary,
-  },
-  listWrap: {
-    flex: 1,
-    width: '100%',
-    alignSelf: 'center',
-  },
-  listContent: {flexGrow: 1, paddingTop: 8},
+  description: {fontSize: 15, lineHeight: 22, color: colors.textSecondary},
+  listWrap: {flex: 1, width: '100%', alignSelf: 'center'},
+  listContent: {flexGrow: 1},
   row: {flexDirection: 'row'},
-  gridItem: {flex: 1},
   centered: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 12,
-  },
-  empty: {
-    textAlign: 'center',
-    color: colors.textSecondary,
-    marginTop: 48,
-    fontSize: 15,
-    paddingHorizontal: 24,
+    padding: 24,
   },
   error: {color: colors.danger, textAlign: 'center'},
   retry: {color: colors.primary, fontWeight: '700'},
+  empty: {textAlign: 'center', color: colors.muted, marginTop: 40},
 });

@@ -2,6 +2,7 @@ import {useCallback, useEffect, useMemo, useState} from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Pressable,
   RefreshControl,
   StyleSheet,
   Text,
@@ -13,26 +14,51 @@ import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
 import {useAuth} from '../../../entities/session';
-import type {Lesson} from '../../../entities/lesson';
+import {
+  TWO_EASY_USER_ID,
+  type Lesson,
+  type LessonRelationStatus,
+} from '../../../entities/lesson';
 import {useI18n} from '../../../shared/i18n';
 import {colors, radii} from '../../../shared/config/theme';
-import {useLayout} from '../../../shared/lib/layout';
+import {catalogTileWidth, useLayout} from '../../../shared/lib/layout';
 import type {StudentsStackParamList} from '../../../shared/navigation/types';
 import {goHome} from '../../../shared/navigation/resetToLessonPlans';
-import {AppDialog, Breadcrumbs, Button} from '../../../shared/ui';
+import {
+  ActionMenuModal,
+  AppDialog,
+  Breadcrumbs,
+  Button,
+  type ActionMenuItem,
+} from '../../../shared/ui';
 import {AppHeader} from '../../app-shell';
+import {DictionaryModal} from '../../dictionary/ui/DictionaryModal';
+import {
+  CreateIndividualHomeworkModal,
+  openStudentHomework,
+  openTeacherStudentHomework,
+  positiveId,
+  resolveHomeworkForStudentBatch,
+} from '../../homework';
 import {fetchSecureLessons} from '../../lesson-plans/api/lessonsApi';
+import {fetchCourses, type Course} from '../../lesson-plans/api/coursesApi';
 import {LessonCard} from '../../lesson-plans/ui/LessonCard';
 import {saveStartLessonSelectedIds} from '../../lesson-player/lib/startLessonSelection';
 import {
+  deleteCourseRelation,
+  deleteLessonRelation,
   deleteStudent,
+  editCourseRelation,
+  editLessonRelation,
   fetchStudentInfo,
   type Student,
 } from '../api/studentsApi';
+import {AttachMaterialToStudentModal} from './AttachMaterialToStudentModal';
 import {CreateStudentModal} from './CreateStudentModal';
 import {StudentCard} from './StudentCard';
 
 type Nav = NativeStackNavigationProp<StudentsStackParamList>;
+type CabinetTab = 'lessons' | 'courses';
 
 type Props = {
   studentId: number;
@@ -43,49 +69,114 @@ type NoticeState = {
   message: string;
 } | null;
 
+type MenuTarget =
+  | {kind: 'lesson'; item: Lesson}
+  | {kind: 'course'; item: Course};
+
+function statusMark(
+  current: LessonRelationStatus | undefined,
+  value: LessonRelationStatus,
+) {
+  return current === value ? '✓ ' : '';
+}
+
 export function StudentCabinetScreen({studentId}: Props) {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<Nav>();
   const {profile} = useAuth();
   const {t} = useI18n();
-  const {pageGutter, pageContentMaxWidth} = useLayout();
+  const {pageGutter, pageContentMaxWidth, catalogColumns, catalogRowWidth} =
+    useLayout();
+  const tileGap = 12;
+  const tileWidth = catalogTileWidth(catalogRowWidth, catalogColumns, tileGap);
 
   const isTeacher = profile?.role_id === 1 || profile?.role_id === 2;
   const isStudentSelf =
     !!profile?.isStudent && Number(profile.studentId) === Number(studentId);
 
+  const [tab, setTab] = useState<CabinetTab>('lessons');
   const [student, setStudent] = useState<Student | null>(null);
   const [lessons, setLessons] = useState<Lesson[]>([]);
+  const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState('');
   const [editOpen, setEditOpen] = useState(false);
+  const [attachOpen, setAttachOpen] = useState(false);
+  const [dictionaryOpen, setDictionaryOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<Student | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [notice, setNotice] = useState<NoticeState>(null);
+  const [menuTarget, setMenuTarget] = useState<MenuTarget | null>(null);
+  const [detachTarget, setDetachTarget] = useState<MenuTarget | null>(null);
+  const [resolvedHw, setResolvedHw] = useState<
+    Record<number, {homework_lesson_id?: number; has_individual_homework?: boolean}>
+  >({});
+  const [createHwLesson, setCreateHwLesson] = useState<Lesson | null>(null);
+  const [hwBusyId, setHwBusyId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const [info, lessonsRes] = await Promise.all([
+      const [info, lessonsRes, coursesList] = await Promise.all([
         fetchStudentInfo(studentId),
         fetchSecureLessons(studentId),
+        fetchCourses({isSecure: true, studentId}),
       ]);
       setStudent(info);
-      setLessons(lessonsRes.lessons ?? []);
+      const nextLessons = lessonsRes.lessons ?? [];
+      const visibleLessons = profile?.isStudent
+        ? nextLessons.filter(
+            lesson => lesson['lesson_relations.status'] !== 'close',
+          )
+        : nextLessons;
+      setLessons(visibleLessons);
+      setCourses(
+        profile?.isStudent
+          ? coursesList.filter(
+              course => course['lesson_relations.status'] !== 'close',
+            )
+          : coursesList,
+      );
+
+      if (isTeacher && visibleLessons.length > 0) {
+        try {
+          const batch = await resolveHomeworkForStudentBatch(
+            visibleLessons.map(l => l.id),
+            studentId,
+          );
+          const map: Record<
+            number,
+            {homework_lesson_id?: number; has_individual_homework?: boolean}
+          > = {};
+          Object.entries(batch?.by_lesson_id || {}).forEach(([id, value]) => {
+            map[Number(id)] = {
+              homework_lesson_id: positiveId(value?.homework_lesson_id),
+              has_individual_homework: !!value?.has_individual_homework,
+            };
+          });
+          setResolvedHw(map);
+        } catch {
+          setResolvedHw({});
+        }
+      } else {
+        setResolvedHw({});
+      }
     } catch {
       setStudent(null);
       setLessons([]);
+      setCourses([]);
+      setResolvedHw({});
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [studentId]);
+  }, [studentId, profile?.isStudent, isTeacher]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  const filtered = useMemo(() => {
+  const filteredLessons = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) {
       return lessons;
@@ -93,7 +184,19 @@ export function StudentCabinetScreen({studentId}: Props) {
     return lessons.filter(l => l.title?.toLowerCase().includes(q));
   }, [lessons, search]);
 
-  const onConfirmDelete = async () => {
+  const filteredCourses = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) {
+      return courses;
+    }
+    return courses.filter(c => c.title?.toLowerCase().includes(q));
+  }, [courses, search]);
+
+  const listData = (tab === 'lessons' ? filteredLessons : filteredCourses) as Array<
+    Lesson | Course
+  >;
+
+  const onConfirmDeleteStudent = async () => {
     if (!pendingDelete) {
       return;
     }
@@ -116,11 +219,93 @@ export function StudentCabinetScreen({studentId}: Props) {
     }
   };
 
+  const changeStatus = async (
+    target: MenuTarget,
+    status: LessonRelationStatus,
+  ) => {
+    const relationId = target.item['lesson_relations.id'];
+    if (!relationId) {
+      setNotice({message: t('lessons.statusUpdateFailed')});
+      return;
+    }
+    const res =
+      target.kind === 'course'
+        ? await editCourseRelation({
+            relation_id: relationId,
+            status: status === 'complete' ? 'open' : status,
+          })
+        : await editLessonRelation({relation_id: relationId, status});
+    if (res.success === false) {
+      setNotice({message: res.message || t('lessons.statusUpdateFailed')});
+      return;
+    }
+    await load();
+  };
+
+  const onConfirmDetach = async () => {
+    if (!detachTarget) {
+      return;
+    }
+    const relationId = detachTarget.item['lesson_relations.id'];
+    if (!relationId) {
+      setDetachTarget(null);
+      setNotice({message: t('lessons.detachFailed')});
+      return;
+    }
+    const res =
+      detachTarget.kind === 'course'
+        ? await deleteCourseRelation(relationId)
+        : await deleteLessonRelation(relationId);
+    setDetachTarget(null);
+    if (res.success === false) {
+      setNotice({message: res.message || t('lessons.detachFailed')});
+      return;
+    }
+    await load();
+  };
+
+  const menuItems: ActionMenuItem[] = useMemo(() => {
+    if (!menuTarget || !isTeacher) {
+      return [];
+    }
+    const status = menuTarget.item['lesson_relations.status'];
+    const items: ActionMenuItem[] = [
+      {
+        label: `${statusMark(status, 'open')}${t('lessons.statusOpen')}`,
+        onPress: () => {
+          void changeStatus(menuTarget, 'open');
+        },
+      },
+      {
+        label: `${statusMark(status, 'close')}${t('lessons.statusClosed')}`,
+        onPress: () => {
+          void changeStatus(menuTarget, 'close');
+        },
+      },
+    ];
+    if (menuTarget.kind === 'lesson') {
+      items.push({
+        label: `${statusMark(status, 'complete')}${t('lessons.statusComplete')}`,
+        onPress: () => {
+          void changeStatus(menuTarget, 'complete');
+        },
+      });
+    }
+    items.push({
+      label: t('lessons.deleteFromStudent'),
+      destructive: true,
+      onPress: () => setDetachTarget(menuTarget),
+    });
+    return items;
+    // changeStatus closes over load/t — intentional
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [menuTarget, isTeacher, t]);
+
   const crumbs = isTeacher
     ? [
         {
           label: t('editor.home'),
-          onPress: () => goHome(navigation as never, true),
+          onPress: () => goHome(navigation as never, true, profile),
         },
         {
           label: t('profile.myStudents'),
@@ -134,7 +319,134 @@ export function StudentCabinetScreen({studentId}: Props) {
         },
         {label: student?.name || t('common.loading')},
       ]
-    : [{label: t('students.studentCabinet')}];
+    : [];
+
+  const openLesson = (item: Lesson) => {
+    if (!(isTeacher || isStudentSelf)) {
+      return;
+    }
+    if (item['lesson_relations.status'] === 'close' && isStudentSelf) {
+      return;
+    }
+    if (isTeacher) {
+      void saveStartLessonSelectedIds([studentId]);
+    }
+    navigation.getParent()?.navigate('Lessons', {
+      screen: 'LessonViewer',
+      params: {
+        lessonId: item.id,
+        from: 'Lessons',
+        studentId: isTeacher ? studentId : undefined,
+      },
+    });
+  };
+
+  const openHomeworkViewer = (homeworkLessonId: number) => {
+    if (isTeacher) {
+      void saveStartLessonSelectedIds([studentId]);
+    }
+    navigation.getParent()?.navigate('Lessons', {
+      screen: 'LessonViewer',
+      params: {
+        lessonId: homeworkLessonId,
+        from: 'Lessons',
+        studentId: isTeacher ? studentId : undefined,
+      },
+    });
+  };
+
+  const homeworkExistsForLesson = (lesson: Lesson) => {
+    const is2easy = Number(lesson.user_id) === TWO_EASY_USER_ID;
+    const resolved = resolvedHw[lesson.id];
+    const individualId =
+      (resolved?.has_individual_homework
+        ? positiveId(resolved.homework_lesson_id)
+        : undefined) ||
+      (lesson.has_individual_homework
+        ? positiveId(lesson.homework_lesson_id)
+        : undefined);
+
+    if (is2easy) {
+      return individualId != null;
+    }
+    if (resolved) {
+      if (positiveId(resolved.homework_lesson_id)) {
+        return true;
+      }
+      if (resolved.has_individual_homework) {
+        return true;
+      }
+    }
+    return !!(
+      positiveId(lesson.homework_lesson_id) || lesson.has_individual_homework
+    );
+  };
+
+  const onHomeworkPress = async (lesson: Lesson) => {
+    const is2easy = Number(lesson.user_id) === TWO_EASY_USER_ID;
+    const resolved = resolvedHw[lesson.id];
+    const knownId =
+      (resolved?.has_individual_homework
+        ? positiveId(resolved.homework_lesson_id)
+        : undefined) ||
+      (lesson.has_individual_homework
+        ? positiveId(lesson.homework_lesson_id)
+        : undefined);
+
+    setHwBusyId(lesson.id);
+    try {
+      if (isTeacher) {
+        if (knownId || homeworkExistsForLesson(lesson)) {
+          const hwId = await openTeacherStudentHomework({
+            lessonId: lesson.id,
+            studentId,
+            knownHomeworkId: knownId,
+          });
+          if (hwId) {
+            openHomeworkViewer(hwId);
+            return;
+          }
+          setNotice({message: t('lessons.homeworkOpenFailed')});
+          return;
+        }
+        setCreateHwLesson(lesson);
+        return;
+      }
+
+      if (isStudentSelf && (homeworkExistsForLesson(lesson) || is2easy)) {
+        const hwId = await openStudentHomework({
+          lesson: {
+            ...lesson,
+            homework_lesson_id:
+              knownId || lesson.homework_lesson_id,
+            has_individual_homework:
+              resolved?.has_individual_homework ||
+              lesson.has_individual_homework,
+          },
+          studentId,
+        });
+        if (hwId) {
+          openHomeworkViewer(hwId);
+          return;
+        }
+        setNotice({message: t('lessons.homeworkOpenFailed')});
+      }
+    } catch {
+      setNotice({message: t('lessons.homeworkOpenFailed')});
+    } finally {
+      setHwBusyId(null);
+    }
+  };
+
+  const openCourse = (item: Course) => {
+    if (!(isTeacher || isStudentSelf)) {
+      return;
+    }
+    if (item['lesson_relations.status'] === 'close' && isStudentSelf) {
+      return;
+    }
+    navigation.navigate('StudentCourse', {courseId: item.id, studentId});
+  };
 
   return (
     <View style={styles.root}>
@@ -158,10 +470,11 @@ export function StudentCabinetScreen({studentId}: Props) {
         </View>
       ) : (
         <FlatList
-          data={filtered}
-          keyExtractor={item => String(item.id)}
-          numColumns={2}
-          columnWrapperStyle={styles.row}
+          key={`cols-${catalogColumns}`}
+          data={listData}
+          keyExtractor={item => `${tab}-${item.id}`}
+          numColumns={catalogColumns}
+          columnWrapperStyle={[styles.row, {gap: tileGap}]}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -208,46 +521,118 @@ export function StudentCabinetScreen({studentId}: Props) {
                 </View>
               )}
 
+              <View style={styles.tabs}>
+                <Pressable
+                  onPress={() => setTab('lessons')}
+                  style={[styles.tab, tab === 'lessons' && styles.tabActive]}>
+                  <Text
+                    style={[
+                      styles.tabText,
+                      tab === 'lessons' && styles.tabTextActive,
+                    ]}>
+                    {t('lessons.lessonsTab')}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => setTab('courses')}
+                  style={[styles.tab, tab === 'courses' && styles.tabActive]}>
+                  <Text
+                    style={[
+                      styles.tabText,
+                      tab === 'courses' && styles.tabTextActive,
+                    ]}>
+                    {t('lessons.coursesTab')}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => setDictionaryOpen(true)}
+                  style={styles.tab}>
+                  <Text style={styles.tabText}>{t('dictionary.tab')}</Text>
+                </Pressable>
+              </View>
+
               <TextInput
                 value={search}
                 onChangeText={setSearch}
-                placeholder={t('students.searchLessons')}
+                placeholder={
+                  tab === 'courses'
+                    ? t('lessons.searchCourses')
+                    : t('students.searchLessons')
+                }
                 placeholderTextColor={colors.muted}
                 style={styles.search}
                 autoCorrect={false}
                 autoCapitalize="none"
                 clearButtonMode="while-editing"
               />
-              <Text style={styles.section}>
-                {t('profile.lessonsAndCourses')}
-              </Text>
+
+              {isTeacher ? (
+                <Button
+                  title={t('lessons.attachToStudent')}
+                  onPress={() => setAttachOpen(true)}
+                />
+              ) : null}
             </View>
           }
-          renderItem={({item}) => (
-            <View style={styles.gridItem}>
-              <LessonCard
-                item={item}
-                onPress={() => {
-                  if (!(isTeacher || isStudentSelf)) {
-                    return;
+          renderItem={({item}) => {
+            const locked = item['lesson_relations.status'] === 'close';
+            const isLessonRow = tab === 'lessons';
+            const lessonItem = item as Lesson;
+            const is2easy =
+              isLessonRow && Number(lessonItem.user_id) === TWO_EASY_USER_ID;
+            const showHwAction =
+              isLessonRow &&
+              ((isTeacher && !locked) ||
+                (isStudentSelf &&
+                  (homeworkExistsForLesson(lessonItem) || is2easy)));
+            const hwExists = isLessonRow && homeworkExistsForLesson(lessonItem);
+            return (
+              <View style={{width: tileWidth, marginBottom: tileGap}}>
+                <LessonCard
+                  item={item}
+                  locked={locked}
+                  onPress={() => {
+                    if (tab === 'courses') {
+                      openCourse(item as Course);
+                    } else {
+                      openLesson(item as Lesson);
+                    }
+                  }}
+                  onMenuPress={
+                    isTeacher
+                      ? () =>
+                          setMenuTarget(
+                            tab === 'courses'
+                              ? {kind: 'course', item: item as Course}
+                              : {kind: 'lesson', item: item as Lesson},
+                          )
+                      : undefined
                   }
-                  if (isTeacher) {
-                    void saveStartLessonSelectedIds([studentId]);
+                  actionLabel={
+                    showHwAction
+                      ? isTeacher && !hwExists
+                        ? t('lessons.createHomework')
+                        : t('lessons.homeworkLabel')
+                      : undefined
                   }
-                  navigation.getParent()?.navigate('Lessons', {
-                    screen: 'LessonViewer',
-                    params: {
-                      lessonId: item.id,
-                      from: 'Lessons',
-                      studentId: isTeacher ? studentId : undefined,
-                    },
-                  });
-                }}
-              />
-            </View>
-          )}
+                  onActionPress={
+                    showHwAction
+                      ? () => {
+                          void onHomeworkPress(lessonItem);
+                        }
+                      : undefined
+                  }
+                  actionLoading={hwBusyId === lessonItem.id}
+                />
+              </View>
+            );
+          }}
           ListEmptyComponent={
-            <Text style={styles.empty}>{t('students.noLessons')}</Text>
+            <Text style={styles.empty}>
+              {tab === 'courses'
+                ? t('lessons.noCourses')
+                : t('students.noLessons')}
+            </Text>
           }
         />
       )}
@@ -262,6 +647,53 @@ export function StudentCabinetScreen({studentId}: Props) {
           }}
         />
       ) : null}
+
+      {isTeacher ? (
+        <AttachMaterialToStudentModal
+          visible={attachOpen}
+          studentId={studentId}
+          onClose={() => setAttachOpen(false)}
+          onAttached={() => {
+            setAttachOpen(false);
+            setNotice({message: t('lessons.attachSuccess')});
+            void load();
+          }}
+        />
+      ) : null}
+
+      {!!createHwLesson && (
+        <CreateIndividualHomeworkModal
+          visible={!!createHwLesson}
+          lessonId={createHwLesson.id}
+          studentId={studentId}
+          onClose={() => setCreateHwLesson(null)}
+          onOpenViewer={hwId => {
+            setCreateHwLesson(null);
+            openHomeworkViewer(hwId);
+          }}
+          onSuccess={() => {
+            void load();
+          }}
+        />
+      )}
+
+      <DictionaryModal
+        visible={dictionaryOpen}
+        studentId={studentId}
+        onClose={() => setDictionaryOpen(false)}
+      />
+
+      <ActionMenuModal
+        visible={!!menuTarget}
+        title={
+          menuTarget?.kind === 'course'
+            ? t('lessons.lessonStatusCourse')
+            : t('lessons.lessonStatusLesson')
+        }
+        items={menuItems}
+        cancelLabel={t('common.cancel')}
+        onClose={() => setMenuTarget(null)}
+      />
 
       <AppDialog
         visible={!!pendingDelete}
@@ -278,13 +710,37 @@ export function StudentCabinetScreen({studentId}: Props) {
             variant: 'danger',
             loading: deleting,
             onPress: () => {
-              void onConfirmDelete();
+              void onConfirmDeleteStudent();
             },
           },
           {
             label: t('common.cancel'),
             variant: 'ghost',
             onPress: () => setPendingDelete(null),
+          },
+        ]}
+      />
+
+      <AppDialog
+        visible={!!detachTarget}
+        title={t('lessons.deleteFromStudent')}
+        message={t('lessons.deleteFromStudentConfirm').replace(
+          '{{title}}',
+          detachTarget?.item.title || '',
+        )}
+        onClose={() => setDetachTarget(null)}
+        actions={[
+          {
+            label: t('lessons.deleteFromStudent'),
+            variant: 'danger',
+            onPress: () => {
+              void onConfirmDetach();
+            },
+          },
+          {
+            label: t('common.cancel'),
+            variant: 'ghost',
+            onPress: () => setDetachTarget(null),
           },
         ]}
       />
@@ -345,6 +801,23 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   tagText: {fontSize: 12, color: '#B45309', fontWeight: '600'},
+  tabs: {flexDirection: 'row', gap: 8},
+  tab: {
+    flex: 1,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.white,
+    paddingVertical: 10,
+    paddingHorizontal: 4,
+    alignItems: 'center',
+  },
+  tabActive: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primarySoft,
+  },
+  tabText: {fontSize: 13, fontWeight: '600', color: colors.textSecondary},
+  tabTextActive: {color: colors.primary},
   search: {
     backgroundColor: colors.white,
     borderRadius: radii.md,
@@ -355,14 +828,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.text,
   },
-  section: {
-    marginTop: 8,
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  row: {gap: 12},
-  gridItem: {flex: 1, marginBottom: 12},
+  row: {flexDirection: 'row'},
   empty: {
     textAlign: 'center',
     color: colors.muted,

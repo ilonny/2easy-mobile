@@ -25,6 +25,7 @@ export type LessonsStackParamList = {
     studentId?: number;
   };
   LessonEditor: {lessonId: number};
+  BoardViewer: {boardId: number; catalog?: boolean};
   LegalDocument: {docId: LegalDocId};
 };
 
@@ -32,6 +33,7 @@ export type LessonsStackParamList = {
 export type StudentsStackParamList = {
   StudentsList: undefined;
   StudentCabinet: {studentId: number};
+  StudentCourse: {courseId: number; studentId: number};
 };
 
 export type MainTabParamList = {

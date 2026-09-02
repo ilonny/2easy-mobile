@@ -96,6 +96,37 @@ export async function refineAiLesson(data: {
   });
 }
 
+export type AiRefineExerciseResponse = {
+  success?: boolean;
+  assistantMessage?: string;
+  refused?: boolean;
+  data?: Record<string, unknown>;
+  aiLimit?: {category?: string; remaining?: number};
+  message?: string;
+  code?: string;
+  limitExceeded?: boolean;
+};
+
+export async function refineAiExercise(data: {
+  type: string;
+  instruction: string;
+  currentData?: Record<string, unknown>;
+  lesson_id?: number;
+  lessonContext?: {
+    title?: string;
+    description?: string;
+    tags?: string;
+  };
+  conversation?: Array<{role: string; content: string}>;
+  ui_language?: string;
+}) {
+  return postJson<AiRefineExerciseResponse>({
+    path: '/ai/refine-exercise',
+    isSecure: true,
+    data,
+  });
+}
+
 export async function saveAiLesson(data: {
   draft: AiLessonDraft;
   course_id?: number;

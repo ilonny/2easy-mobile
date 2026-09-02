@@ -39,6 +39,14 @@ export function NoteEditor({
     setImages(attachmentsToPicked(d.images));
   }, [visible, exercise]);
 
+  const applyAiData = (data: Record<string, unknown>) => {
+    setTitle(String(data.title || ''));
+    setDescription(String(data.description || ''));
+    if (data.images) {
+      setImages(attachmentsToPicked(data.images as never));
+    }
+  };
+
   const onSave = async () => {
     setSaving(true);
     try {
@@ -81,7 +89,17 @@ export function NoteEditor({
       saving={saving}
       previewType="note"
       previewLessonId={lessonId}
-      previewData={previewData}>
+      previewData={previewData}
+      ai={{
+        type: 'note',
+        lessonId,
+        currentData: {
+          id: exercise?.id,
+          title,
+          description,
+        },
+        onApply: applyAiData,
+      }}>
       <TextField label={t('editor.fieldTitle')} value={title} onChangeText={setTitle} />
       <TextField
         label={t('editor.fieldDescription')}

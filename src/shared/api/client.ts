@@ -77,7 +77,7 @@ async function parseResponse<T>(response: Response): Promise<ApiResult<T>> {
 }
 
 async function requestJson<T>(
-  method: 'GET' | 'POST',
+  method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
   params: RequestParams,
 ): Promise<ApiResult<T>> {
   const headers: Record<string, string> = {
@@ -94,7 +94,10 @@ async function requestJson<T>(
     response = await fetch(`${API_URL}${params.path}`, {
       method,
       headers,
-      body: method === 'POST' ? JSON.stringify(params.data ?? {}) : undefined,
+      body:
+        method === 'GET'
+          ? undefined
+          : JSON.stringify(params.data ?? {}),
     });
   } catch {
     return {
@@ -117,6 +120,18 @@ export async function getJson<T = Record<string, unknown>>(
   params: Omit<RequestParams, 'data'>,
 ): Promise<ApiResult<T>> {
   return requestJson<T>('GET', params);
+}
+
+export async function patchJson<T = Record<string, unknown>>(
+  params: RequestParams,
+): Promise<ApiResult<T>> {
+  return requestJson<T>('PATCH', params);
+}
+
+export async function deleteJson<T = Record<string, unknown>>(
+  params: RequestParams,
+): Promise<ApiResult<T>> {
+  return requestJson<T>('DELETE', params);
 }
 
 type MultipartParams = {

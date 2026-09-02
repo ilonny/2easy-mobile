@@ -378,8 +378,8 @@ export function AudioEditor({
           label={t('editor.coverImage')}
           images={images}
           onChange={setImages}
-          multiple
-          max={4}
+          multiple={false}
+          max={1}
         />
       </View>
     </EditorShell>

@@ -1,9 +1,7 @@
 import {useCallback, useEffect, useMemo, useState} from 'react';
 import {
   ActivityIndicator,
-  Image,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -13,31 +11,54 @@ import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
 import {useAuth} from '../../../entities/session';
-import {getLessonCoverSource} from '../../../entities/lesson';
+import {getLessonCoverSource, isLessonLockedOnFreeTariff} from '../../../entities/lesson';
 import {useI18n} from '../../../shared/i18n';
-import {colors, radii} from '../../../shared/config/theme';
+import {colors} from '../../../shared/config/theme';
 import type {RootStackParamList} from '../../../shared/navigation/types';
 import {
   goHome,
   goToSection,
+  resetToRoute,
 } from '../../../shared/navigation/resetToLessonPlans';
 import {useLayout} from '../../../shared/lib/layout';
 import {AppDialog, Breadcrumbs, Button} from '../../../shared/ui';
 import {AppHeader} from '../../app-shell';
+import {DictionarySelectionProvider} from '../../dictionary/model/DictionarySelectionContext';
+import {AddWordFromSelectionModal} from '../../dictionary/ui/AddWordFromSelectionModal';
+import {DictionaryModal} from '../../dictionary/ui/DictionaryModal';
+import {DictionarySelectionPill} from '../../dictionary/ui/DictionarySelectionPill';
+import {useLessonBoardOpener} from '../../boards';
+import {useSubscription} from '../../home/model/useSubscription';
+import {
+  getOrCreateHomeworkForStudent,
+  isHomeworkLesson,
+  openStudentHomework,
+  positiveId,
+} from '../../homework';
 import {
   fetchLessonStudents,
   type LessonParticipant,
 } from '../../students/api/studentsApi';
-import {fetchExList, fetchLesson, resetAnswers} from '../api/lessonApi';
-import {readStartLessonSelectedIds} from '../lib/startLessonSelection';
+import {fetchExList, fetchLesson, changeExVisible, resetAnswers} from '../api/lessonApi';
+import {notifyLocalAnswersReset} from '../model/useExAnswer';
+import {
+  readStartLessonSelectedIds,
+  saveStartLessonSelectedIds,
+} from '../lib/startLessonSelection';
 import {LessonPlayerProvider} from '../model/LessonPlayerContext';
 import {
   LessonScrollProvider,
   LessonScrollView,
 } from '../model/LessonScrollContext';
 import type {Exercise, LessonDetail} from '../model/types';
+import {isExVisible} from '../lib/exMappers';
 import {ExList} from './ExList';
+import {LessonCover} from './LessonCover';
 import {getImageUrl} from '../lib/getImageUrl';
+import {LessonChatModal} from './LessonChatModal';
+import {LessonParticipantsSheet} from './LessonParticipantsSheet';
+import {LessonToolsBar, LESSON_TOOLS_BAR_HEIGHT} from './LessonToolsBar';
+import {LessonVideoCallWindow} from './LessonVideoCallWindow';
 
 type Props = {
   lessonId: number;
@@ -46,14 +67,6 @@ type Props = {
 };
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
-
-function participantName(s: LessonParticipant) {
-  return s['student.name'] || s.name || `#${s.student_id}`;
-}
-
-function participantEmail(s: LessonParticipant) {
-  return s['student.email'] || s.email || '';
-}
 
 export function LessonViewerScreen({
   lessonId,
@@ -65,13 +78,13 @@ export function LessonViewerScreen({
   const navigation = useNavigation<Nav>();
   const {isAuthorized, profile} = useAuth();
   const {t} = useI18n();
+  const {subscription} = useSubscription();
 
   const [headerHeight, setHeaderHeight] = useState(0);
 
   const isTeacher = profile?.role_id === 1 || profile?.role_id === 2;
-  const selfStudentId = profile?.isStudent
-    ? Number(profile.studentId)
-    : undefined;
+  const isStudent = !!profile?.isStudent;
+  const selfStudentId = isStudent ? Number(profile.studentId) : undefined;
 
   const [lesson, setLesson] = useState<LessonDetail | null>(null);
   const [exercises, setExercises] = useState<Exercise[]>([]);
@@ -84,9 +97,36 @@ export function LessonViewerScreen({
   const [resetOpen, setResetOpen] = useState(false);
   const [resetting, setResetting] = useState(false);
 
+  const [participantsOpen, setParticipantsOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [videoOpen, setVideoOpen] = useState(false);
+  const [dictionaryStudentId, setDictionaryStudentId] = useState<number | null>(
+    null,
+  );
+  const [selectionAnchor, setSelectionAnchor] = useState<{
+    text: string;
+    pageX: number;
+    pageY: number;
+  } | null>(null);
+  const [addWordOpen, setAddWordOpen] = useState(false);
+  const [addWordSource, setAddWordSource] = useState('');
+  const [notice, setNotice] = useState('');
+  const [homeworkOpening, setHomeworkOpening] = useState(false);
+  const [answersEpoch, setAnswersEpoch] = useState(0);
+
   const answerStudentId = isTeacher
     ? activeStudentId
     : selfStudentId ?? studentIdProp;
+
+  const {
+    openLessonBoard,
+    opening: boardOpening,
+    modal: lessonBoardModal,
+  } = useLessonBoardOpener({
+    lessonId,
+    isTeacher: !!isTeacher,
+    studentIdForBoard: isTeacher ? answerStudentId : undefined,
+  });
 
   const parentLabel =
     from === 'Tutorial'
@@ -95,17 +135,31 @@ export function LessonViewerScreen({
         ? t('grammarPage.breadcrumb')
         : t('header.lessonPlans');
 
-  const crumbs = [
-    {
-      label: t('editor.home'),
-      onPress: () => goHome(navigation, isAuthorized),
-    },
-    {
-      label: parentLabel,
-      onPress: () => goToSection(navigation, from, isAuthorized),
-    },
-    {label: lesson?.title || t('common.loading')},
-  ];
+  const goStudentCabinet = () => {
+    resetToRoute(navigation, 'Students', {
+      studentId: Number(profile?.studentId || selfStudentId || 0),
+    });
+  };
+
+  const crumbs = isStudent
+    ? [
+        {
+          label: t('students.studentCabinet'),
+          onPress: goStudentCabinet,
+        },
+        {label: lesson?.title || t('common.loading')},
+      ]
+    : [
+        {
+          label: t('editor.home'),
+          onPress: () => goHome(navigation, isAuthorized, profile),
+        },
+        {
+          label: parentLabel,
+          onPress: () => goToSection(navigation, from, isAuthorized),
+        },
+        {label: lesson?.title || t('common.loading')},
+      ];
 
   const canEdit = useMemo(() => {
     if (!lesson || !isTeacher) {
@@ -162,9 +216,7 @@ export function LessonViewerScreen({
     setLoading(true);
     setError('');
     try {
-      const studentForLesson = isTeacher
-        ? studentIdProp
-        : selfStudentId;
+      const studentForLesson = isTeacher ? studentIdProp : selfStudentId;
       const [lessonRes, list] = await Promise.all([
         fetchLesson(lessonId, studentForLesson),
         fetchExList(lessonId, {filterHidden: !isTeacher}),
@@ -189,6 +241,18 @@ export function LessonViewerScreen({
     void load();
   }, [load]);
 
+  const isLockedOnTrial = isLessonLockedOnFreeTariff(
+    lesson,
+    subscription?.subscribe_type_id === 1,
+    isStudent,
+  );
+
+  useEffect(() => {
+    if (isLockedOnTrial) {
+      navigation.replace('Subscription');
+    }
+  }, [isLockedOnTrial, navigation]);
+
   useEffect(() => {
     if (studentIdProp) {
       setActiveStudentId(studentIdProp);
@@ -210,6 +274,14 @@ export function LessonViewerScreen({
           }),
         ),
       );
+      exercises.forEach(ex => {
+        notifyLocalAnswersReset({
+          lesson_id: lessonId,
+          ex_id: ex.id,
+          student_id: answerStudentId,
+        });
+      });
+      setAnswersEpoch(epoch => epoch + 1);
       setResetOpen(false);
       void load();
     } finally {
@@ -217,9 +289,72 @@ export function LessonViewerScreen({
     }
   };
 
+  const onChangeVisible = async (ex: Exercise) => {
+    const nextVisible = !isExVisible(ex.is_visible);
+    const prevVisible = ex.is_visible;
+    setExercises(list =>
+      list.map(item =>
+        item.id === ex.id ? {...item, is_visible: nextVisible} : item,
+      ),
+    );
+    try {
+      await changeExVisible(ex.id, nextVisible);
+    } catch {
+      setExercises(list =>
+        list.map(item =>
+          item.id === ex.id ? {...item, is_visible: prevVisible} : item,
+        ),
+      );
+      setNotice(t('editor.saveFailed'));
+    }
+  };
+
   const coverUri = lesson?.image_path
     ? getImageUrl(lesson.image_path)
     : undefined;
+
+  const showTools = isAuthorized && !loading && !error && !!lesson;
+  const toolsPadding =
+    LESSON_TOOLS_BAR_HEIGHT + Math.max(insets.bottom, 10) + 24;
+
+  const dictionarySelectionEnabled =
+    showTools &&
+    ((isStudent && !!selfStudentId) || (isTeacher && participants.length > 0));
+
+  const dictionarySelectionValue = useMemo(
+    () => ({
+      enabled: dictionarySelectionEnabled,
+      onSelection: (anchor: {
+        text: string;
+        pageX: number;
+        pageY: number;
+      }) => {
+        setSelectionAnchor(anchor);
+      },
+      onClearSelection: () => {
+        setSelectionAnchor(null);
+      },
+    }),
+    [dictionarySelectionEnabled],
+  );
+
+  const onAddSelectionPress = () => {
+    if (!selectionAnchor?.text.trim()) {
+      return;
+    }
+    if (isTeacher && !participants.length) {
+      setNotice(t('dictionary.noStudentsOnLesson'));
+      setSelectionAnchor(null);
+      return;
+    }
+    setAddWordSource(selectionAnchor.text.trim());
+    setAddWordOpen(true);
+    setSelectionAnchor(null);
+  };
+
+  if (isLockedOnTrial) {
+    return null;
+  }
 
   return (
     <LessonPlayerProvider
@@ -231,6 +366,7 @@ export function LessonViewerScreen({
         isView: true,
         isEdit: false,
       }}>
+      <DictionarySelectionProvider value={dictionarySelectionValue}>
       <View style={styles.root}>
         {loading ? (
           <View style={styles.centered}>
@@ -265,7 +401,7 @@ export function LessonViewerScreen({
               style={styles.flex}
               contentContainerStyle={{
                 paddingHorizontal: pageGutter,
-                paddingBottom: insets.bottom + 40,
+                paddingBottom: showTools ? toolsPadding : insets.bottom + 40,
                 alignItems: 'center',
               }}
               keyboardShouldPersistTaps="handled"
@@ -296,76 +432,208 @@ export function LessonViewerScreen({
                 ) : null}
 
                 {coverUri ? (
-                  <Image
-                    source={{uri: coverUri}}
-                    style={styles.cover}
-                    resizeMode="cover"
-                  />
+                  <LessonCover source={{uri: coverUri}} />
                 ) : (
-                  <Image
+                  <LessonCover
                     source={getLessonCoverSource(lesson?.image_path)}
-                    style={styles.cover}
-                    resizeMode="cover"
                   />
                 )}
 
-                {isTeacher && participants.length > 0 ? (
-                  <View style={styles.participants}>
-                    <Text style={styles.participantsTitle}>
-                      {t('lessons.participants')}
+                {isTeacher && answerStudentId ? (
+                  <View style={styles.activeStudentRow}>
+                    <Text style={styles.activeStudentLabel}>
+                      {t('lessons.participants')}:{' '}
+                      <Text style={styles.activeStudentValue}>
+                        {participants.find(
+                          s => Number(s.student_id) === answerStudentId,
+                        )?.['student.name'] ||
+                          participants.find(
+                            s => Number(s.student_id) === answerStudentId,
+                          )?.name ||
+                          `#${answerStudentId}`}
+                      </Text>
                     </Text>
-                    <ScrollView
-                      horizontal
-                      showsHorizontalScrollIndicator={false}
-                      contentContainerStyle={styles.participantsRow}>
-                      {participants.map(s => {
-                        const id = Number(s.student_id);
-                        const active = id === activeStudentId;
-                        return (
-                          <Pressable
-                            key={String(id)}
-                            onPress={() => setActiveStudentId(id)}
-                            style={[
-                              styles.participantCard,
-                              active && styles.participantCardActive,
-                            ]}>
-                            <Text
-                              style={[
-                                styles.participantName,
-                                active && styles.participantNameActive,
-                              ]}
-                              numberOfLines={2}>
-                              {participantName(s)}
-                            </Text>
-                            {!!participantEmail(s) && (
-                              <Text
-                                style={styles.participantEmail}
-                                numberOfLines={1}>
-                                {participantEmail(s)}
-                              </Text>
-                            )}
-                          </Pressable>
-                        );
-                      })}
-                    </ScrollView>
+                    <Pressable
+                      style={styles.resetLink}
+                      onPress={() => setResetOpen(true)}>
+                      <Text style={styles.resetText}>
+                        {t('lessons.resetAnswers')}
+                      </Text>
+                    </Pressable>
                   </View>
                 ) : null}
 
-                {isTeacher && answerStudentId ? (
-                  <Pressable
-                    style={styles.resetLink}
-                    onPress={() => setResetOpen(true)}>
-                    <Text style={styles.resetText}>
-                      {t('lessons.resetAnswers')}
-                    </Text>
-                  </Pressable>
-                ) : null}
+                <ExList
+                  key={`answers-${answerStudentId || 0}-${answersEpoch}`}
+                  list={exercises}
+                  chrome={
+                    isTeacher && canEdit
+                      ? {
+                          onChangeIsVisible: ex => {
+                            void onChangeVisible(ex);
+                          },
+                        }
+                      : undefined
+                  }
+                />
 
-                <ExList key={`answers-${answerStudentId || 0}`} list={exercises} />
+                {!!lesson &&
+                positiveId(lesson.homework_lesson_id) &&
+                !isHomeworkLesson(lesson) ? (
+                  <View style={styles.homeworkWrap}>
+                    <Button
+                      title={t('lessons.homeworkLabel')}
+                      loading={homeworkOpening}
+                      onPress={() => {
+                        void (async () => {
+                          setHomeworkOpening(true);
+                          try {
+                            if (
+                              isTeacher &&
+                              participants.length === 1 &&
+                              participants[0]?.student_id
+                            ) {
+                              const sid = Number(participants[0].student_id);
+                              const data = await getOrCreateHomeworkForStudent(
+                                lessonId,
+                                sid,
+                              );
+                              const hwId = positiveId(data?.homework_lesson_id);
+                              if (hwId) {
+                                await saveStartLessonSelectedIds([sid]);
+                                navigation.navigate('LessonViewer', {
+                                  lessonId: hwId,
+                                  from,
+                                  studentId: sid,
+                                });
+                                return;
+                              }
+                            }
+
+                            if (isStudent && selfStudentId) {
+                              const hwId = await openStudentHomework({
+                                lesson,
+                                studentId: selfStudentId,
+                              });
+                              if (hwId) {
+                                navigation.navigate('LessonViewer', {
+                                  lessonId: hwId,
+                                  from,
+                                });
+                                return;
+                              }
+                              setNotice(t('lessons.homeworkOpenFailed'));
+                              return;
+                            }
+
+                            const fallback = positiveId(lesson.homework_lesson_id);
+                            if (fallback) {
+                              navigation.navigate('LessonViewer', {
+                                lessonId: fallback,
+                                from,
+                                ...(answerStudentId
+                                  ? {studentId: answerStudentId}
+                                  : {}),
+                              });
+                              return;
+                            }
+                            setNotice(t('lessons.homeworkOpenFailed'));
+                          } catch {
+                            setNotice(t('lessons.homeworkOpenFailed'));
+                          } finally {
+                            setHomeworkOpening(false);
+                          }
+                        })();
+                      }}
+                    />
+                  </View>
+                ) : null}
               </View>
             </LessonScrollView>
           </LessonScrollProvider>
         )}
+
+        {showTools ? (
+          <LessonToolsBar
+            showParticipants={isTeacher && participants.length > 0}
+            showDictionary={isStudent && !!selfStudentId}
+            showBoard
+            participantsCount={participants.length}
+            onParticipants={() => setParticipantsOpen(true)}
+            onChat={() => setChatOpen(true)}
+            onVideo={() => setVideoOpen(true)}
+            onDictionary={
+              selfStudentId
+                ? () => setDictionaryStudentId(selfStudentId)
+                : undefined
+            }
+            onBoard={() => void openLessonBoard()}
+            boardLoading={boardOpening}
+          />
+        ) : null}
+
+        {lessonBoardModal}
+
+        <LessonParticipantsSheet
+          visible={participantsOpen}
+          participants={participants}
+          activeStudentId={activeStudentId}
+          onSelect={setActiveStudentId}
+          onOpenDictionary={id => setDictionaryStudentId(id)}
+          onClose={() => setParticipantsOpen(false)}
+        />
+
+        <LessonChatModal
+          visible={chatOpen}
+          lessonId={lessonId}
+          onClose={() => setChatOpen(false)}
+        />
+
+        <LessonVideoCallWindow
+          visible={videoOpen}
+          lessonId={lessonId}
+          lessonOwnerId={lesson?.user_id}
+          bottomOffset={
+            LESSON_TOOLS_BAR_HEIGHT + Math.max(insets.bottom, 10) + 16
+          }
+          onClose={() => setVideoOpen(false)}
+        />
+
+        <DictionaryModal
+          visible={dictionaryStudentId != null}
+          studentId={dictionaryStudentId || 0}
+          onClose={() => setDictionaryStudentId(null)}
+        />
+
+        <DictionarySelectionPill
+          visible={!!selectionAnchor?.text}
+          pageX={selectionAnchor?.pageX || 0}
+          pageY={selectionAnchor?.pageY || 0}
+          onPress={onAddSelectionPress}
+        />
+
+        <AddWordFromSelectionModal
+          visible={addWordOpen}
+          sourceWord={addWordSource}
+          lessonId={lessonId}
+          studentId={isStudent ? selfStudentId : undefined}
+          isTeacherBulk={isTeacher}
+          participantIds={participants.map(s => Number(s.student_id))}
+          onClose={() => setAddWordOpen(false)}
+        />
+
+        <AppDialog
+          visible={!!notice}
+          message={notice}
+          onClose={() => setNotice('')}
+          actions={[
+            {
+              label: t('common.back'),
+              variant: 'primary',
+              onPress: () => setNotice(''),
+            },
+          ]}
+        />
 
         <AppDialog
           visible={resetOpen}
@@ -389,6 +657,7 @@ export function LessonViewerScreen({
           ]}
         />
       </View>
+      </DictionarySelectionProvider>
     </LessonPlayerProvider>
   );
 }
@@ -405,6 +674,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   pageColumn: {gap: 12},
+  homeworkWrap: {marginTop: 8, marginBottom: 8},
   centered: {flex: 1, alignItems: 'center', justifyContent: 'center'},
   error: {color: colors.danger, textAlign: 'center', padding: 24},
   title: {
@@ -415,45 +685,15 @@ const styles = StyleSheet.create({
   titleTablet: {fontSize: 32},
   desc: {color: colors.textSecondary, fontSize: 15, lineHeight: 22},
   descTablet: {fontSize: 17, lineHeight: 24},
-  cover: {
-    width: '100%',
-    height: 180,
-    borderRadius: radii.lg,
-    backgroundColor: colors.border,
+  activeStudentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    flexWrap: 'wrap',
   },
-  participants: {gap: 8},
-  participantsTitle: {
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 0.6,
-    textTransform: 'uppercase',
-    color: colors.text,
-  },
-  participantsRow: {gap: 8, paddingVertical: 2},
-  participantCard: {
-    minWidth: 120,
-    maxWidth: 180,
-    backgroundColor: colors.white,
-    borderRadius: radii.md,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  participantCardActive: {
-    backgroundColor: colors.primarySoft,
-    borderColor: colors.primary,
-  },
-  participantName: {
-    fontWeight: '700',
-    fontSize: 13,
-    color: colors.text,
-  },
-  participantNameActive: {color: colors.primary},
-  participantEmail: {
-    marginTop: 4,
-    fontSize: 11,
-    color: colors.muted,
-  },
-  resetLink: {alignSelf: 'flex-start', paddingVertical: 4},
+  activeStudentLabel: {fontSize: 13, color: colors.textSecondary},
+  activeStudentValue: {fontWeight: '700', color: colors.primary},
+  resetLink: {paddingVertical: 4},
   resetText: {color: colors.danger, fontWeight: '600'},
 });

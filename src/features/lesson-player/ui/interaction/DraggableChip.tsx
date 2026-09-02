@@ -80,37 +80,15 @@ export function DraggableChip({
   );
 
   const finishDrop = useCallback(
-    (pageX: number, pageY: number, translationX: number, translationY: number) => {
-      const tryHit = (x: number, y: number, next?: () => void) => {
-        hitTestDropTarget(x, y, targetId => {
-          if (targetId && onDropOnTarget) {
-            const consumed = !!onDropOnTarget(targetId, id, label);
-            resetHome(consumed);
-            return;
-          }
-          if (next) {
-            next();
-            return;
-          }
-          resetHome(false);
-        });
-      };
-
-      // 1) Finger tip  2) Estimated chip center (layout + pan translation)
-      const runChipCenter = () => {
-        chipRef.current?.measureInWindow((x, y, width, height) => {
-          if (width > 0 && height > 0) {
-            tryHit(
-              x + width / 2 + translationX,
-              y + height / 2 + translationY,
-            );
-          } else {
-            resetHome(false);
-          }
-        });
-      };
-
-      tryHit(pageX, pageY, runChipCenter);
+    (pageX: number, pageY: number) => {
+      hitTestDropTarget(pageX, pageY, targetId => {
+        if (targetId && onDropOnTarget) {
+          const consumed = !!onDropOnTarget(targetId, id, label);
+          resetHome(consumed);
+          return;
+        }
+        resetHome(false);
+      });
     },
     [hitTestDropTarget, id, label, onDropOnTarget, resetHome],
   );
@@ -119,7 +97,8 @@ export function DraggableChip({
     () =>
       Gesture.Pan()
         .enabled(!disabled)
-        .minDistance(4)
+        .maxPointers(1)
+        .minDistance(8)
         .onBegin(() => {
           if (settling.value) {
             return;
@@ -141,12 +120,7 @@ export function DraggableChip({
             return;
           }
           dragging.value = false;
-          runOnJS(finishDrop)(
-            e.absoluteX,
-            e.absoluteY,
-            e.translationX,
-            e.translationY,
-          );
+          runOnJS(finishDrop)(e.absoluteX, e.absoluteY);
         })
         .onFinalize((_e, success) => {
           if (!success && dragging.value) {
@@ -191,12 +165,21 @@ export function DraggableChip({
         collapsable={false}
         style={[
           styles.chip,
+          label.length > 22 && styles.chipCompact,
           selected && styles.chipOn,
           disabled && styles.disabled,
           styles.chipShadow,
           animStyle,
         ]}>
-        <Text style={styles.chipText}>{label}</Text>
+        <Text
+          style={[
+            styles.chipText,
+            label.length > 22 && styles.chipTextLong,
+            label.length > 40 && styles.chipTextXLong,
+          ]}
+          numberOfLines={3}>
+          {label}
+        </Text>
       </Animated.View>
     </GestureDetector>
   );
@@ -225,7 +208,7 @@ export function DropZone({
   );
 }
 
-export function useDropTargetRegistry(hitPadding = 32) {
+export function useDropTargetRegistry(hitPadding = 12) {
   const refs = useRef(new Map<string, View | null>());
   const pad = hitPadding;
 
@@ -253,7 +236,9 @@ export function useDropTargetRegistry(hitPadding = 32) {
       let pending = entries.length;
       let bestId: string | null = null;
       let bestDist = Number.POSITIVE_INFINITY;
-      const maxSnap = Math.max(56, pad * 1.75);
+      let bestStrictId: string | null = null;
+      let bestStrictDist = Number.POSITIVE_INFINITY;
+      const maxSnap = Math.max(28, pad);
 
       entries.forEach(([id, node]) => {
         node!.measureInWindow((x, y, width, height) => {
@@ -262,19 +247,27 @@ export function useDropTargetRegistry(hitPadding = 32) {
           const dx = pageX - cx;
           const dy = pageY - cy;
           const dist = Math.sqrt(dx * dx + dy * dy);
-          const inside =
+          const insideStrict =
+            pageX >= x &&
+            pageX <= x + width &&
+            pageY >= y &&
+            pageY <= y + height;
+          const insidePad =
             pageX >= x - pad &&
             pageX <= x + width + pad &&
             pageY >= y - pad &&
             pageY <= y + height + pad;
-          const near = dist <= maxSnap;
-          if ((inside || near) && dist < bestDist) {
+          if (insideStrict && dist < bestStrictDist) {
+            bestStrictDist = dist;
+            bestStrictId = id;
+          }
+          if ((insidePad || dist <= maxSnap) && dist < bestDist) {
             bestDist = dist;
             bestId = id;
           }
           pending -= 1;
           if (pending === 0) {
-            cb(bestId);
+            cb(bestStrictId || bestId);
           }
         });
       });
@@ -288,9 +281,15 @@ export function useDropTargetRegistry(hitPadding = 32) {
 const styles = StyleSheet.create({
   chip: {
     backgroundColor: colors.primary,
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    maxWidth: 220,
+  },
+  chipCompact: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    maxWidth: 180,
   },
   chipShadow: {
     shadowColor: '#000',
@@ -299,7 +298,9 @@ const styles = StyleSheet.create({
   },
   chipOn: {backgroundColor: '#271399'},
   disabled: {opacity: 0.4},
-  chipText: {color: '#fff', fontWeight: '700', fontSize: 15},
+  chipText: {color: '#fff', fontWeight: '700', fontSize: 13, lineHeight: 16},
+  chipTextLong: {fontSize: 12, lineHeight: 15, fontWeight: '600'},
+  chipTextXLong: {fontSize: 11, lineHeight: 14, fontWeight: '600'},
   dropHighlight: {
     borderWidth: 2,
     borderColor: colors.primary,

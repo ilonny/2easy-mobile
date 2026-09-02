@@ -73,11 +73,13 @@ export function FillGapsNewExView({data}: Props) {
 
   const [map, setMap] = useState<AnswersMap>({});
   const [selectedPoolId, setSelectedPoolId] = useState<string | null>(null);
+  const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     try {
       const raw = answers[String(data?.id)]?.answer;
       if (!raw) {
+        setMap({});
         return;
       }
       const parsedRaw = JSON.parse(raw);
@@ -96,11 +98,28 @@ export function FillGapsNewExView({data}: Props) {
     }
   }, [answers, data?.id]);
 
+  useEffect(() => {
+    return () => {
+      if (persistTimerRef.current) {
+        clearTimeout(persistTimerRef.current);
+      }
+    };
+  }, []);
+
   const persist = useCallback(
     (next: AnswersMap) => {
-      writeAnswer(data.id, JSON.stringify(next));
+      // Site: only students persist FillGapsNew answers (teacher watches via poll).
+      if (isTeacher) {
+        return;
+      }
+      if (persistTimerRef.current) {
+        clearTimeout(persistTimerRef.current);
+      }
+      persistTimerRef.current = setTimeout(() => {
+        void writeAnswer(data.id, JSON.stringify(next));
+      }, 400);
     },
-    [data.id, writeAnswer],
+    [data.id, writeAnswer, isTeacher],
   );
 
   const isCorrectForGap = (gap: Gap | undefined, v: string) => {

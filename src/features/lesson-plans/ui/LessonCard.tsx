@@ -1,4 +1,4 @@
-import {Image, Pressable, StyleSheet, Text, View} from 'react-native';
+import {ActivityIndicator, Image, Pressable, StyleSheet, Text, View} from 'react-native';
 
 import {getLessonCoverSource} from '../../../entities/lesson';
 import {colors, radii} from '../../../shared/config/theme';
@@ -14,6 +14,11 @@ type Props = {
   item: CatalogCardItem;
   onPress: () => void;
   onMenuPress?: () => void;
+  locked?: boolean;
+  /** Optional secondary action (e.g. Homework / Create homework). */
+  actionLabel?: string;
+  onActionPress?: () => void;
+  actionLoading?: boolean;
 };
 
 function KebabIcon() {
@@ -26,54 +31,107 @@ function KebabIcon() {
   );
 }
 
-export function LessonCard({item, onPress, onMenuPress}: Props) {
+export function LessonCard({
+  item,
+  onPress,
+  onMenuPress,
+  locked,
+  actionLabel,
+  onActionPress,
+  actionLoading,
+}: Props) {
   return (
-    <Pressable
-      onPress={onPress}
-      onLongPress={onMenuPress}
-      style={({pressed}) => [styles.card, pressed && styles.pressed]}>
-      <View style={styles.imageWrap}>
-        <Image
-          source={getLessonCoverSource(item.image_path)}
-          style={styles.image}
-          resizeMode="cover"
-        />
-        {!!onMenuPress && (
-          <Pressable
-            onPress={onMenuPress}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel="More actions"
-            style={({pressed}) => [
-              styles.menuBtn,
-              pressed && styles.menuBtnPressed,
-            ]}>
-            <KebabIcon />
-          </Pressable>
-        )}
-      </View>
-      <View style={styles.body}>
-        <Text style={styles.title} numberOfLines={2}>
-          {item.title || `#${item.id}`}
-        </Text>
-        {!!item.tags && (
-          <Text style={styles.tags} numberOfLines={1}>
-            {item.tags}
+    <View style={styles.wrap}>
+      <Pressable
+        onPress={onPress}
+        onLongPress={onMenuPress}
+        style={({pressed}) => [styles.card, pressed && styles.pressed]}>
+        <View style={styles.imageWrap}>
+          <Image
+            source={getLessonCoverSource(item.image_path)}
+            style={styles.image}
+            resizeMode="cover"
+          />
+          {locked ? (
+            <View style={styles.lockOverlay} pointerEvents="none">
+              <View style={styles.lockBadge}>
+                <Text style={styles.lockIcon}>🔒</Text>
+              </View>
+            </View>
+          ) : null}
+          {!!onMenuPress && (
+            <Pressable
+              onPress={onMenuPress}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="More actions"
+              style={({pressed}) => [
+                styles.menuBtn,
+                pressed && styles.menuBtnPressed,
+              ]}>
+              <KebabIcon />
+            </Pressable>
+          )}
+        </View>
+        <View style={styles.body}>
+          <Text style={styles.title} numberOfLines={2}>
+            {item.title || `#${item.id}`}
           </Text>
-        )}
-      </View>
-    </Pressable>
+          {!!item.tags && (
+            <Text style={styles.tags} numberOfLines={1}>
+              {item.tags}
+            </Text>
+          )}
+        </View>
+      </Pressable>
+      {!!actionLabel && !!onActionPress ? (
+        <Pressable
+          onPress={onActionPress}
+          disabled={actionLoading || locked}
+          style={({pressed}) => [
+            styles.actionBtn,
+            (pressed || actionLoading) && styles.actionBtnPressed,
+            locked && styles.actionBtnDisabled,
+          ]}>
+          {actionLoading ? (
+            <ActivityIndicator color={colors.primary} size="small" />
+          ) : (
+            <Text style={styles.actionText} numberOfLines={1}>
+              {actionLabel}
+            </Text>
+          )}
+        </Pressable>
+      ) : null}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  wrap: {width: '100%'},
   card: {
-    flex: 1,
+    width: '100%',
     backgroundColor: colors.white,
     borderRadius: radii.md,
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: colors.border,
+  },
+  lockOverlay: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(255, 255, 255, 0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  lockBadge: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  lockIcon: {
+    fontSize: 22,
   },
   pressed: {
     opacity: 0.94,
@@ -136,5 +194,23 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontSize: 11,
     fontWeight: '600',
+  },
+  actionBtn: {
+    marginTop: 8,
+    minHeight: 36,
+    borderRadius: radii.md,
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+    backgroundColor: colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+  },
+  actionBtnPressed: {opacity: 0.85, backgroundColor: colors.primarySoft},
+  actionBtnDisabled: {opacity: 0.45},
+  actionText: {
+    color: colors.primary,
+    fontWeight: '700',
+    fontSize: 13,
   },
 });

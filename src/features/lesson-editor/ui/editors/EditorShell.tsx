@@ -1,6 +1,5 @@
-import {useEffect, useState, type ReactNode} from 'react';
+import {type ReactNode} from 'react';
 import {
-  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -12,11 +11,25 @@ import {
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
+import {CreateExWithAiButton} from '../../../ai/ui/CreateExWithAiButton';
 import {useI18n} from '../../../../shared/i18n';
 import {colors, radii} from '../../../../shared/config/theme';
 import {useLayout} from '../../../../shared/lib/layout';
+import {useKeyboardBottomOffset} from '../../../../shared/lib/useKeyboardBottomOffset';
 import {Button} from '../../../../shared/ui';
 import {ExercisePreview} from './ExercisePreview';
+
+export type EditorAiProps = {
+  type: string;
+  currentData: Record<string, unknown>;
+  onApply: (data: Record<string, unknown>) => void;
+  lessonId?: number;
+  lessonContext?: {
+    title?: string;
+    description?: string;
+    tags?: string;
+  };
+};
 
 type Props = {
   visible: boolean;
@@ -29,6 +42,8 @@ type Props = {
   previewType?: string;
   previewData?: Record<string, unknown>;
   previewLessonId?: number;
+  /** Per-exercise AI assistant (site CreateExWithAiButton). */
+  ai?: EditorAiProps;
 };
 
 export function EditorShell({
@@ -41,32 +56,12 @@ export function EditorShell({
   previewType,
   previewData,
   previewLessonId,
+  ai,
 }: Props) {
   const insets = useSafeAreaInsets();
   const {t} = useI18n();
   const {isTablet, authFormMaxWidth, pageGutter} = useLayout();
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
-
-  useEffect(() => {
-    if (!visible) {
-      setKeyboardHeight(0);
-      return;
-    }
-    const showEvent =
-      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const hideEvent =
-      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-    const onShow = Keyboard.addListener(showEvent, e => {
-      setKeyboardHeight(e.endCoordinates.height);
-    });
-    const onHide = Keyboard.addListener(hideEvent, () => {
-      setKeyboardHeight(0);
-    });
-    return () => {
-      onShow.remove();
-      onHide.remove();
-    };
-  }, [visible]);
+  const keyboardHeight = useKeyboardBottomOffset(visible);
 
   return (
     <Modal
@@ -126,6 +121,15 @@ export function EditorShell({
                   alignSelf: 'center',
                 },
               ]}>
+              {ai ? (
+                <CreateExWithAiButton
+                  type={ai.type}
+                  currentData={ai.currentData}
+                  onApply={ai.onApply}
+                  lessonId={ai.lessonId}
+                  lessonContext={ai.lessonContext}
+                />
+              ) : null}
               {children}
               {!!previewType && !!previewData && (
                 <View style={styles.previewBlock}>

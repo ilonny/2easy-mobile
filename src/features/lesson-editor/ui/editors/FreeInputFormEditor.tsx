@@ -57,6 +57,24 @@ export function FreeInputFormEditor({
     );
   }, [visible, exercise]);
 
+  const applyAiData = (data: Record<string, unknown>) => {
+    setTitle(String(data.title || ''));
+    setSubtitle(String(data.subtitle || ''));
+    setDescription(String(data.description || ''));
+    if (data.images) {
+      setImages(attachmentsToPicked(data.images as never));
+    }
+    const raw = (data.questions as Array<Record<string, unknown>>) || [];
+    setQuestions(
+      raw.length
+        ? raw.map(q => ({
+            id: String(q.id || newId()),
+            text: String(q.text || q.value || ''),
+          }))
+        : [{id: newId(), text: ''}],
+    );
+  };
+
   const onSave = async () => {
     setSaving(true);
     try {
@@ -113,7 +131,24 @@ export function FreeInputFormEditor({
       saving={saving}
       previewType="free-input-form"
       previewLessonId={lessonId}
-      previewData={previewData}>
+      previewData={previewData}
+      ai={{
+        type: 'free-input-form',
+        lessonId,
+        currentData: {
+          id: exercise?.id,
+          title,
+          subtitle,
+          description,
+          titleColor: TITLE_COLOR,
+          questions: questions.map(q => ({
+            id: q.id,
+            value: q.text,
+            images: [],
+          })),
+        },
+        onApply: applyAiData,
+      }}>
       <TextField label={t('editor.fieldTitle')} value={title} onChangeText={setTitle} />
       <TextField
         label={t('editor.fieldSubtitle')}
@@ -130,8 +165,8 @@ export function FreeInputFormEditor({
           label={t('editor.coverImage')}
           images={images}
           onChange={setImages}
-          multiple
-          max={4}
+          multiple={false}
+          max={1}
         />
       </View>
       {questions.map((q, index) => (

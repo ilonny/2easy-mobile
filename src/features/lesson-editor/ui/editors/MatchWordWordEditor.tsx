@@ -58,6 +58,25 @@ export function MatchWordWordEditor({
     setImages(attachmentsToPicked(d.images));
   }, [visible, exercise]);
 
+  const applyAiData = (data: Record<string, unknown>) => {
+    setTitle(String(data.title || ''));
+    setSubtitle(String(data.subtitle || ''));
+    setDescription(String(data.description || ''));
+    const raw = (data.matches as Match[]) || [];
+    setMatches(
+      raw.length
+        ? raw.map(m => ({
+            id: m.id || newId(),
+            value: m.value || '',
+            correctValue: m.correctValue || '',
+          }))
+        : [{id: newId(), value: '', correctValue: ''}],
+    );
+    if (data.images) {
+      setImages(attachmentsToPicked(data.images as never));
+    }
+  };
+
   const onSave = async () => {
     setSaving(true);
     try {
@@ -106,7 +125,20 @@ export function MatchWordWordEditor({
       saving={saving}
       previewType="match-word-word"
       previewLessonId={lessonId}
-      previewData={previewData}>
+      previewData={previewData}
+      ai={{
+        type: 'match-word-word',
+        lessonId,
+        currentData: {
+          id: exercise?.id,
+          title,
+          subtitle,
+          description,
+          matches,
+          titleColor: TITLE_COLOR,
+        },
+        onApply: applyAiData,
+      }}>
       <TextField label={t('editor.fieldTitle')} value={title} onChangeText={setTitle} />
       <TextField
         label={t('editor.fieldSubtitle')}
@@ -162,8 +194,8 @@ export function MatchWordWordEditor({
           label={t('editor.coverImage')}
           images={images}
           onChange={setImages}
-          multiple
-          max={6}
+          multiple={false}
+          max={1}
         />
       </View>
     </EditorShell>

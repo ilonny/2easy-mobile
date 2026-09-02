@@ -35,7 +35,8 @@ export function TextDefaultEditor({
   const [images, setImages] = useState<PickedImage[]>([]);
   const [editorImages, setEditorImages] = useState<PickedImage[]>([]);
   const [saving, setSaving] = useState(false);
-  const editorKey = String(exercise?.id || 'new');
+  const [aiRev, setAiRev] = useState(0);
+  const editorKey = `${exercise?.id || 'new'}-${aiRev}`;
 
   useEffect(() => {
     if (!visible) return;
@@ -48,6 +49,19 @@ export function TextDefaultEditor({
     setEditorImages(attachmentsToPicked(d.editorImages));
   }, [visible, exercise]);
 
+  const applyAiData = (data: Record<string, unknown>) => {
+    setTitle(String(data.title || ''));
+    setSubtitle(String(data.subtitle || ''));
+    setDescription(String(data.description || ''));
+    setContent(String(data.content || ''));
+    if (data.images) {
+      setImages(attachmentsToPicked(data.images as never));
+    }
+    if (data.editorImages) {
+      setEditorImages(attachmentsToPicked(data.editorImages as never));
+    }
+    setAiRev(v => v + 1);
+  };
   const onSave = async () => {
     setSaving(true);
     try {
@@ -103,7 +117,21 @@ export function TextDefaultEditor({
       saving={saving}
       previewType="text-default"
       previewLessonId={lessonId}
-      previewData={previewData}>
+      previewData={previewData}
+      ai={{
+        type: 'text-default',
+        lessonId,
+        currentData: {
+          id: exercise?.id,
+          title,
+          subtitle,
+          description,
+          content,
+          titleColor: TITLE_COLOR,
+          viewType: 'carousel',
+        },
+        onApply: applyAiData,
+      }}>
       <TextField
         label={t('editor.fieldTitle')}
         value={title}
@@ -131,8 +159,8 @@ export function TextDefaultEditor({
           label={t('editor.heroImages')}
           images={images}
           onChange={setImages}
-          multiple
-          max={8}
+          multiple={false}
+          max={1}
         />
       </View>
       <View style={editorStyles.card}>

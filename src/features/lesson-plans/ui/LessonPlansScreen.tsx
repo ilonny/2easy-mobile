@@ -1,4 +1,4 @@
-import {useCallback, useMemo, useRef, useState} from 'react';
+import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -19,17 +19,26 @@ import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
 import {useAuth} from '../../../entities/session';
-import {TWO_EASY_USER_ID, type Lesson} from '../../../entities/lesson';
+import {isLessonLockedOnFreeTariff, sortLessonsFreeFirst, TWO_EASY_USER_ID, type Lesson} from '../../../entities/lesson';
 import type {RootStackParamList} from '../../../shared/navigation/types';
 import {useI18n} from '../../../shared/i18n';
 import {colors, radii} from '../../../shared/config/theme';
-import {useLayout} from '../../../shared/lib/layout';
+import {catalogTileWidth, useLayout} from '../../../shared/lib/layout';
 import {
   ActionMenuModal,
   AppDialog,
+  Button,
   type ActionMenuItem,
 } from '../../../shared/ui';
 import {useSubscription} from '../../home/model/useSubscription';
+import {
+  AttachBoardToStudentsModal,
+  CreateBoardModal,
+  EditBoardModal,
+  deleteBoard,
+  fetchBoards,
+  type Board,
+} from '../../boards';
 import {
   copyLesson,
   deleteLesson,
@@ -40,12 +49,13 @@ import type {Course} from '../api/coursesApi';
 import {useLessonPlans} from '../model/useLessonPlans';
 import {AddLessonToCourseModal} from './AddLessonToCourseModal';
 import {AttachLessonToStudentsModal} from './AttachLessonToStudentsModal';
+import {CreateCourseModal} from './CreateCourseModal';
 import {LessonCard} from './LessonCard';
 import {TryNowModal} from './TryNowModal';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
-type CatalogRow = Lesson | Course;
+type CatalogRow = Lesson | Course | Board;
 
 const AnimatedFlatList = Animated.createAnimatedComponent(FlatList<CatalogRow>);
 
@@ -53,15 +63,19 @@ export function LessonPlansScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<Nav>();
   const {isAuthorized, profile} = useAuth();
-  const {hasSubscription} = useSubscription();
+  const {hasSubscription, hasPaidTariff, subscription} = useSubscription();
   const {t} = useI18n();
   const isTeacher = profile?.role_id === 1 || profile?.role_id === 2;
+  const isStudent = !!profile?.isStudent;
+  const isFreeTariff = subscription?.subscribe_type_id === 1;
   const profileId = Number(profile?.id || profile?.user_id || 0);
-  const {isTablet, pageGutter, pageContentMaxWidth} = useLayout();
+  const {isTablet, pageGutter, pageContentMaxWidth, catalogColumns, catalogRowWidth} =
+    useLayout();
   const {
     lessons,
     courses,
     isCoursesTab,
+    isBoardsTab,
     hasMyCourses,
     hasTwoEasyCourses,
     loading,
@@ -80,9 +94,21 @@ export function LessonPlansScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [headerHeight, setHeaderHeight] = useState(0);
 
+  const [boards, setBoards] = useState<Board[]>([]);
+  const [boardsLoading, setBoardsLoading] = useState(false);
+  const [createBoardOpen, setCreateBoardOpen] = useState(false);
+  const [createCourseOpen, setCreateCourseOpen] = useState(false);
+  const [editCourse, setEditCourse] = useState<Course | null>(null);
+  const [editBoard, setEditBoard] = useState<Board | null>(null);
+  const [attachBoard, setAttachBoard] = useState<Board | null>(null);
+  const [deleteBoardTarget, setDeleteBoardTarget] = useState<Board | null>(null);
+  const [menuBoard, setMenuBoard] = useState<Board | null>(null);
+
   const [menuLesson, setMenuLesson] = useState<Lesson | null>(null);
+  const [menuCourse, setMenuCourse] = useState<Course | null>(null);
   const [editLesson, setEditLesson] = useState<Lesson | null>(null);
   const [attachLesson, setAttachLesson] = useState<Lesson | null>(null);
+  const [attachCourse, setAttachCourse] = useState<Course | null>(null);
   const [courseLesson, setCourseLesson] = useState<Lesson | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Lesson | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -92,11 +118,62 @@ export function LessonPlansScreen() {
   const lastScrollY = useRef(0);
   const headerVisible = useRef(true);
 
-  const listData = useMemo(
-    () => (isCoursesTab ? courses : lessons),
-    [isCoursesTab, courses, lessons],
-  );
+  const listData = useMemo(() => {
+    if (isBoardsTab) {
+      const q = search.trim().toLowerCase();
+      if (!q) {
+        return boards;
+      }
+      return boards.filter(
+        b =>
+          b.title?.toLowerCase().includes(q) ||
+          b.description?.toLowerCase().includes(q) ||
+          b.tags?.toLowerCase().includes(q),
+      );
+    }
+    const rows = isCoursesTab ? courses : lessons;
+    if (isCoursesTab || !isFreeTariff || isStudent) {
+      return rows;
+    }
+    return sortLessonsFreeFirst(rows as Lesson[]);
+  }, [
+    isBoardsTab,
+    boards,
+    search,
+    isCoursesTab,
+    courses,
+    lessons,
+    isFreeTariff,
+    isStudent,
+  ]);
+
+  const loadBoards = useCallback(async () => {
+    if (!isAuthorized || (!isTeacher && !isStudent)) {
+      setBoards([]);
+      return;
+    }
+    setBoardsLoading(true);
+    try {
+      const res = await fetchBoards(
+        isStudent && profile?.studentId
+          ? {studentId: Number(profile.studentId)}
+          : undefined,
+      );
+      setBoards(res.success === false ? [] : res.boards || []);
+    } catch {
+      setBoards([]);
+    } finally {
+      setBoardsLoading(false);
+    }
+  }, [isAuthorized, isTeacher, isStudent, profile?.studentId]);
+
+  useEffect(() => {
+    void loadBoards();
+  }, [loadBoards]);
+
+  const showBoardsTab = isAuthorized && isTeacher;
   const gap = isTablet ? 16 : 12;
+  const tileWidth = catalogTileWidth(catalogRowWidth, catalogColumns, gap);
 
   const showHeader = useCallback(() => {
     if (headerVisible.current) {
@@ -144,13 +221,21 @@ export function LessonPlansScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await reload();
+    if (isBoardsTab) {
+      await loadBoards();
+    } else {
+      await reload();
+    }
     setRefreshing(false);
   };
 
   const onPressLesson = (lesson: Lesson) => {
     if (!isAuthorized) {
       setTryNowVisible(true);
+      return;
+    }
+    if (isLessonLockedOnFreeTariff(lesson, isFreeTariff, isStudent)) {
+      navigation.navigate('Subscription');
       return;
     }
     if (isTeacher) {
@@ -180,10 +265,85 @@ export function LessonPlansScreen() {
       setNotice(t('lessons.needSubscriptionForActions'));
       return;
     }
+    setMenuCourse(null);
     setMenuLesson(lesson);
   };
 
+  const onCourseMenuPress = (course: Course) => {
+    if (!isAuthorized) {
+      setTryNowVisible(true);
+      return;
+    }
+    if (!hasSubscription) {
+      setNotice(t('lessons.needSubscriptionForActions'));
+      return;
+    }
+    setMenuLesson(null);
+    setMenuCourse(course);
+  };
+
+  const onBoardMenuPress = (board: Board) => {
+    if (!hasPaidTariff && !hasSubscription) {
+      setNotice(t('boards.subscriptionRequired'));
+      return;
+    }
+    setMenuLesson(null);
+    setMenuCourse(null);
+    setMenuBoard(board);
+  };
+
+  const openCreateBoard = () => {
+    if (!hasPaidTariff) {
+      setNotice(t('boards.subscriptionRequired'));
+      return;
+    }
+    setCreateBoardOpen(true);
+  };
+
   const menuItems: ActionMenuItem[] = useMemo(() => {
+    if (menuBoard) {
+      return [
+        {
+          label: t('boards.editBoard'),
+          onPress: () => setEditBoard(menuBoard),
+        },
+        {
+          label: t('boards.attachToStudent'),
+          onPress: () => setAttachBoard(menuBoard),
+        },
+        {
+          label: t('boards.startBoardLesson'),
+          onPress: () =>
+            navigation.navigate('BoardViewer', {
+              boardId: menuBoard.id,
+              catalog: false,
+            }),
+        },
+        {
+          label: t('common.delete'),
+          destructive: true,
+          onPress: () => setDeleteBoardTarget(menuBoard),
+        },
+      ];
+    }
+    if (menuCourse) {
+      const ownCourse =
+        profileId > 0 && Number(menuCourse.user_id) === profileId;
+      return [
+        ...(ownCourse
+          ? [
+              {
+                label: t('lessons.editCourse'),
+                onPress: () => setEditCourse(menuCourse),
+              },
+            ]
+          : []),
+        {
+          label: t('lessons.attachToStudent'),
+          onPress: () => setAttachCourse(menuCourse),
+        },
+      ];
+    }
     if (!menuLesson) {
       return [];
     }
@@ -232,7 +392,7 @@ export function LessonPlansScreen() {
       });
     }
     return items;
-  }, [menuLesson, profileId, reload, t]);
+  }, [menuBoard, menuLesson, menuCourse, profileId, reload, t, navigation]);
 
   const onConfirmDelete = async () => {
     if (!deleteTarget) {
@@ -255,7 +415,7 @@ export function LessonPlansScreen() {
     }
   };
 
-  const showMenu = isAuthorized && isTeacher && !isCoursesTab;
+  const showMenu = isAuthorized && isTeacher;
 
   const listPaddingTop = headerHeight > 0 ? headerHeight + 8 : insets.top + 120;
 
@@ -301,7 +461,22 @@ export function LessonPlansScreen() {
                     {t('lessonPlans.myLessons')}
                   </Text>
                 </Pressable>
-                {hasMyCourses ? (
+                {isTeacher ? (
+                  <Pressable
+                    onPress={() => setTab('myCourses')}
+                    style={[
+                      styles.tab,
+                      tab === 'myCourses' && styles.tabActive,
+                    ]}>
+                    <Text
+                      style={[
+                        styles.tabLabel,
+                        tab === 'myCourses' && styles.tabLabelActive,
+                      ]}>
+                      {t('lessonPlans.myCourses')}
+                    </Text>
+                  </Pressable>
+                ) : hasMyCourses ? (
                   <Pressable
                     onPress={() => setTab('myCourses')}
                     style={[
@@ -344,6 +519,19 @@ export function LessonPlansScreen() {
                     </Text>
                   </Pressable>
                 ) : null}
+                {showBoardsTab ? (
+                  <Pressable
+                    onPress={() => setTab('myBoards')}
+                    style={[styles.tab, tab === 'myBoards' && styles.tabActive]}>
+                    <Text
+                      style={[
+                        styles.tabLabel,
+                        tab === 'myBoards' && styles.tabLabelActive,
+                      ]}>
+                      {t('boards.myBoards')}
+                    </Text>
+                  </Pressable>
+                ) : null}
               </>
             ) : hasTwoEasyCourses ? (
               <>
@@ -379,6 +567,38 @@ export function LessonPlansScreen() {
           {isAuthorized && tab === 'my' ? (
             <View style={styles.createWrap}>
               <CreateLessonButton />
+              {isTeacher ? (
+                <Button
+                  title={t('lessons.createCourse')}
+                  variant="secondary"
+                  onPress={() => setCreateCourseOpen(true)}
+                />
+              ) : null}
+              {isTeacher ? (
+                <Button
+                  title={t('boards.createBoard')}
+                  variant="secondary"
+                  onPress={openCreateBoard}
+                />
+              ) : null}
+            </View>
+          ) : null}
+
+          {isAuthorized && isCoursesTab && isTeacher && tab === 'myCourses' ? (
+            <View style={styles.createWrap}>
+              <Button
+                title={t('lessons.createCourse')}
+                onPress={() => setCreateCourseOpen(true)}
+              />
+            </View>
+          ) : null}
+
+          {isAuthorized && isBoardsTab && isTeacher ? (
+            <View style={styles.createWrap}>
+              <Button
+                title={t('boards.createBoard')}
+                onPress={openCreateBoard}
+              />
             </View>
           ) : null}
 
@@ -386,16 +606,19 @@ export function LessonPlansScreen() {
             value={search}
             onChangeText={setSearch}
             placeholder={
-              isCoursesTab
-                ? t('lessonPlans.searchCoursesPlaceholder')
-                : t('lessonPlans.searchPlaceholder')
+              isBoardsTab
+                ? t('boards.searchBoards')
+                : isCoursesTab
+                  ? t('lessonPlans.searchCoursesPlaceholder')
+                  : t('lessonPlans.searchPlaceholder')
             }
             placeholderTextColor={colors.muted}
             style={[styles.search, isTablet && styles.searchTablet]}
             autoCorrect={false}
           />
 
-          {(tab === 'twoEasy' || (!isAuthorized && !isCoursesTab)) && (
+          {(tab === 'twoEasy' ||
+            (!isAuthorized && !isCoursesTab && !isBoardsTab)) && (
             <View style={styles.filters}>
               {levelFilters.map(filter => {
                 const active = levelFilter === filter;
@@ -426,11 +649,11 @@ export function LessonPlansScreen() {
           styles.listWrap,
           {paddingHorizontal: pageGutter, maxWidth: pageContentMaxWidth},
         ]}>
-        {loading && !refreshing ? (
+        {(isBoardsTab ? boardsLoading : loading) && !refreshing ? (
           <View style={styles.centered}>
             <ActivityIndicator color={colors.primary} size="large" />
           </View>
-        ) : error ? (
+        ) : error && !isBoardsTab ? (
           <View style={styles.centered}>
             <Text style={styles.error}>{error}</Text>
             <Pressable onPress={() => reload()}>
@@ -439,21 +662,38 @@ export function LessonPlansScreen() {
           </View>
         ) : (
           <AnimatedFlatList
+            key={`cols-${catalogColumns}-${isBoardsTab ? 'b' : isCoursesTab ? 'c' : 'l'}`}
             data={listData}
             keyExtractor={item =>
-              `${isCoursesTab ? 'c' : 'l'}-${item.id}`
+              `${isBoardsTab ? 'b' : isCoursesTab ? 'c' : 'l'}-${item.id}`
             }
-            numColumns={2}
+            numColumns={catalogColumns}
             columnWrapperStyle={[styles.row, {gap}]}
             contentContainerStyle={[
               styles.listContent,
               {paddingTop: listPaddingTop, paddingBottom: insets.bottom + 24},
             ]}
             renderItem={({item}) => (
-              <View style={[styles.gridItem, {marginBottom: gap}]}>
+              <View style={{width: tileWidth, marginBottom: gap}}>
                 <LessonCard
                   item={item}
+                  locked={
+                    !isCoursesTab &&
+                    !isBoardsTab &&
+                    isLessonLockedOnFreeTariff(
+                      item as Lesson,
+                      isFreeTariff,
+                      isStudent,
+                    )
+                  }
                   onPress={() => {
+                    if (isBoardsTab) {
+                      navigation.navigate('BoardViewer', {
+                        boardId: (item as Board).id,
+                        catalog: isTeacher,
+                      });
+                      return;
+                    }
                     if (isCoursesTab) {
                       onPressCourse(item as Course);
                     } else {
@@ -462,7 +702,12 @@ export function LessonPlansScreen() {
                   }}
                   onMenuPress={
                     showMenu
-                      ? () => onMenuPress(item as Lesson)
+                      ? () =>
+                          isBoardsTab
+                            ? onBoardMenuPress(item as Board)
+                            : isCoursesTab
+                              ? onCourseMenuPress(item as Course)
+                              : onMenuPress(item as Lesson)
                       : undefined
                   }
                 />
@@ -470,9 +715,11 @@ export function LessonPlansScreen() {
             )}
             ListEmptyComponent={
               <Text style={styles.empty}>
-                {isCoursesTab
-                  ? t('lessonPlans.emptyCourses')
-                  : t('lessonPlans.empty')}
+                {isBoardsTab
+                  ? t('boards.noBoards')
+                  : isCoursesTab
+                    ? t('lessonPlans.emptyCourses')
+                    : t('lessonPlans.empty')}
               </Text>
             }
             refreshControl={
@@ -507,11 +754,87 @@ export function LessonPlansScreen() {
       />
 
       <ActionMenuModal
-        visible={!!menuLesson}
-        title={menuLesson?.title}
+        visible={!!menuLesson || !!menuCourse || !!menuBoard}
+        title={menuLesson?.title || menuCourse?.title || menuBoard?.title}
         items={menuItems}
         cancelLabel={t('common.cancel')}
-        onClose={() => setMenuLesson(null)}
+        onClose={() => {
+          setMenuLesson(null);
+          setMenuCourse(null);
+          setMenuBoard(null);
+        }}
+      />
+
+      <CreateBoardModal
+        visible={createBoardOpen}
+        onClose={() => setCreateBoardOpen(false)}
+        onCreated={boardId => {
+          setCreateBoardOpen(false);
+          void loadBoards();
+          setTab('myBoards');
+          navigation.navigate('BoardViewer', {boardId, catalog: true});
+        }}
+      />
+
+      <EditBoardModal
+        visible={!!editBoard}
+        board={editBoard}
+        onClose={() => setEditBoard(null)}
+        onSaved={() => {
+          setEditBoard(null);
+          void loadBoards();
+        }}
+      />
+
+      <AttachBoardToStudentsModal
+        visible={!!attachBoard}
+        board={attachBoard}
+        onClose={() => setAttachBoard(null)}
+        onAttached={() => {
+          setAttachBoard(null);
+          setNotice(t('lessons.attachSuccess'));
+          void loadBoards();
+        }}
+      />
+
+      <AppDialog
+        visible={!!deleteBoardTarget}
+        title={t('boards.deleteBoard')}
+        message={t('boards.deleteConfirm').replace(
+          '{{title}}',
+          deleteBoardTarget?.title || '',
+        )}
+        onClose={() => setDeleteBoardTarget(null)}
+        actions={[
+          {
+            label: t('common.delete'),
+            variant: 'danger',
+            onPress: () => {
+              void (async () => {
+                if (!deleteBoardTarget) {
+                  return;
+                }
+                try {
+                  const res = await deleteBoard(deleteBoardTarget.id);
+                  if (res.success === false) {
+                    setNotice(res.message || t('boards.saveError'));
+                  } else {
+                    await loadBoards();
+                  }
+                } catch {
+                  setNotice(t('boards.saveError'));
+                } finally {
+                  setDeleteBoardTarget(null);
+                }
+              })();
+            },
+          },
+          {
+            label: t('common.cancel'),
+            variant: 'ghost',
+            onPress: () => setDeleteBoardTarget(null),
+          },
+        ]}
       />
 
       <EditLessonMetaModal
@@ -524,6 +847,21 @@ export function LessonPlansScreen() {
         }}
       />
 
+      <CreateCourseModal
+        visible={createCourseOpen || !!editCourse}
+        course={editCourse}
+        onClose={() => {
+          setCreateCourseOpen(false);
+          setEditCourse(null);
+        }}
+        onSaved={courseId => {
+          setCreateCourseOpen(false);
+          setEditCourse(null);
+          void reload();
+          navigation.navigate('Course', {courseId});
+        }}
+      />
+
       {!!attachLesson && (
         <AttachLessonToStudentsModal
           visible
@@ -532,6 +870,20 @@ export function LessonPlansScreen() {
           onClose={() => setAttachLesson(null)}
           onAttached={() => {
             setAttachLesson(null);
+            setNotice(t('lessons.attachSuccess'));
+          }}
+        />
+      )}
+
+      {!!attachCourse && (
+        <AttachLessonToStudentsModal
+          visible
+          isCourses
+          lessonId={attachCourse.id}
+          lessonTitle={attachCourse.title}
+          onClose={() => setAttachCourse(null)}
+          onAttached={() => {
+            setAttachCourse(null);
             setNotice(t('lessons.attachSuccess'));
           }}
         />
@@ -651,6 +1003,7 @@ const styles = StyleSheet.create({
   },
   createWrap: {
     marginBottom: 12,
+    gap: 8,
   },
   pageTitleTablet: {
     fontSize: 34,
@@ -744,9 +1097,6 @@ const styles = StyleSheet.create({
   },
   row: {
     flexDirection: 'row',
-  },
-  gridItem: {
-    flex: 1,
   },
   centered: {
     flex: 1,

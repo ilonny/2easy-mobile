@@ -69,7 +69,8 @@ export function FillGapsNewEditor({
   const [gaps, setGaps] = useState<FillGapsGap[]>([]);
   const [images, setImages] = useState<PickedImage[]>([]);
   const [saving, setSaving] = useState(false);
-  const editorKey = String(exercise?.id || 'new');
+  const [aiRev, setAiRev] = useState(0);
+  const editorKey = `${exercise?.id || 'new'}-${aiRev}`;
 
   useEffect(() => {
     if (!visible) return;
@@ -83,6 +84,20 @@ export function FillGapsNewEditor({
     setGaps(normalizeGaps(d.gaps));
     setImages(attachmentsToPicked(d.images));
   }, [visible, exercise]);
+
+  const applyAiData = (data: Record<string, unknown>) => {
+    setTitle(String(data.title || ''));
+    setSubtitle(String(data.subtitle || ''));
+    setDescription(String(data.description || ''));
+    const m = data.mode as Mode;
+    setMode(m === 'select' || m === 'drag' ? m : 'input');
+    setContent(normalizeContent(data.content));
+    setGaps(normalizeGaps(data.gaps));
+    if (data.images) {
+      setImages(attachmentsToPicked(data.images as never));
+    }
+    setAiRev(v => v + 1);
+  };
 
   const onSave = async () => {
     setSaving(true);
@@ -160,7 +175,22 @@ export function FillGapsNewEditor({
       saving={saving}
       previewType="FILL_GAPS_NEW"
       previewLessonId={lessonId}
-      previewData={previewData}>
+      previewData={previewData}
+      ai={{
+        type: 'FILL_GAPS_NEW',
+        lessonId,
+        currentData: {
+          id: exercise?.id,
+          mode,
+          title,
+          subtitle,
+          description,
+          content,
+          gaps,
+          titleColor: TITLE_COLOR,
+        },
+        onApply: applyAiData,
+      }}>
       <TextField label={t('editor.fieldTitle')} value={title} onChangeText={setTitle} />
       <TextField
         label={t('editor.fieldSubtitle')}
@@ -205,8 +235,8 @@ export function FillGapsNewEditor({
           label={t('editor.heroImages')}
           images={images}
           onChange={setImages}
-          multiple
-          max={6}
+          multiple={false}
+          max={1}
         />
       </View>
     </EditorShell>

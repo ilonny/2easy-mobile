@@ -42,6 +42,7 @@ export function FillGapsSelectExView({data}: Props) {
     try {
       const raw = answers[String(data?.id)]?.answer;
       if (!raw) {
+        setLocalAnswers([]);
         return;
       }
       setLocalAnswers(JSON.parse(raw));

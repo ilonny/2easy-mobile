@@ -1,5 +1,6 @@
 import {Platform, Text, View} from 'react-native';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
+import {getFocusedRouteNameFromRoute} from '@react-navigation/native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
 import {useAuth} from '../../entities/session';
@@ -18,6 +19,12 @@ const TAB_EMOJI = {
   Students: '🧑‍🎓',
   Profile: '👤',
 } as const;
+
+const HIDE_TAB_ROUTES = new Set(['LessonViewer', 'LessonEditor', 'BoardViewer']);
+
+function shouldHideTabBar(routeName?: string) {
+  return !!routeName && HIDE_TAB_ROUTES.has(routeName);
+}
 
 function TabIcon({
   emoji,
@@ -74,6 +81,21 @@ export function MainTabNavigator() {
   const tabBarHeight = 52 + bottom;
   const isStudent = !!profile?.isStudent;
 
+  const visibleTabBarStyle = {
+    backgroundColor: colors.white,
+    borderTopColor: colors.border,
+    borderTopWidth: 1,
+    height: tabBarHeight,
+    paddingTop: 6,
+    paddingBottom: bottom,
+  } as const;
+
+  const hiddenTabBarStyle = {
+    display: 'none' as const,
+    height: 0,
+    overflow: 'hidden' as const,
+  };
+
   return (
     <Tab.Navigator
       initialRouteName={isStudent ? 'Students' : 'Lessons'}
@@ -82,14 +104,7 @@ export function MainTabNavigator() {
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.muted,
         tabBarHideOnKeyboard: true,
-        tabBarStyle: {
-          backgroundColor: colors.white,
-          borderTopColor: colors.border,
-          borderTopWidth: 1,
-          height: tabBarHeight,
-          paddingTop: 6,
-          paddingBottom: bottom,
-        },
+        tabBarStyle: isStudent ? hiddenTabBarStyle : visibleTabBarStyle,
         tabBarItemStyle: {
           paddingTop: 2,
         },
@@ -98,25 +113,33 @@ export function MainTabNavigator() {
       <Tab.Screen
         name="Lessons"
         component={LessonsStackNavigator}
-        options={{
-          tabBarButton: isStudent ? () => null : undefined,
-          tabBarItemStyle: isStudent ? {display: 'none'} : undefined,
-          tabBarAccessibilityLabel: t('profile.lessonsAndCourses'),
-          tabBarLabel: ({focused}) => (
-            <TabLabel
-              label={t('profile.lessonsAndCourses')}
-              focused={focused}
-            />
-          ),
-          tabBarIcon: ({focused}) => (
-            <TabIcon emoji={TAB_EMOJI.Lessons} focused={focused} />
-          ),
+        options={({route}) => {
+          const focused = getFocusedRouteNameFromRoute(route) ?? 'LessonPlans';
+          const hide = isStudent || shouldHideTabBar(focused);
+          return {
+            tabBarButton: isStudent ? () => null : undefined,
+            tabBarItemStyle: isStudent ? {display: 'none'} : undefined,
+            tabBarStyle: hide ? hiddenTabBarStyle : visibleTabBarStyle,
+            tabBarAccessibilityLabel: t('profile.lessonsAndCourses'),
+            tabBarLabel: ({focused: f}) => (
+              <TabLabel
+                label={t('profile.lessonsAndCourses')}
+                focused={f}
+              />
+            ),
+            tabBarIcon: ({focused: f}) => (
+              <TabIcon emoji={TAB_EMOJI.Lessons} focused={f} />
+            ),
+          };
         }}
       />
       <Tab.Screen
         name="Students"
         component={StudentsStackNavigator}
         options={{
+          tabBarButton: isStudent ? () => null : undefined,
+          tabBarItemStyle: isStudent ? {display: 'none'} : undefined,
+          tabBarStyle: isStudent ? hiddenTabBarStyle : visibleTabBarStyle,
           tabBarAccessibilityLabel: isStudent
             ? t('students.cabinetTab')
             : t('profile.myStudents'),
@@ -139,6 +162,7 @@ export function MainTabNavigator() {
         options={{
           tabBarButton: isStudent ? () => null : undefined,
           tabBarItemStyle: isStudent ? {display: 'none'} : undefined,
+          tabBarStyle: isStudent ? hiddenTabBarStyle : visibleTabBarStyle,
           tabBarAccessibilityLabel: t('profile.profileLabel'),
           tabBarLabel: ({focused}) => (
             <TabLabel label={t('profile.profileLabel')} focused={focused} />
