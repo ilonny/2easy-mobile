@@ -23,6 +23,7 @@ export type LessonsStackParamList = {
     lessonId: number;
     from?: 'Grammar' | 'Tutorial' | 'Lessons';
     studentId?: number;
+    sessionId?: number;
   };
   LessonEditor: {lessonId: number};
   BoardViewer: {boardId: number; catalog?: boolean};

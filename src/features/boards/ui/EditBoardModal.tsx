@@ -1,5 +1,6 @@
 import {useEffect, useState} from 'react';
 import {
+  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -13,15 +14,18 @@ import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
 import {getLessonImageUrl} from '../../../entities/lesson';
 import {useI18n} from '../../../shared/i18n';
-import {colors} from '../../../shared/config/theme';
+import {colors, radii} from '../../../shared/config/theme';
 import {useKeyboardBottomOffset} from '../../../shared/lib/useKeyboardBottomOffset';
 import {useLayout} from '../../../shared/lib/layout';
-import {Button, TextField} from '../../../shared/ui';
+import {AppDialog, Button, TextField} from '../../../shared/ui';
 import {
   ImagePickerField,
   type PickedImage,
 } from '../../lesson-editor/ui/ImagePickerField';
-import {uploadPhotos} from '../../lesson-player/api/lessonApi';
+import {
+  uploadPhotos,
+  uploadPhotosByUrl,
+} from '../../lesson-player/api/lessonApi';
 import {editBoard} from '../api/boardsApi';
 import type {Board} from '../model/types';
 
@@ -35,7 +39,7 @@ type Props = {
 export function EditBoardModal({visible, board, onClose, onSaved}: Props) {
   const insets = useSafeAreaInsets();
   const {t} = useI18n();
-  const {pageGutter, authFormMaxWidth} = useLayout();
+  const {pageGutter, pageContentMaxWidth} = useLayout();
   const keyboardHeight = useKeyboardBottomOffset(visible);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -94,6 +98,9 @@ export function EditBoardModal({visible, board, onClose, onSaved}: Props) {
             0,
         );
         image_id = uploadedId || null;
+      } else if (nextCover?.isRemoteUrl && nextCover.uri) {
+        const uploaded = await uploadPhotosByUrl([{dataURL: nextCover.uri}]);
+        image_id = Number(uploaded.attachments?.[0]?.id || 0) || null;
       } else if (!nextCover) {
         image_id = null;
       }
@@ -117,77 +124,176 @@ export function EditBoardModal({visible, board, onClose, onSaved}: Props) {
   };
 
   return (
-    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <KeyboardAvoidingView
-        style={styles.root}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <View
-          style={[
-            styles.header,
-            {paddingTop: insets.top + 8, paddingHorizontal: pageGutter},
-          ]}>
-          <Text style={styles.headerTitle}>{t('boards.editBoard')}</Text>
-          <Pressable onPress={onClose} hitSlop={8}>
-            <Text style={styles.close}>✕</Text>
-          </Pressable>
-        </View>
-        <ScrollView
-          contentContainerStyle={[
-            styles.content,
-            {
-              paddingHorizontal: pageGutter,
-              paddingBottom: insets.bottom + 24 + keyboardHeight,
-              maxWidth: authFormMaxWidth,
-              width: '100%',
-              alignSelf: 'center',
-            },
-          ]}
-          keyboardShouldPersistTaps="handled">
-          <TextField
-            label={t('editor.fieldTitle')}
-            value={title}
-            onChangeText={setTitle}
-          />
-          <TextField
-            label={t('editor.fieldDescription')}
-            value={description}
-            onChangeText={setDescription}
-            multiline
-          />
-          <TextField
-            label={t('editor.fieldTags')}
-            value={tags}
-            onChangeText={setTags}
-          />
-          <ImagePickerField
-            label={t('boards.cover')}
-            images={cover}
-            onChange={setCover}
-            multiple={false}
-            max={1}
-          />
-          {!!error && <Text style={styles.error}>{error}</Text>}
-          <Button
-            title={t('common.save')}
-            onPress={() => void onSubmit()}
-            loading={saving}
-          />
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </Modal>
+    <>
+      <Modal
+        visible={visible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={onClose}>
+        <KeyboardAvoidingView
+          style={styles.flex}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <View style={[styles.root, {paddingTop: insets.top + 8}]}>
+            <View style={styles.header}>
+              <View style={styles.headerText}>
+                <Text style={styles.kicker}>{t('boards.editBoard')}</Text>
+                <Text style={styles.title} numberOfLines={2}>
+                  {title.trim() || t('boards.editBoard')}
+                </Text>
+              </View>
+              <Pressable onPress={onClose} hitSlop={10} style={styles.closeBtn}>
+                <Text style={styles.close}>✕</Text>
+              </Pressable>
+            </View>
+
+            <ScrollView
+              style={styles.flex}
+              contentContainerStyle={[
+                styles.body,
+                {
+                  paddingHorizontal: pageGutter,
+                  maxWidth: pageContentMaxWidth,
+                  width: '100%',
+                  alignSelf: 'center',
+                  paddingBottom: 16,
+                },
+              ]}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="interactive"
+              automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}>
+              <View style={styles.card}>
+                <TextField
+                  label={t('editor.fieldTitle')}
+                  value={title}
+                  onChangeText={setTitle}
+                  error={error && !title.trim() ? error : undefined}
+                />
+                <TextField
+                  label={t('editor.fieldDescription')}
+                  value={description}
+                  onChangeText={setDescription}
+                  multiline
+                  style={styles.multiline}
+                />
+                <TextField
+                  label={t('editor.fieldTags')}
+                  value={tags}
+                  onChangeText={setTags}
+                />
+              </View>
+
+              <View style={styles.card}>
+                <ImagePickerField
+                  label={t('boards.cover')}
+                  images={cover}
+                  onChange={setCover}
+                  multiple={false}
+                  max={1}
+                />
+                {cover[0]?.uri ? (
+                  <Image source={{uri: cover[0].uri}} style={styles.cover} />
+                ) : null}
+              </View>
+            </ScrollView>
+
+            <View
+              style={[
+                styles.footerBar,
+                {
+                  paddingHorizontal: pageGutter,
+                  paddingBottom:
+                    insets.bottom +
+                    12 +
+                    (Platform.OS === 'android' ? keyboardHeight : 0),
+                  maxWidth: pageContentMaxWidth,
+                  width: '100%',
+                  alignSelf: 'center',
+                },
+              ]}>
+              <Button
+                title={t('common.save')}
+                onPress={() => {
+                  void onSubmit();
+                }}
+                loading={saving}
+              />
+              <Pressable onPress={onClose} style={styles.cancelWrap}>
+                <Text style={styles.cancel}>{t('common.cancel')}</Text>
+              </Pressable>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+      <AppDialog
+        visible={!!error && !!title.trim()}
+        title={t('common.edit')}
+        message={error}
+        onClose={() => setError('')}
+        actions={[
+          {
+            label: t('common.back'),
+            variant: 'primary',
+            onPress: () => setError(''),
+          },
+        ]}
+      />
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {flex: 1, backgroundColor: colors.pageBackground},
+  flex: {flex: 1},
+  root: {flex: 1, backgroundColor: '#F7F5FF'},
   header: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
-    paddingBottom: 12,
+    paddingHorizontal: 16,
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
-  headerTitle: {fontSize: 20, fontWeight: '800', color: colors.text},
-  close: {fontSize: 20, color: colors.muted, fontWeight: '700'},
-  content: {gap: 14, paddingTop: 8},
-  error: {color: colors.danger},
+  headerText: {flex: 1, marginRight: 12, gap: 2},
+  kicker: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.muted,
+    textTransform: 'uppercase',
+  },
+  title: {fontSize: 20, fontWeight: '800', color: colors.primary},
+  closeBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F2F2F2',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  close: {fontSize: 16, color: colors.muted, fontWeight: '700'},
+  body: {padding: 16, flexGrow: 1},
+  card: {
+    backgroundColor: colors.white,
+    borderRadius: radii.xl,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: 12,
+  },
+  multiline: {minHeight: 100, textAlignVertical: 'top', paddingTop: 12},
+  cover: {
+    width: '100%',
+    height: 160,
+    borderRadius: radii.lg,
+    marginTop: 8,
+    backgroundColor: colors.primarySoft,
+  },
+  footerBar: {
+    gap: 12,
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+    backgroundColor: '#F7F5FF',
+  },
+  cancelWrap: {alignItems: 'center', paddingVertical: 6},
+  cancel: {color: colors.muted, fontWeight: '600'},
 });

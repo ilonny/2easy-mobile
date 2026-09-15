@@ -11,6 +11,7 @@ export function LessonViewerPage({route}: Props) {
       lessonId={route.params.lessonId}
       from={route.params.from}
       studentId={route.params.studentId}
+      sessionId={route.params.sessionId}
     />
   );
 }

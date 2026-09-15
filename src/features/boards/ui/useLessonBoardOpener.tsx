@@ -16,13 +16,15 @@ export function useLessonBoardOpener({
   lessonId,
   isTeacher,
   studentIdForBoard,
+  lessonSessionId,
 }: {
   lessonId: number;
   isTeacher: boolean;
   studentIdForBoard?: number;
+  lessonSessionId?: number;
 }) {
   const {t} = useI18n();
-  const {hasPaidTariff} = useSubscription();
+  const {hasSubscription, loading: subLoading} = useSubscription();
   const [boardId, setBoardId] = useState<number | null>(null);
   const [open, setOpen] = useState(false);
   const [opening, setOpening] = useState(false);
@@ -32,13 +34,19 @@ export function useLessonBoardOpener({
     if (!lessonId) {
       return;
     }
-    if (isTeacher && !hasPaidTariff) {
-      setNotice(t('boards.subscriptionRequired'));
+    if (isTeacher && (subLoading || !hasSubscription)) {
+      if (!subLoading) {
+        setNotice(t('boards.subscriptionRequired'));
+      }
       return;
     }
     setOpening(true);
     try {
-      const scopeRes = await fetchLessonBoardScope(lessonId, studentIdForBoard);
+      const scopeRes = await fetchLessonBoardScope(
+        lessonId,
+        studentIdForBoard,
+        lessonSessionId,
+      );
       if (!scopeRes.success || !scopeRes.scope) {
         setNotice(scopeRes.message || t('boards.loadScopeError'));
         return;
@@ -51,7 +59,11 @@ export function useLessonBoardOpener({
         setNotice(t('boards.selectStudentForBoard'));
         return;
       }
-      const boardRes = await fetchLessonBoard(lessonId, studentIdForBoard);
+      const boardRes = await fetchLessonBoard(
+        lessonId,
+        studentIdForBoard,
+        lessonSessionId,
+      );
       const id = Number(boardRes?.board?.id || 0);
       if (!boardRes.success || !id) {
         setNotice(boardRes.message || t('boards.openBoardError'));
@@ -64,7 +76,15 @@ export function useLessonBoardOpener({
     } finally {
       setOpening(false);
     }
-  }, [hasPaidTariff, isTeacher, lessonId, studentIdForBoard, t]);
+  }, [
+    hasSubscription,
+    isTeacher,
+    lessonId,
+    lessonSessionId,
+    studentIdForBoard,
+    subLoading,
+    t,
+  ]);
 
   const modal = (
     <>

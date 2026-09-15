@@ -11,7 +11,7 @@ import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
 import {useAuth} from '../../../entities/session';
-import {getLessonCoverSource, isLessonLockedOnFreeTariff} from '../../../entities/lesson';
+import {getLessonCoverSource, isTeacherLessonAccessBlocked} from '../../../entities/lesson';
 import {useI18n} from '../../../shared/i18n';
 import {colors} from '../../../shared/config/theme';
 import type {RootStackParamList} from '../../../shared/navigation/types';
@@ -21,6 +21,7 @@ import {
   resetToRoute,
 } from '../../../shared/navigation/resetToLessonPlans';
 import {useLayout} from '../../../shared/lib/layout';
+import {useKeyboardBottomOffset} from '../../../shared/lib/useKeyboardBottomOffset';
 import {AppDialog, Breadcrumbs, Button} from '../../../shared/ui';
 import {AppHeader} from '../../app-shell';
 import {DictionarySelectionProvider} from '../../dictionary/model/DictionarySelectionContext';
@@ -39,7 +40,13 @@ import {
   fetchLessonStudents,
   type LessonParticipant,
 } from '../../students/api/studentsApi';
-import {fetchExList, fetchLesson, changeExVisible, resetAnswers} from '../api/lessonApi';
+import {
+  fetchExList,
+  fetchLesson,
+  changeExVisible,
+  resetAnswers,
+  resolveLessonSession,
+} from '../api/lessonApi';
 import {notifyLocalAnswersReset} from '../model/useExAnswer';
 import {
   readStartLessonSelectedIds,
@@ -64,6 +71,7 @@ type Props = {
   lessonId: number;
   from?: 'Grammar' | 'Tutorial' | 'Lessons';
   studentId?: number;
+  sessionId?: number;
 };
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -72,13 +80,14 @@ export function LessonViewerScreen({
   lessonId,
   from = 'Lessons',
   studentId: studentIdProp,
+  sessionId: sessionIdProp,
 }: Props) {
   const insets = useSafeAreaInsets();
   const {isTablet, pageGutter, pageContentMaxWidth} = useLayout();
   const navigation = useNavigation<Nav>();
   const {isAuthorized, profile} = useAuth();
   const {t} = useI18n();
-  const {subscription} = useSubscription();
+  const {subscription, hasSubscription, loading: subLoading} = useSubscription();
 
   const [headerHeight, setHeaderHeight] = useState(0);
 
@@ -92,6 +101,10 @@ export function LessonViewerScreen({
   const [activeStudentId, setActiveStudentId] = useState<number | undefined>(
     studentIdProp,
   );
+  const [lessonSessionId, setLessonSessionId] = useState<number | undefined>(
+    sessionIdProp,
+  );
+  const [sessionRoster, setSessionRoster] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [resetOpen, setResetOpen] = useState(false);
@@ -126,6 +139,7 @@ export function LessonViewerScreen({
     lessonId,
     isTeacher: !!isTeacher,
     studentIdForBoard: isTeacher ? answerStudentId : undefined,
+    lessonSessionId,
   });
 
   const parentLabel =
@@ -181,7 +195,9 @@ export function LessonViewerScreen({
       return;
     }
     try {
-      const selectedIds = studentIdProp
+      const selectedIds = sessionRoster.length
+        ? sessionRoster
+        : studentIdProp
         ? [studentIdProp]
         : await readStartLessonSelectedIds();
       if (!selectedIds.length) {
@@ -210,7 +226,35 @@ export function LessonViewerScreen({
       setParticipants([]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-run on lesson / prop change
-  }, [isTeacher, lessonId, studentIdProp]);
+  }, [isTeacher, lessonId, sessionRoster, studentIdProp]);
+
+  useEffect(() => {
+    if (!isAuthorized || !lessonId) {
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const result = await resolveLessonSession(lessonId, sessionIdProp);
+        if (cancelled || !result?.success || !result.session?.id) {
+          return;
+        }
+        const roster = Array.isArray(result.session.student_ids)
+          ? result.session.student_ids.map(Number).filter(Boolean)
+          : [];
+        setLessonSessionId(Number(result.session.id));
+        setSessionRoster(roster);
+        if (roster.length) {
+          await saveStartLessonSelectedIds(roster);
+        }
+      } catch {
+        // Legacy lessons keep the old per-student scope.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthorized, lessonId, sessionIdProp]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -241,17 +285,20 @@ export function LessonViewerScreen({
     void load();
   }, [load]);
 
-  const isLockedOnTrial = isLessonLockedOnFreeTariff(
-    lesson,
-    subscription?.subscribe_type_id === 1,
+  const isLockedOnTrial = isTeacherLessonAccessBlocked(lesson, {
     isStudent,
-  );
+    hasSubscription,
+    isFreeTariff: subscription?.subscribe_type_id === 1,
+  });
 
   useEffect(() => {
+    if (subLoading || !isAuthorized || isStudent) {
+      return;
+    }
     if (isLockedOnTrial) {
       navigation.replace('Subscription');
     }
-  }, [isLockedOnTrial, navigation]);
+  }, [isAuthorized, isLockedOnTrial, isStudent, navigation, subLoading]);
 
   useEffect(() => {
     if (studentIdProp) {
@@ -314,6 +361,8 @@ export function LessonViewerScreen({
     : undefined;
 
   const showTools = isAuthorized && !loading && !error && !!lesson;
+  const keyboardHeight = useKeyboardBottomOffset(showTools);
+  const toolsVisible = showTools && keyboardHeight === 0;
   const toolsPadding =
     LESSON_TOOLS_BAR_HEIGHT + Math.max(insets.bottom, 10) + 24;
 
@@ -401,7 +450,7 @@ export function LessonViewerScreen({
               style={styles.flex}
               contentContainerStyle={{
                 paddingHorizontal: pageGutter,
-                paddingBottom: showTools ? toolsPadding : insets.bottom + 40,
+                paddingBottom: toolsVisible ? toolsPadding : insets.bottom + 40,
                 alignItems: 'center',
               }}
               keyboardShouldPersistTaps="handled"
@@ -553,14 +602,23 @@ export function LessonViewerScreen({
           </LessonScrollProvider>
         )}
 
-        {showTools ? (
+        {toolsVisible ? (
           <LessonToolsBar
             showParticipants={isTeacher && participants.length > 0}
             showDictionary={isStudent && !!selfStudentId}
             showBoard
             participantsCount={participants.length}
             onParticipants={() => setParticipantsOpen(true)}
-            onChat={() => setChatOpen(true)}
+            onChat={() => {
+              const chatStudentId = isTeacher
+                ? answerStudentId
+                : selfStudentId ?? studentIdProp;
+              if (!isTeacher && !chatStudentId && !lessonSessionId) {
+                setNotice(t('lessons.selectStudentForChat'));
+                return;
+              }
+              setChatOpen(true);
+            }}
             onVideo={() => setVideoOpen(true)}
             onDictionary={
               selfStudentId
@@ -586,6 +644,12 @@ export function LessonViewerScreen({
         <LessonChatModal
           visible={chatOpen}
           lessonId={lessonId}
+          studentId={
+            isTeacher
+              ? answerStudentId
+              : selfStudentId ?? studentIdProp
+          }
+          sessionId={lessonSessionId}
           onClose={() => setChatOpen(false)}
         />
 

@@ -103,7 +103,8 @@ export function EditorShell({
                 paddingHorizontal: pageGutter,
                 paddingBottom:
                   insets.bottom +
-                  32 +
+                  48 +
+                  (keyboardHeight > 0 ? 24 : 0) +
                   (Platform.OS === 'android' ? keyboardHeight : 0),
               },
             ]}

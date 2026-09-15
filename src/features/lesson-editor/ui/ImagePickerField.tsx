@@ -2,7 +2,6 @@ import {useEffect, useState} from 'react';
 import {
   ActivityIndicator,
   FlatList,
-  Image,
   Modal,
   Pressable,
   StyleSheet,
@@ -15,7 +14,7 @@ import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
 import {useI18n} from '../../../shared/i18n';
 import {colors, radii} from '../../../shared/config/theme';
-import {Button} from '../../../shared/ui';
+import {Button, SmartImage} from '../../../shared/ui';
 import {searchImages} from '../../lesson-player/api/lessonApi';
 import {newId} from './editors/editorShared';
 
@@ -180,7 +179,7 @@ export function ImagePickerField({
         <View style={styles.thumbs}>
           {images.map(img => (
             <View key={img.id} style={styles.thumbWrap}>
-              <Image source={{uri: img.uri}} style={styles.thumb} />
+              <SmartImage source={{uri: img.uri}} style={styles.thumb} />
               <Pressable
                 style={styles.remove}
                 onPress={() => removeAt(img.id)}
@@ -256,7 +255,7 @@ export function ImagePickerField({
                   <Pressable
                     style={[styles.result, active && styles.resultActive]}
                     onPress={() => toggleResult(item)}>
-                    <Image source={{uri: item}} style={styles.resultImg} />
+                    <SmartImage source={{uri: item}} style={styles.resultImg} />
                     {active ? (
                       <View style={styles.check}>
                         <Text style={styles.checkText}>✓</Text>

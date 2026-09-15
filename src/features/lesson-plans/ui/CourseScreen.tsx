@@ -13,7 +13,7 @@ import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
 import {useAuth} from '../../../entities/session';
-import {isLessonLockedOnFreeTariff, type Lesson} from '../../../entities/lesson';
+import {isLessonLockedOnFreeTariff, isTeacherLessonAccessBlocked, type Lesson} from '../../../entities/lesson';
 import type {RootStackParamList} from '../../../shared/navigation/types';
 import {useI18n} from '../../../shared/i18n';
 import {colors} from '../../../shared/config/theme';
@@ -41,7 +41,7 @@ export function CourseScreen({courseId}: Props) {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<Nav>();
   const {isAuthorized, profile} = useAuth();
-  const {subscription} = useSubscription();
+  const {subscription, hasSubscription, loading: subLoading} = useSubscription();
   const {t} = useI18n();
   const isTeacher = profile?.role_id === 1 || profile?.role_id === 2;
   const isStudent = !!profile?.isStudent;
@@ -152,7 +152,16 @@ export function CourseScreen({courseId}: Props) {
       setTryNowVisible(true);
       return;
     }
-    if (isLessonLockedOnFreeTariff(lesson, isFreeTariff, isStudent)) {
+    if (subLoading) {
+      return;
+    }
+    if (
+      isTeacherLessonAccessBlocked(lesson, {
+        isStudent,
+        hasSubscription,
+        isFreeTariff,
+      })
+    ) {
       navigation.navigate('Subscription');
       return;
     }
@@ -167,6 +176,12 @@ export function CourseScreen({courseId}: Props) {
   };
 
   const onHomeworkPress = async (lesson: Lesson) => {
+    if (!isStudent && (subLoading || !hasSubscription)) {
+      if (!subLoading) {
+        navigation.navigate('Subscription');
+      }
+      return;
+    }
     const check = hwCheck[lesson.id];
     if (check?.exists && check.homeworkId) {
       navigation.navigate('LessonEditor', {lessonId: check.homeworkId});
@@ -212,7 +227,16 @@ export function CourseScreen({courseId}: Props) {
             <Button
               title={t('lessons.editCourse')}
               variant="secondary"
-              onPress={() => setEditOpen(true)}
+              onPress={() => {
+                if (subLoading) {
+                  return;
+                }
+                if (!hasSubscription) {
+                  navigation.navigate('Subscription');
+                  return;
+                }
+                setEditOpen(true);
+              }}
             />
           ) : null}
         </View>

@@ -2,7 +2,9 @@ import {ImageBackground, StyleSheet, Text, View} from 'react-native';
 
 import {useAuth} from '../../../entities/session';
 import {useI18n} from '../../../shared/i18n';
+import {catalogTileWidth, useLayout} from '../../../shared/lib/layout';
 import {tariffs} from '../model/data';
+import {SubscribeCancelButton} from '../../profile/ui/SubscribeCancelButton';
 import {PillCta} from './PillCta';
 
 export type TariffOption = (typeof tariffs)[number];
@@ -33,33 +35,58 @@ export function SubscribeSection({
 }: Props) {
   const {t} = useI18n();
   const {isAuthorized, profile} = useAuth();
+  const {isTablet, isLandscape, catalogRowWidth} = useLayout();
   const showFreeTrial = !profile?.login;
   const visibleTariffs = hasPaidTariff
     ? tariffs.filter(item => item.id === subscribeTypeId)
     : tariffs;
+  const tariffGap = isTablet ? 16 : 14;
+  const tariffColumns = !isTablet
+    ? 1
+    : visibleTariffs.length === 1
+      ? 1
+      : isLandscape
+        ? Math.min(3, visibleTariffs.length)
+        : Math.min(2, visibleTariffs.length);
+  const tariffCardWidth =
+    tariffColumns === 1
+      ? isTablet
+        ? Math.min(400, catalogRowWidth)
+        : undefined
+      : catalogTileWidth(catalogRowWidth, tariffColumns, tariffGap);
 
   return (
     <View style={styles.root}>
       {!hideIntro ? (
         <>
-          <Text style={styles.heading}>{t('subscription.title')}</Text>
-          <Text style={styles.sub}>{t('subscription.description')}</Text>
+          <Text style={[styles.heading, isTablet && styles.headingTablet]}>
+            {t('subscription.title')}
+          </Text>
+          <Text style={[styles.sub, isTablet && styles.subTablet]}>
+            {t('subscription.description')}
+          </Text>
         </>
       ) : null}
 
       <ImageBackground
         source={require('../../../shared/assets/home/subscribe_purple.png')}
-        style={styles.purple}
+        style={[styles.purple, isTablet && styles.purpleTablet]}
         imageStyle={styles.panelImage}>
         <View style={styles.badge}>
-          <Text style={styles.badgeText}>{t('subscription.subscriptionBadge')}</Text>
+          <Text style={[styles.badgeText, isTablet && styles.badgeTextTablet]}>
+            {t('subscription.subscriptionBadge')}
+          </Text>
         </View>
-        <Text style={styles.purpleTitle}>{t('subscription.tariffIncludes')}</Text>
+        <Text style={[styles.purpleTitle, isTablet && styles.purpleTitleTablet]}>
+          {t('subscription.tariffIncludes')}
+        </Text>
         <View style={styles.divider} />
         {INCLUDES.map(key => (
           <View key={key} style={styles.includeRow}>
             <Text style={styles.check}>✓</Text>
-            <Text style={styles.includeText}>{t(key)}</Text>
+            <Text style={[styles.includeText, isTablet && styles.includeTextTablet]}>
+              {t(key)}
+            </Text>
           </View>
         ))}
       </ImageBackground>
@@ -67,11 +94,17 @@ export function SubscribeSection({
       {showFreeTrial ? (
         <ImageBackground
           source={require('../../../shared/assets/home/subscribe_green.png')}
-          style={styles.green}
+          style={[styles.green, isTablet && styles.greenTablet]}
           imageStyle={styles.panelImage}>
-          <Text style={styles.greenTitle}>{t('subscription.notUsedYet')}</Text>
-          <Text style={styles.greenBody}>{t('subscription.startFreeTrial')}</Text>
-          <Text style={styles.greenBody}>{t('subscription.freeTrialDesc')}</Text>
+          <Text style={[styles.greenTitle, isTablet && styles.greenTitleTablet]}>
+            {t('subscription.notUsedYet')}
+          </Text>
+          <Text style={[styles.greenBody, isTablet && styles.greenBodyTablet]}>
+            {t('subscription.startFreeTrial')}
+          </Text>
+          <Text style={[styles.greenBody, isTablet && styles.greenBodyTablet]}>
+            {t('subscription.freeTrialDesc')}
+          </Text>
           <View style={styles.greenFooter}>
             <View style={styles.noCard}>
               <Text style={styles.noCardText}>
@@ -89,34 +122,61 @@ export function SubscribeSection({
         </ImageBackground>
       ) : null}
 
-      <Text style={styles.heading}>
+      <Text style={[styles.heading, isTablet && styles.headingTablet]}>
         {hasPaidTariff ? t('subscription.yourTariff') : t('subscription.tariffs')}
       </Text>
 
-      <View style={styles.tariffs}>
+      <View
+        style={[
+          styles.tariffs,
+          {
+            gap: tariffGap,
+            flexDirection: tariffColumns > 1 ? 'row' : 'column',
+            flexWrap: tariffColumns > 1 ? 'wrap' : 'nowrap',
+            justifyContent: 'center',
+          },
+        ]}>
         {visibleTariffs.map(tariff => (
-          <View key={tariff.id} style={styles.tariffCard}>
+          <View
+            key={tariff.id}
+            style={[
+              styles.tariffCard,
+              isTablet && styles.tariffCardTablet,
+              tariffCardWidth ? {width: tariffCardWidth} : styles.tariffCardPhone,
+            ]}>
             <View style={styles.tariffTitleWrap}>
               <View
                 style={[styles.tariffHighlight, {backgroundColor: tariff.color}]}
               />
-              <Text style={styles.tariffTitle}>{t(tariff.titleKey)}</Text>
+              <Text style={[styles.tariffTitle, isTablet && styles.tariffTitleTablet]}>
+                {t(tariff.titleKey)}
+              </Text>
             </View>
             <View style={styles.priceRow}>
               {'oldPrice' in tariff && tariff.oldPrice ? (
-                <Text style={styles.oldPrice}>{tariff.oldPrice} ₽</Text>
+                <Text style={[styles.oldPrice, isTablet && styles.oldPriceTablet]}>
+                  {tariff.oldPrice} ₽
+                </Text>
               ) : null}
-              <Text style={styles.price}>{tariff.price} ₽</Text>
-              <Text style={styles.period}>{t(tariff.periodKey)}</Text>
+              <Text style={[styles.price, isTablet && styles.priceTablet]}>
+                {tariff.price} ₽
+              </Text>
+              <Text style={[styles.period, isTablet && styles.periodTablet]}>
+                {t(tariff.periodKey)}
+              </Text>
             </View>
-            {!hasPaidTariff ? (
-              <PillCta
-                title={t('subscription.subscribe')}
-                onPress={
-                  isAuthorized ? () => onSubscribe(tariff) : onStartFree
-                }
-              />
-            ) : null}
+            <View style={styles.tariffFooter}>
+              {!hasPaidTariff ? (
+                <PillCta
+                  title={t('subscription.subscribe')}
+                  onPress={
+                    isAuthorized ? () => onSubscribe(tariff) : onStartFree
+                  }
+                />
+              ) : (
+                <SubscribeCancelButton />
+              )}
+            </View>
           </View>
         ))}
       </View>
@@ -135,6 +195,10 @@ const styles = StyleSheet.create({
     color: '#1A1A1A',
     lineHeight: 30,
   },
+  headingTablet: {
+    fontSize: 32,
+    lineHeight: 38,
+  },
   sub: {
     fontSize: 16,
     lineHeight: 22,
@@ -142,11 +206,25 @@ const styles = StyleSheet.create({
     color: '#2D2D2D',
     marginBottom: 8,
   },
+  subTablet: {
+    fontSize: 18,
+    lineHeight: 26,
+    maxWidth: 640,
+    alignSelf: 'center',
+  },
   purple: {
     borderRadius: 20,
     overflow: 'hidden',
     padding: 20,
     minHeight: 280,
+    alignSelf: 'center',
+    width: '100%',
+    maxWidth: 793,
+  },
+  purpleTablet: {
+    padding: 32,
+    minHeight: 340,
+    borderRadius: 24,
   },
   green: {
     borderRadius: 20,
@@ -154,6 +232,14 @@ const styles = StyleSheet.create({
     padding: 20,
     minHeight: 260,
     gap: 8,
+    alignSelf: 'center',
+    width: '100%',
+    maxWidth: 793,
+  },
+  greenTablet: {
+    padding: 32,
+    minHeight: 280,
+    borderRadius: 24,
   },
   panelImage: {
     borderRadius: 20,
@@ -171,12 +257,18 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
   },
+  badgeTextTablet: {fontSize: 15},
   purpleTitle: {
     color: '#FFFFFF',
     fontSize: 20,
     fontWeight: '700',
     lineHeight: 26,
     marginBottom: 12,
+    maxWidth: 520,
+  },
+  purpleTitleTablet: {
+    fontSize: 24,
+    lineHeight: 30,
   },
   divider: {
     height: StyleSheet.hairlineWidth,
@@ -198,16 +290,29 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
   },
+  includeTextTablet: {
+    fontSize: 16,
+    lineHeight: 22,
+  },
   greenTitle: {
     fontSize: 20,
     fontWeight: '700',
     color: '#292929',
     lineHeight: 26,
   },
+  greenTitleTablet: {
+    fontSize: 24,
+    lineHeight: 30,
+  },
   greenBody: {
     fontSize: 14,
     lineHeight: 20,
     color: '#292929',
+  },
+  greenBodyTablet: {
+    fontSize: 16,
+    lineHeight: 22,
+    maxWidth: 560,
   },
   greenFooter: {
     marginTop: 12,
@@ -228,7 +333,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   tariffs: {
-    gap: 14,
+    width: '100%',
   },
   tariffCard: {
     backgroundColor: '#FFFFFF',
@@ -240,6 +345,19 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     shadowOffset: {width: 0, height: 8},
     elevation: 3,
+    flexShrink: 0,
+  },
+  tariffCardTablet: {
+    padding: 24,
+    borderRadius: 24,
+    minHeight: 220,
+  },
+  tariffCardPhone: {
+    width: '100%',
+  },
+  tariffFooter: {
+    marginTop: 'auto',
+    paddingTop: 4,
   },
   tariffTitleWrap: {
     position: 'relative',
@@ -259,6 +377,9 @@ const styles = StyleSheet.create({
     color: '#1A1A1A',
     zIndex: 1,
   },
+  tariffTitleTablet: {
+    fontSize: 22,
+  },
   priceRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
@@ -271,14 +392,17 @@ const styles = StyleSheet.create({
     color: '#ACACAC',
     textDecorationLine: 'line-through',
   },
+  oldPriceTablet: {fontSize: 20},
   price: {
     fontSize: 28,
     fontWeight: '800',
     color: '#1A1A1A',
   },
+  priceTablet: {fontSize: 30},
   period: {
     fontSize: 14,
     color: '#787878',
     marginBottom: 4,
   },
+  periodTablet: {fontSize: 16},
 });

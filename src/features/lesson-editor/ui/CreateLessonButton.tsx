@@ -17,6 +17,8 @@ type Props = {
   courseId?: number;
   buttonTitle?: string;
   onCreated?: (lessonId: number) => void;
+  /** Return false to keep the modal closed (e.g. send the user to Subscription). */
+  beforeOpen?: () => boolean;
 };
 
 /**
@@ -30,6 +32,7 @@ export function CreateLessonButton({
   courseId,
   buttonTitle,
   onCreated,
+  beforeOpen,
 }: Props) {
   const {t} = useI18n();
   const navigation = useNavigation<Nav>();
@@ -39,7 +42,12 @@ export function CreateLessonButton({
     <>
       <Button
         title={buttonTitle || t('editor.createLesson')}
-        onPress={() => setModalOpen(true)}
+        onPress={() => {
+          if (beforeOpen && !beforeOpen()) {
+            return;
+          }
+          setModalOpen(true);
+        }}
       />
       <CreateLessonModal
         visible={modalOpen}

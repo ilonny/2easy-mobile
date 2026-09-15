@@ -20,6 +20,8 @@ import {useLessonChat} from '../model/useLessonChat';
 type Props = {
   visible: boolean;
   lessonId: number;
+  studentId?: number;
+  sessionId?: number;
   onClose: () => void;
 };
 
@@ -34,12 +36,18 @@ function formatEditedAt(value?: string | null) {
   return date.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
 }
 
-export function LessonChatModal({visible, lessonId, onClose}: Props) {
+export function LessonChatModal({
+  visible,
+  lessonId,
+  studentId,
+  sessionId,
+  onClose,
+}: Props) {
   const insets = useSafeAreaInsets();
   const {t} = useI18n();
   const keyboardHeight = useKeyboardBottomOffset(visible);
   const {messageList, connected, sendMessage, editMessage, toggleReaction} =
-    useLessonChat(lessonId, visible);
+    useLessonChat(lessonId, studentId, sessionId, visible);
   const [draft, setDraft] = useState('');
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
   const [editing, setEditing] = useState<ChatMessage | null>(null);

@@ -4,6 +4,7 @@ import {useNavigation} from '@react-navigation/native';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 
 import {useI18n} from '../../../shared/i18n';
+import {useLayout} from '../../../shared/lib/layout';
 import type {RootStackParamList} from '../../../shared/navigation/types';
 import {useSubscription} from '../../home/model/useSubscription';
 import {
@@ -18,6 +19,7 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 export function SubscriptionScreen() {
   const navigation = useNavigation<Nav>();
   const {t} = useI18n();
+  const {isTablet} = useLayout();
   const {hasPaidTariff, subscription} = useSubscription();
   const [paymentTariff, setPaymentTariff] = useState<TariffOption | null>(null);
 
@@ -27,8 +29,12 @@ export function SubscriptionScreen() {
         title={t('subscription.title')}
         subtitle={t('subscription.page.subtitle')}
         sectionLabel={t('header.subscription')}>
-        <Text style={styles.desc}>{t('subscription.page.description1')}</Text>
-        <Text style={styles.desc}>{t('subscription.page.description2')}</Text>
+        <Text style={[styles.desc, isTablet && styles.descTablet]}>
+          {t('subscription.page.description1')}
+        </Text>
+        <Text style={[styles.desc, isTablet && styles.descTablet]}>
+          {t('subscription.page.description2')}
+        </Text>
         <View style={styles.tariffs}>
           <SubscribeSection
             hideIntro
@@ -54,6 +60,12 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     textAlign: 'center',
     color: '#2D2D2D',
+  },
+  descTablet: {
+    fontSize: 17,
+    lineHeight: 24,
+    maxWidth: 640,
+    alignSelf: 'center',
   },
   tariffs: {
     marginTop: 8,

@@ -12,9 +12,15 @@ import {useNavigation} from '@react-navigation/native';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 
 import {useAuth} from '../../../entities/session';
-import {getLessonCoverSource, type Lesson} from '../../../entities/lesson';
+import {
+  getLessonCoverSource,
+  isTeacherLessonAccessBlocked,
+  type Lesson,
+} from '../../../entities/lesson';
 import {fetchMainPageLessons} from '../../lesson-plans/api/lessonsApi';
+import {useSubscription} from '../model/useSubscription';
 import {colors, radii} from '../../../shared/config/theme';
+import {SmartImage} from '../../../shared/ui';
 import type {RootStackParamList} from '../../../shared/navigation/types';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -22,6 +28,7 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 export function LessonsCarousel() {
   const navigation = useNavigation<Nav>();
   const {isAuthorized, profile} = useAuth();
+  const {hasSubscription, subscription, loading: subLoading} = useSubscription();
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [loading, setLoading] = useState(true);
   const [handVisible, setHandVisible] = useState(true);
@@ -52,6 +59,20 @@ export function LessonsCarousel() {
 
   const openLesson = (lesson: Lesson) => {
     if (!isAuthorized) {
+      return;
+    }
+    const isStudent = !!profile?.isStudent;
+    if (subLoading) {
+      return;
+    }
+    if (
+      isTeacherLessonAccessBlocked(lesson, {
+        isStudent,
+        hasSubscription,
+        isFreeTariff: subscription?.subscribe_type_id === 1,
+      })
+    ) {
+      navigation.navigate('Subscription');
       return;
     }
     const isTeacher = profile?.role_id === 1 || profile?.role_id === 2;
@@ -89,7 +110,7 @@ export function LessonsCarousel() {
               style={styles.card}
               onPress={() => openLesson(lesson)}>
               <View style={styles.imageWrap}>
-                <Image
+                <SmartImage
                   source={getLessonCoverSource(lesson.image_path)}
                   style={styles.image}
                   resizeMode="cover"

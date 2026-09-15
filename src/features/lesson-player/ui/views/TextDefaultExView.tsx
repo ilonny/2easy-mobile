@@ -1,6 +1,8 @@
-import {Image, StyleSheet, View} from 'react-native';
+import {StyleSheet, View} from 'react-native';
 
 import {colors, radii} from '../../../../shared/config/theme';
+import {SmartImage} from '../../../../shared/ui';
+import {resolveMediaUri} from '../../../../shared/lib/mediaUri';
 import {ExHeader} from '../ExHeader';
 import {HtmlContent} from '../HtmlContent';
 import {ImageGallery} from '../ImageGallery';
@@ -30,8 +32,8 @@ export function TextDefaultExView({data}: Props) {
       )}
       <View style={styles.card}>
         {!!editorImage?.dataURL && (
-          <Image
-            source={{uri: editorImage.dataURL}}
+          <SmartImage
+            source={{uri: resolveMediaUri(editorImage.dataURL)}}
             style={styles.editorImg}
             resizeMode="contain"
           />

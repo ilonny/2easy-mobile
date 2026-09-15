@@ -12,7 +12,7 @@ import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
 import {useAuth} from '../../../entities/session';
-import type {Lesson} from '../../../entities/lesson';
+import {isTeacherLessonAccessBlocked, type Lesson} from '../../../entities/lesson';
 import {getJson} from '../../../shared/api';
 import {useI18n} from '../../../shared/i18n';
 import {colors, radii} from '../../../shared/config/theme';
@@ -34,8 +34,8 @@ export function GrammarScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<Nav>();
   const {t} = useI18n();
-  const {isAuthorized} = useAuth();
-  const {hasSubscription, loading: subLoading} = useSubscription();
+  const {isAuthorized, profile} = useAuth();
+  const {hasSubscription, subscription, loading: subLoading} = useSubscription();
   const {isTablet, pageGutter, pageContentMaxWidth, catalogRowWidth} =
     useLayout();
 
@@ -164,12 +164,27 @@ export function GrammarScreen() {
             <View style={{width: tileWidth, marginBottom: gap}}>
               <LessonCard
                 item={item}
-                onPress={() =>
+                locked={isTeacherLessonAccessBlocked(item, {
+                  isStudent: !!profile?.isStudent,
+                  hasSubscription,
+                  isFreeTariff: subscription?.subscribe_type_id === 1,
+                })}
+                onPress={() => {
+                  if (
+                    isTeacherLessonAccessBlocked(item, {
+                      isStudent: !!profile?.isStudent,
+                      hasSubscription,
+                      isFreeTariff: subscription?.subscribe_type_id === 1,
+                    })
+                  ) {
+                    navigation.navigate('Subscription');
+                    return;
+                  }
                   navigation.navigate('LessonViewer', {
                     lessonId: item.id,
                     from: 'Grammar',
-                  })
-                }
+                  });
+                }}
               />
             </View>
           )}

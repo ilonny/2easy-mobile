@@ -13,7 +13,8 @@ import {postJson} from '../../../shared/api';
 import {useI18n} from '../../../shared/i18n';
 import {colors, radii} from '../../../shared/config/theme';
 import {useKeyboardBottomOffset} from '../../../shared/lib/useKeyboardBottomOffset';
-import {Button} from '../../../shared/ui';
+import {useLayout} from '../../../shared/lib/layout';
+import {AppDialog, Button} from '../../../shared/ui';
 import {useSubscription} from '../../home/model/useSubscription';
 
 const REASON_KEYS = [
@@ -43,13 +44,19 @@ const REASON_KEYS = [
   },
 ] as const;
 
-export function SubscribeCancelButton() {
+type Props = {
+  disableUppercase?: boolean;
+};
+
+export function SubscribeCancelButton({disableUppercase}: Props) {
   const {t} = useI18n();
-  const {reload} = useSubscription();
+  const {hasPaidTariff, reload} = useSubscription();
+  const {isTablet, authFormMaxWidth, pageGutter} = useLayout();
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState('');
   const [otherText, setOtherText] = useState('');
   const [loading, setLoading] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
   const keyboardHeight = useKeyboardBottomOffset(open);
 
   const close = useCallback(() => {
@@ -62,7 +69,7 @@ export function SubscribeCancelButton() {
     const reasonMeta = REASON_KEYS.find(r => r.id === selected);
     const reasonLabel = reasonMeta
       ? t(reasonMeta.labelKey)
-      : t('subscriptionCancel.reasonNotSpecified');
+      : selected || t('subscriptionCancel.reasonNotSpecified');
     const reasonText =
       selected === 'other'
         ? `${reasonLabel}${otherText ? `: ${otherText}` : ''}`
@@ -70,42 +77,85 @@ export function SubscribeCancelButton() {
 
     setLoading(true);
     try {
-      await postJson({
+      const res = await postJson<{
+        success?: boolean;
+        message?: string;
+        successMessage?: string;
+      }>({
         path: '/subscription/cancel',
         isSecure: true,
         data: {cancelReason: reasonText},
       });
+      if (!res.success) {
+        setNotice(res.message || t('subscription.serverErrorTryLater'));
+        return;
+      }
       await reload();
       close();
+      setNotice(
+        res.successMessage || t('subscriptionCancel.cancelled'),
+      );
+    } catch {
+      setNotice(t('subscription.serverErrorTryLater'));
     } finally {
       setLoading(false);
     }
   };
 
+  if (!hasPaidTariff) {
+    return null;
+  }
+
   return (
     <>
       <Pressable onPress={() => setOpen(true)} hitSlop={8}>
-        <Text style={styles.link}>{t('subscriptionCancel.cancelButton')}</Text>
+        <Text
+          style={[
+            styles.link,
+            disableUppercase ? null : styles.linkUpper,
+          ]}>
+          {t('subscriptionCancel.cancelButton')}
+        </Text>
       </Pressable>
 
       <Modal visible={open} transparent animationType="fade" onRequestClose={close}>
         <Pressable
-          style={[styles.backdrop, {paddingBottom: keyboardHeight}]}
+          style={[
+            styles.backdrop,
+            {
+              paddingHorizontal: isTablet ? pageGutter : 16,
+              paddingBottom: keyboardHeight,
+            },
+          ]}
           onPress={close}>
-          <Pressable style={styles.card} onPress={e => e.stopPropagation()}>
+          <Pressable
+            style={[
+              styles.card,
+              isTablet && styles.cardTablet,
+              {maxWidth: authFormMaxWidth, width: '100%'},
+            ]}
+            onPress={e => e.stopPropagation()}>
             <ScrollView showsVerticalScrollIndicator={false}>
-              <Text style={styles.title}>
+              <Text style={[styles.title, isTablet && styles.titleTablet]}>
                 {t('subscriptionCancel.shareWhyTitle')}
               </Text>
-              <Text style={styles.sub}>{t('subscriptionCancel.itsValuable')}</Text>
+              <Text style={[styles.sub, isTablet && styles.subTablet]}>
+                {t('subscriptionCancel.itsValuable')}
+              </Text>
               {REASON_KEYS.map(reason => {
                 const active = selected === reason.id;
                 return (
                   <Pressable
                     key={reason.id}
                     onPress={() => setSelected(reason.id)}
-                    style={[styles.reason, active && styles.reasonActive]}>
-                    <Text style={styles.reasonText}>{t(reason.labelKey)}</Text>
+                    style={[
+                      styles.reason,
+                      isTablet && styles.reasonTablet,
+                      active && styles.reasonActive,
+                    ]}>
+                    <Text style={[styles.reasonText, isTablet && styles.reasonTextTablet]}>
+                      {t(reason.labelKey)}
+                    </Text>
                   </Pressable>
                 );
               })}
@@ -116,28 +166,44 @@ export function SubscribeCancelButton() {
                   placeholder={t('subscriptionCancel.placeholderOther')}
                   placeholderTextColor={colors.muted}
                   multiline
-                  style={styles.other}
+                  style={[styles.other, isTablet && styles.otherTablet]}
                 />
               ) : null}
-              <View style={styles.actions}>
+              <View style={[styles.actions, isTablet && styles.actionsTablet]}>
                 <View style={styles.actionHalf}>
                   <Button
                     title={t('subscriptionCancel.cancelButton')}
-                    onPress={onCancel}
+                    onPress={() => {
+                      void onCancel();
+                    }}
                     loading={loading}
-                    disabled={!selected}
+                    style={styles.cancelBtn}
                   />
                 </View>
-                <Pressable style={styles.stay} onPress={close}>
-                  <Text style={styles.stayText}>
-                    {t('subscriptionCancel.stayWith2Easy')}
-                  </Text>
-                </Pressable>
+                <View style={styles.actionHalf}>
+                  <Button
+                    title={t('subscriptionCancel.stayWith2Easy')}
+                    onPress={close}
+                  />
+                </View>
               </View>
             </ScrollView>
           </Pressable>
         </Pressable>
       </Modal>
+
+      <AppDialog
+        visible={!!notice}
+        message={notice || undefined}
+        onClose={() => setNotice(null)}
+        actions={[
+          {
+            label: t('common.close'),
+            variant: 'primary',
+            onPress: () => setNotice(null),
+          },
+        ]}
+      />
     </>
   );
 }
@@ -148,11 +214,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
     letterSpacing: 0.4,
     marginTop: 8,
+    paddingVertical: 8,
+  },
+  linkUpper: {
+    textTransform: 'uppercase',
   },
   backdrop: {
     flex: 1,
     backgroundColor: colors.modalBackdrop,
     justifyContent: 'center',
+    alignItems: 'center',
     padding: 16,
   },
   card: {
@@ -161,6 +232,11 @@ const styles = StyleSheet.create({
     padding: 20,
     maxHeight: '90%',
   },
+  cardTablet: {
+    padding: 28,
+    borderRadius: 24,
+    maxHeight: '84%',
+  },
   title: {
     fontSize: 20,
     fontWeight: '600',
@@ -168,11 +244,21 @@ const styles = StyleSheet.create({
     color: colors.text,
     marginBottom: 6,
   },
+  titleTablet: {
+    fontSize: 24,
+    lineHeight: 30,
+    marginBottom: 10,
+  },
   sub: {
     fontSize: 14,
     color: colors.muted,
     textAlign: 'center',
     marginBottom: 16,
+  },
+  subTablet: {
+    fontSize: 16,
+    lineHeight: 22,
+    marginBottom: 20,
   },
   reason: {
     borderWidth: 1,
@@ -180,6 +266,14 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     padding: 12,
     marginBottom: 8,
+    minHeight: 48,
+    justifyContent: 'center',
+  },
+  reasonTablet: {
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    minHeight: 56,
+    marginBottom: 10,
   },
   reasonActive: {
     borderColor: colors.primary,
@@ -189,6 +283,9 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: colors.text,
+  },
+  reasonTextTablet: {
+    fontSize: 17,
   },
   other: {
     minHeight: 80,
@@ -201,21 +298,24 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
     color: colors.text,
   },
+  otherTablet: {
+    minHeight: 100,
+    fontSize: 17,
+    padding: 16,
+  },
   actions: {
     marginTop: 12,
+    flexDirection: 'row',
     gap: 10,
   },
+  actionsTablet: {
+    marginTop: 20,
+    gap: 12,
+  },
   actionHalf: {
-    width: '100%',
+    flex: 1,
   },
-  stay: {
-    alignItems: 'center',
-    paddingVertical: 12,
-    backgroundColor: colors.primary,
-    borderRadius: radii.md,
-  },
-  stayText: {
-    color: colors.white,
-    fontWeight: '700',
+  cancelBtn: {
+    backgroundColor: '#6B7280',
   },
 });

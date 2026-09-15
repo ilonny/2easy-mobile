@@ -2,6 +2,39 @@ import {getJson, postJson, postMultipart} from '../../../shared/api';
 import {mapExerciseRow, isExVisible} from '../lib/exMappers';
 import type {Exercise, LessonDetail} from '../model/types';
 
+export type LessonSession = {
+  id: number;
+  lesson_id: number;
+  teacher_user_id: number;
+  student_ids: number[];
+  is_group: boolean;
+};
+
+export async function startLessonSession(
+  lessonId: number,
+  studentIds: number[],
+) {
+  return postJson<{success?: boolean; session?: LessonSession; message?: string}>({
+    path: '/lesson/session/start',
+    isSecure: true,
+    data: {lesson_id: lessonId, student_ids: studentIds},
+  });
+}
+
+export async function resolveLessonSession(
+  lessonId: number,
+  sessionId?: number,
+) {
+  const qs = new URLSearchParams({lesson_id: String(lessonId)});
+  if (sessionId) {
+    qs.set('session_id', String(sessionId));
+  }
+  return getJson<{success?: boolean; session?: LessonSession; message?: string}>({
+    path: `/lesson/session/resolve?${qs.toString()}`,
+    isSecure: true,
+  });
+}
+
 export async function fetchLesson(lessonId: number, studentId?: number) {
   const qs = new URLSearchParams({id: String(lessonId)});
   if (studentId) {

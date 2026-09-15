@@ -90,7 +90,7 @@ export function ProfileScreen() {
           </Pressable>
         </View>
 
-        <SubscribeCancelButton />
+        <SubscribeCancelButton disableUppercase />
 
         <View style={styles.informer}>
           <ProfileSubscribeInformer />

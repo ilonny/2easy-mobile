@@ -14,7 +14,7 @@ import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
 import {useAuth} from '../../../entities/session';
-import {isLessonLockedOnFreeTariff} from '../../../entities/lesson';
+import {isTeacherLessonAccessBlocked} from '../../../entities/lesson';
 import {useI18n} from '../../../shared/i18n';
 import {colors} from '../../../shared/config/theme';
 import type {RootStackParamList} from '../../../shared/navigation/types';
@@ -77,7 +77,7 @@ export function LessonEditorScreen({lessonId}: Props) {
   const {isAuthorized, profile} = useAuth();
   const {t} = useI18n();
   const {isTablet, pageGutter, pageContentMaxWidth} = useLayout();
-  const {hasSubscription, subscription} = useSubscription();
+  const {hasSubscription, subscription, loading: subLoading} = useSubscription();
 
   const [lesson, setLesson] = useState<LessonDetail | null>(null);
   const [exercises, setExercises] = useState<Exercise[]>([]);
@@ -128,17 +128,26 @@ export function LessonEditorScreen({lessonId}: Props) {
     void load();
   }, [load]);
 
-  const isLockedOnTrial = isLessonLockedOnFreeTariff(
-    lesson,
-    subscription?.subscribe_type_id === 1,
-    !!profile?.isStudent,
-  );
+  const isLockedOnTrial = isTeacherLessonAccessBlocked(lesson, {
+    isStudent: !!profile?.isStudent,
+    hasSubscription,
+    isFreeTariff: subscription?.subscribe_type_id === 1,
+  });
 
   useEffect(() => {
+    if (subLoading || !isAuthorized || profile?.isStudent) {
+      return;
+    }
     if (isLockedOnTrial) {
       navigation.replace('Subscription');
     }
-  }, [isLockedOnTrial, navigation]);
+  }, [
+    isAuthorized,
+    isLockedOnTrial,
+    navigation,
+    profile?.isStudent,
+    subLoading,
+  ]);
 
   useEffect(() => {
     void (async () => {
@@ -370,7 +379,10 @@ export function LessonEditorScreen({lessonId}: Props) {
     setStartStudentsOpen(true);
   };
 
-  const onStartLessonWithStudents = (selectedIds: number[]) => {
+  const onStartLessonWithStudents = (
+    selectedIds: number[],
+    sessionId?: number,
+  ) => {
     setStartStudentsOpen(false);
     if (lessonIsHomework) {
       const studentId = Number(selectedIds[0] || 0);
@@ -404,6 +416,7 @@ export function LessonEditorScreen({lessonId}: Props) {
       lessonId,
       from: 'Lessons',
       ...(selectedIds.length === 1 ? {studentId: selectedIds[0]} : {}),
+      ...(sessionId ? {sessionId} : {}),
     });
   };
 
@@ -447,7 +460,15 @@ export function LessonEditorScreen({lessonId}: Props) {
         ) : error ? (
           <View style={styles.centered}>
             <Text style={styles.error}>{error}</Text>
-            <CreateLessonButton />
+            <CreateLessonButton
+              beforeOpen={() => {
+                if (!hasSubscription) {
+                  navigation.navigate('Subscription');
+                  return false;
+                }
+                return true;
+              }}
+            />
           </View>
         ) : (
           <LessonScrollProvider

@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import RenderHTML, {
   defaultSystemFonts,
+  type CustomBlockRenderer,
   type MixedStyleDeclaration,
 } from 'react-native-render-html';
 import {WebView, type WebViewMessageEvent} from 'react-native-webview';
@@ -16,6 +17,8 @@ import {WEB_URL} from '../../../shared/config';
 import {fontFamily, MANROPE_SYSTEM_FONTS} from '../../../shared/config/fonts';
 import {colors} from '../../../shared/config/theme';
 import {useLayout} from '../../../shared/lib/layout';
+import {htmlContainsSvg, resolveMediaUri} from '../../../shared/lib/mediaUri';
+import {SmartImage} from '../../../shared/ui/SmartImage';
 import {useDictionarySelection} from '../../dictionary/model/DictionarySelectionContext';
 
 type Props = {
@@ -25,8 +28,7 @@ type Props = {
   contentWidth?: number;
 };
 
-const BAD_IMG_SRC =
-  /(?:about:\/+|_next\/static\/|data:image\/svg|\.svg(?:\?|#|$))/i;
+const BAD_IMG_SRC = /(?:about:\/+|javascript:)/i;
 
 const HTML_TAG_RE = /<\/?[a-z][\s\S]*>/i;
 
@@ -56,34 +58,23 @@ export function stripHtml(value?: string | null): string {
 }
 
 function resolveUrl(src: string, base: string): string {
-  const trimmed = (src || '').trim();
-  if (!trimmed) {
-    return '';
-  }
-  if (/^https?:\/\//i.test(trimmed)) {
-    return trimmed;
-  }
-  if (trimmed.startsWith('//')) {
-    return `https:${trimmed}`;
-  }
-  if (/^(about:|data:|blob:|file:)/i.test(trimmed)) {
-    return '';
-  }
-  try {
-    return new URL(trimmed, base).toString();
-  } catch {
-    return '';
-  }
+  return resolveMediaUri(src, base);
 }
 
 function isSupportedImageUrl(url: string): boolean {
-  if (!url || !/^https?:\/\//i.test(url)) {
+  if (!url) {
     return false;
   }
   if (BAD_IMG_SRC.test(url)) {
     return false;
   }
-  return true;
+  if (/^data:image\//i.test(url)) {
+    return true;
+  }
+  if (/^https?:\/\//i.test(url)) {
+    return true;
+  }
+  return false;
 }
 
 function escapePlain(text: string): string {
@@ -128,6 +119,28 @@ export function normalizeLessonHtml(
 export function sanitizeLessonHtml(html: string, baseUrl = WEB_URL): string {
   return normalizeLessonHtml(html, baseUrl);
 }
+
+const HtmlImgRenderer: CustomBlockRenderer = ({tnode}) => {
+  const src = tnode.attributes.src;
+  if (!src) {
+    return null;
+  }
+  return (
+    <SmartImage
+      source={{uri: src}}
+      resizeMode="contain"
+      style={htmlImgStyle}
+    />
+  );
+};
+
+const htmlImgStyle = {
+  width: '100%' as const,
+  height: 220,
+  marginVertical: 8,
+};
+
+const htmlRenderers = {img: HtmlImgRenderer};
 
 const defaultTagsStyles: Record<string, MixedStyleDeclaration> = {
   body: {margin: 0, padding: 0, fontFamily: fontFamily.regular},
@@ -180,12 +193,15 @@ function buildSelectableDocument(bodyHtml: string, fontSize: number) {
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<meta name="color-scheme" content="only light" />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" />
 <style>
+  :root { color-scheme: only light; }
   html, body {
     margin: 0;
     padding: 0;
     background: transparent;
+    color-scheme: only light;
     color: ${colors.text};
     font-family: 'Manrope', ${JSON.stringify(fontFamily.regular)}, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     font-size: ${fontSize}px;
@@ -197,6 +213,7 @@ function buildSelectableDocument(bodyHtml: string, fontSize: number) {
     user-select: text;
   }
   img { max-width: 100%; height: auto; }
+  svg { max-width: 100%; height: auto; display: block; }
   * { max-width: 100%; box-sizing: border-box; }
   a { color: ${colors.primary}; }
   p { margin: 0 0 8px; }
@@ -267,8 +284,13 @@ function buildSelectableDocument(bodyHtml: string, fontSize: number) {
     touchTimer = setTimeout(reportSelection, 420);
   });
   window.addEventListener('load', reportHeight);
+  document.querySelectorAll('img').forEach(function (img) {
+    img.addEventListener('load', reportHeight);
+    img.addEventListener('error', reportHeight);
+  });
   setTimeout(reportHeight, 50);
   setTimeout(reportHeight, 250);
+  setTimeout(reportHeight, 800);
   if (window.ResizeObserver) {
     new ResizeObserver(reportHeight).observe(document.body);
   }
@@ -397,8 +419,10 @@ export function HtmlContent({html, baseStyle, contentWidth}: Props) {
     ...(baseStyle as object),
   } as TextStyle;
   const fontSize = typeof base.fontSize === 'number' ? base.fontSize : 16;
+  const needsWebView =
+    !!dictionarySelection?.enabled || htmlContainsSvg(cleaned);
 
-  const inner = dictionarySelection?.enabled ? (
+  const inner = needsWebView ? (
     <SelectableHtmlWebView
       html={cleaned}
       contentWidth={measured}
@@ -418,6 +442,7 @@ export function HtmlContent({html, baseStyle, contentWidth}: Props) {
         ...(baseStyle as object),
       }}
       tagsStyles={defaultTagsStyles}
+      renderers={htmlRenderers}
       enableExperimentalMarginCollapsing
       renderersProps={renderersProps}
       defaultTextProps={{selectable: true}}

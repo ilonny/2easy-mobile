@@ -16,9 +16,11 @@ import {TWO_EASY_USER_ID, type Lesson} from '../../../entities/lesson';
 import {useI18n} from '../../../shared/i18n';
 import {colors} from '../../../shared/config/theme';
 import {catalogTileWidth, useLayout} from '../../../shared/lib/layout';
-import type {StudentsStackParamList} from '../../../shared/navigation/types';
+import type {RootStackParamList} from '../../../shared/navigation/types';
+import {openSectionRoute} from '../../../shared/navigation/resetToLessonPlans';
 import {AppDialog, Breadcrumbs} from '../../../shared/ui';
 import {AppHeader} from '../../app-shell';
+import {useSubscription} from '../../home/model/useSubscription';
 import {
   CreateIndividualHomeworkModal,
   openStudentHomework,
@@ -34,7 +36,7 @@ import {
 import {LessonCard} from '../../lesson-plans/ui/LessonCard';
 import {saveStartLessonSelectedIds} from '../../lesson-player/lib/startLessonSelection';
 
-type Nav = NativeStackNavigationProp<StudentsStackParamList>;
+type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 type Props = {
   courseId: number;
@@ -44,7 +46,8 @@ type Props = {
 export function StudentCourseScreen({courseId, studentId}: Props) {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<Nav>();
-  const {profile} = useAuth();
+  const {profile, isAuthorized} = useAuth();
+  const {hasSubscription, loading: subLoading} = useSubscription();
   const {t} = useI18n();
   const {pageGutter, pageContentMaxWidth, catalogColumns, catalogRowWidth} =
     useLayout();
@@ -53,6 +56,20 @@ export function StudentCourseScreen({courseId, studentId}: Props) {
   const isTeacher = profile?.role_id === 1 || profile?.role_id === 2;
   const isStudentSelf =
     !!profile?.isStudent && Number(profile.studentId) === Number(studentId);
+
+  const requireTeacherSubscription = () => {
+    if (!isTeacher) {
+      return true;
+    }
+    if (subLoading) {
+      return false;
+    }
+    if (!hasSubscription) {
+      openSectionRoute(navigation, 'Subscription', isAuthorized);
+      return false;
+    }
+    return true;
+  };
 
   const [course, setCourse] = useState<Course | null>(null);
   const [lessons, setLessons] = useState<Lesson[]>([]);
@@ -158,6 +175,9 @@ export function StudentCourseScreen({courseId, studentId}: Props) {
   };
 
   const onHomeworkPress = async (lesson: Lesson) => {
+    if (isTeacher && !requireTeacherSubscription()) {
+      return;
+    }
     const is2easy = Number(lesson.user_id) === TWO_EASY_USER_ID;
     const resolved = resolvedHw[lesson.id];
     const knownId =
@@ -278,6 +298,9 @@ export function StudentCourseScreen({courseId, studentId}: Props) {
                   locked={locked}
                   onPress={() => {
                     if (locked && profile?.isStudent) {
+                      return;
+                    }
+                    if (isTeacher && !requireTeacherSubscription()) {
                       return;
                     }
                     if (isTeacher) {

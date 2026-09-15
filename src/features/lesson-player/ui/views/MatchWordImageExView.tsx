@@ -8,8 +8,8 @@ import {
 
 import {colors, radii} from '../../../../shared/config/theme';
 import {useLayout} from '../../../../shared/lib/layout';
+import {resolveMediaUri} from '../../../../shared/lib/mediaUri';
 import {ZoomableImage} from '../../../../shared/ui/ZoomableImage';
-import {getImageUrl} from '../../lib/getImageUrl';
 import {useLessonPlayer} from '../../model/LessonPlayerContext';
 import {useExAnswer} from '../../model/useExAnswer';
 import {ExHeader} from '../ExHeader';
@@ -31,20 +31,7 @@ type ImgItem = {
 };
 
 function resolveUri(item: ImgItem): string {
-  const raw = item.dataURL || item.path || '';
-  if (!raw) {
-    return '';
-  }
-  if (
-    /^https?:\/\//i.test(raw) ||
-    /^file:\/\//i.test(raw) ||
-    raw.startsWith('content://') ||
-    raw.startsWith('ph://') ||
-    raw.startsWith('data:')
-  ) {
-    return raw;
-  }
-  return getImageUrl(raw);
+  return resolveMediaUri(item.dataURL || item.path || '');
 }
 
 export function MatchWordImageExView({data}: Props) {

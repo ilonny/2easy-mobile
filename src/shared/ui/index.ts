@@ -6,6 +6,7 @@ export {Panel} from './Panel';
 export {AuthScreenLayout} from './AuthScreenLayout';
 export {LanguageSwitcher} from './LanguageSwitcher';
 export {ZoomableImage} from './ZoomableImage';
+export {SmartImage} from './SmartImage';
 export {EyeIcon} from './EyeIcon';
 export {Breadcrumbs, type BreadcrumbCrumb} from './Breadcrumbs';
 export {AppDialog, type AppDialogAction} from './AppDialog';

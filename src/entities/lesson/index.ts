@@ -5,7 +5,7 @@ export {
   matchesLevelFilter,
   matchesSearch,
 } from './lib/filters';
-export {isLessonLockedOnFreeTariff, isLessonMarkedFree, sortLessonsFreeFirst} from './lib/access';
+export {isLessonLockedOnFreeTariff, isLessonMarkedFree, isTeacherLessonAccessBlocked, sortLessonsFreeFirst} from './lib/access';
 export type {TrialLockLesson} from './lib/access';
 export {
   getLessonCoverSource,

@@ -15,14 +15,15 @@ export function useSubscription() {
   const [subscription, setSubscription] = useState<SubscriptionInfo | null>(
     null,
   );
-  const [loading, setLoading] = useState(false);
+  const [resolved, setResolved] = useState(false);
 
   const reload = useCallback(async () => {
     if (!isAuthorized || profile?.isStudent) {
       setSubscription(null);
+      setResolved(true);
       return;
     }
-    setLoading(true);
+    setResolved(false);
     try {
       const res = await getJson<SubscriptionInfo>({
         path: '/subscription',
@@ -32,7 +33,7 @@ export function useSubscription() {
     } catch {
       setSubscription(null);
     } finally {
-      setLoading(false);
+      setResolved(true);
     }
   }, [isAuthorized, profile?.isStudent]);
 
@@ -49,10 +50,12 @@ export function useSubscription() {
   const hasPaidTariff = !!(
     subscription?.subscribe_type_id && subscription.subscribe_type_id !== 1
   );
+  const waitingForTeacherSub =
+    isAuthorized && !profile?.isStudent && !resolved;
 
   return {
     subscription,
-    loading: loading || authIsLoading,
+    loading: authIsLoading || waitingForTeacherSub,
     hasSubscription,
     hasPaidTariff,
     reload,

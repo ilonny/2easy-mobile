@@ -299,6 +299,7 @@ export const en: TranslationTree = {
     participantsActiveHint:
       '*The student highlighted in light purple is the one whose answers are shown on screen.',
     lessonChat: 'Lesson chat',
+    selectStudentForChat: 'Select a student in the participants list',
     chatShort: 'Chat',
     typeMessage: 'Type a message',
     chatSend: 'Send',
@@ -437,6 +438,17 @@ export const en: TranslationTree = {
     promocode: 'Promo code',
     promocodeAlreadyUsed: 'This promo code has already been used',
     promocodeInvalid: 'Promo code is invalid or does not exist',
+    promocodeApplied: 'Promo code applied',
+    apply: 'Apply',
+    discount: 'Discount',
+    total: 'Total',
+    payWithRfCard: 'Pay with a Russian card',
+    payWithNonRfCard: 'Pay with a non-Russian card',
+    or: 'or',
+    serverErrorTryLater:
+      'A server error occurred. Try again later or contact support',
+    phoneRequired: 'Phone number is required',
+    subscriptionPayment: '2EASY subscription payment',
     perMonth: '/ month',
     per3Months: '/ 3 months',
     perYear: '/ year',
@@ -658,6 +670,9 @@ export const en: TranslationTree = {
     reasonExpensive: 'subscription is too expensive',
     reasonOther: 'other reason',
     reasonNotSpecified: 'not specified',
+    cancelled:
+      'Subscription cancelled. You can keep using the service until the paid period ends',
+    alreadyCancelled: 'Your subscription was already cancelled',
   },
 
   legal: {

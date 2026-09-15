@@ -1,7 +1,6 @@
 import {useCallback, useMemo, useRef, useState} from 'react';
 import {
   Animated,
-  Image,
   Modal,
   PanResponder,
   Pressable,
@@ -16,6 +15,9 @@ import {
   type StyleProp,
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
+
+import {isSvgUri, uriFromSource} from '../lib/mediaUri';
+import {SmartImage} from './SmartImage';
 
 type Props = {
   source: ImageSourcePropType;
@@ -365,6 +367,33 @@ function PinchPanImage({
     [onDismiss, backdropOpacity, canSwipePage, onSwipePage],
   );
 
+  const uri = uriFromSource(source);
+  const svg = isSvgUri(uri);
+  const [useWeb, setUseWeb] = useState(svg);
+
+  if (useWeb || svg) {
+    return (
+      <Animated.View
+        {...panResponder.panHandlers}
+        style={[
+          styles.fullImage,
+          {width: screenW, height: imageH},
+          {
+            transform: [{translateX}, {translateY}, {scale}],
+          },
+        ]}>
+        {uri ? (
+          <SmartImage
+            source={source}
+            style={styles.fill}
+            resizeMode="contain"
+            pointerEvents="none"
+          />
+        ) : null}
+      </Animated.View>
+    );
+  }
+
   return (
     <Animated.Image
       {...panResponder.panHandlers}
@@ -377,6 +406,11 @@ function PinchPanImage({
         },
       ]}
       resizeMode="contain"
+      onError={() => {
+        if (uri) {
+          setUseWeb(true);
+        }
+      }}
     />
   );
 }
@@ -440,7 +474,9 @@ export function ZoomableImage({
   );
 
   if (!zoomable) {
-    return <Image source={source} style={style} resizeMode={resizeMode} />;
+    return (
+      <SmartImage source={source} style={style} resizeMode={resizeMode} />
+    );
   }
 
   return (
@@ -452,7 +488,12 @@ export function ZoomableImage({
         accessibilityRole="imagebutton"
         accessibilityLabel="Zoom image"
         style={style as object}>
-        <Image source={source} style={styles.fill} resizeMode={resizeMode} />
+        <SmartImage
+          source={source}
+          style={styles.fill}
+          resizeMode={resizeMode}
+          pointerEvents="none"
+        />
       </TouchableOpacity>
 
       <Modal

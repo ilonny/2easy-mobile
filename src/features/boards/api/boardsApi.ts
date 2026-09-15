@@ -84,10 +84,14 @@ export async function deleteBoardRelation(relationId: number) {
 export async function fetchLessonBoardScope(
   lessonId: number,
   studentId?: number,
+  sessionId?: number,
 ) {
   const qs = new URLSearchParams({lesson_id: String(lessonId)});
   if (studentId) {
     qs.set('student_id', String(studentId));
+  }
+  if (sessionId) {
+    qs.set('session_id', String(sessionId));
   }
   return getJson<LessonBoardScopeResponse>({
     path: `/board/lesson/scope?${qs.toString()}`,
@@ -95,10 +99,17 @@ export async function fetchLessonBoardScope(
   });
 }
 
-export async function fetchLessonBoard(lessonId: number, studentId?: number) {
+export async function fetchLessonBoard(
+  lessonId: number,
+  studentId?: number,
+  sessionId?: number,
+) {
   const qs = new URLSearchParams({lesson_id: String(lessonId)});
   if (studentId) {
     qs.set('student_id', String(studentId));
+  }
+  if (sessionId) {
+    qs.set('session_id', String(sessionId));
   }
   return getJson<{board?: Board}>({
     path: `/board/lesson?${qs.toString()}`,

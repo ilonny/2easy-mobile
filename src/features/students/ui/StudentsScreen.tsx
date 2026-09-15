@@ -16,10 +16,11 @@ import {useAuth} from '../../../entities/session';
 import {useI18n} from '../../../shared/i18n';
 import {colors} from '../../../shared/config/theme';
 import {useLayout} from '../../../shared/lib/layout';
-import type {StudentsStackParamList} from '../../../shared/navigation/types';
-import {goHome} from '../../../shared/navigation/resetToLessonPlans';
+import type {RootStackParamList} from '../../../shared/navigation/types';
+import {goHome, openSectionRoute} from '../../../shared/navigation/resetToLessonPlans';
 import {AppDialog, Breadcrumbs, Button} from '../../../shared/ui';
 import {AppHeader} from '../../app-shell';
+import {useSubscription} from '../../home/model/useSubscription';
 import {
   deleteStudent,
   fetchStudents,
@@ -28,7 +29,7 @@ import {
 import {CreateStudentModal} from './CreateStudentModal';
 import {StudentCard} from './StudentCard';
 
-type Nav = NativeStackNavigationProp<StudentsStackParamList>;
+type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 type NoticeState = {
   title?: string;
@@ -39,6 +40,7 @@ export function StudentsScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<Nav>();
   const {isAuthorized} = useAuth();
+  const {hasSubscription, loading: subLoading} = useSubscription();
   const {t} = useI18n();
   const {pageGutter, pageContentMaxWidth} = useLayout();
   const [students, setStudents] = useState<Student[]>([]);
@@ -66,12 +68,29 @@ export function StudentsScreen() {
     void load();
   }, [load]);
 
+  const requireSubscription = () => {
+    if (subLoading) {
+      return false;
+    }
+    if (!hasSubscription) {
+      openSectionRoute(navigation, 'Subscription', isAuthorized);
+      return false;
+    }
+    return true;
+  };
+
   const openCreate = () => {
+    if (!requireSubscription()) {
+      return;
+    }
     setEditing(null);
     setModalOpen(true);
   };
 
   const openEdit = (student: Student) => {
+    if (!requireSubscription()) {
+      return;
+    }
     setEditing(student);
     setModalOpen(true);
   };
@@ -158,7 +177,12 @@ export function StudentsScreen() {
               student={item}
               onOpenCabinet={openCabinet}
               onEdit={openEdit}
-              onDelete={setPendingDelete}
+              onDelete={student => {
+                if (!requireSubscription()) {
+                  return;
+                }
+                setPendingDelete(student);
+              }}
             />
           )}
           ListFooterComponent={

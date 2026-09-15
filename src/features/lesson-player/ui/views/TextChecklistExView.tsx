@@ -1,6 +1,8 @@
-import {Image, Pressable, StyleSheet, Text, View} from 'react-native';
+import {Pressable, StyleSheet, Text, View} from 'react-native';
 
 import {colors, radii} from '../../../../shared/config/theme';
+import {SmartImage} from '../../../../shared/ui';
+import {resolveMediaUri} from '../../../../shared/lib/mediaUri';
 import {useLessonPlayer} from '../../model/LessonPlayerContext';
 import {useExAnswer} from '../../model/useExAnswer';
 import {ExHeader} from '../ExHeader';
@@ -71,8 +73,8 @@ export function TextChecklistExView({data}: Props) {
           })}
         </View>
         {!!editorImage?.dataURL && (
-          <Image
-            source={{uri: editorImage.dataURL}}
+          <SmartImage
+            source={{uri: resolveMediaUri(editorImage.dataURL)}}
             style={styles.sideImg}
             resizeMode="contain"
           />

@@ -1,14 +1,8 @@
-import {API_BASE_URL} from '../../../shared/config';
+import {resolveMediaUri} from '../../../shared/lib/mediaUri';
 import type {Lesson} from '../model/types';
 
 export function getLessonImageUrl(path?: string): string {
-  if (!path) {
-    return '';
-  }
-  if (/^https?:\/\//i.test(path)) {
-    return path;
-  }
-  return `${API_BASE_URL}/${path.replace(/^\//, '')}`;
+  return resolveMediaUri(path);
 }
 
 export function matchesLevelFilter(lesson: Lesson, filter: string): boolean {

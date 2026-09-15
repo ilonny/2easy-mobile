@@ -19,7 +19,7 @@ import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
 import {useAuth} from '../../../entities/session';
-import {isLessonLockedOnFreeTariff, sortLessonsFreeFirst, TWO_EASY_USER_ID, type Lesson} from '../../../entities/lesson';
+import {isLessonLockedOnFreeTariff, isTeacherLessonAccessBlocked, sortLessonsFreeFirst, TWO_EASY_USER_ID, type Lesson} from '../../../entities/lesson';
 import type {RootStackParamList} from '../../../shared/navigation/types';
 import {useI18n} from '../../../shared/i18n';
 import {colors, radii} from '../../../shared/config/theme';
@@ -63,7 +63,8 @@ export function LessonPlansScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<Nav>();
   const {isAuthorized, profile} = useAuth();
-  const {hasSubscription, hasPaidTariff, subscription} = useSubscription();
+  const {hasSubscription, subscription, loading: subLoading} =
+    useSubscription();
   const {t} = useI18n();
   const isTeacher = profile?.role_id === 1 || profile?.role_id === 2;
   const isStudent = !!profile?.isStudent;
@@ -229,12 +230,35 @@ export function LessonPlansScreen() {
     setRefreshing(false);
   };
 
+  const requireSubscription = () => {
+    if (isStudent) {
+      return true;
+    }
+    if (subLoading) {
+      return false;
+    }
+    if (!hasSubscription) {
+      navigation.navigate('Subscription');
+      return false;
+    }
+    return true;
+  };
+
   const onPressLesson = (lesson: Lesson) => {
     if (!isAuthorized) {
       setTryNowVisible(true);
       return;
     }
-    if (isLessonLockedOnFreeTariff(lesson, isFreeTariff, isStudent)) {
+    if (subLoading) {
+      return;
+    }
+    if (
+      isTeacherLessonAccessBlocked(lesson, {
+        isStudent,
+        hasSubscription,
+        isFreeTariff,
+      })
+    ) {
       navigation.navigate('Subscription');
       return;
     }
@@ -261,8 +285,7 @@ export function LessonPlansScreen() {
       setTryNowVisible(true);
       return;
     }
-    if (!hasSubscription) {
-      setNotice(t('lessons.needSubscriptionForActions'));
+    if (!requireSubscription()) {
       return;
     }
     setMenuCourse(null);
@@ -274,8 +297,7 @@ export function LessonPlansScreen() {
       setTryNowVisible(true);
       return;
     }
-    if (!hasSubscription) {
-      setNotice(t('lessons.needSubscriptionForActions'));
+    if (!requireSubscription()) {
       return;
     }
     setMenuLesson(null);
@@ -283,8 +305,7 @@ export function LessonPlansScreen() {
   };
 
   const onBoardMenuPress = (board: Board) => {
-    if (!hasPaidTariff && !hasSubscription) {
-      setNotice(t('boards.subscriptionRequired'));
+    if (!requireSubscription()) {
       return;
     }
     setMenuLesson(null);
@@ -293,8 +314,7 @@ export function LessonPlansScreen() {
   };
 
   const openCreateBoard = () => {
-    if (!hasPaidTariff) {
-      setNotice(t('boards.subscriptionRequired'));
+    if (!requireSubscription()) {
       return;
     }
     setCreateBoardOpen(true);
@@ -566,12 +586,19 @@ export function LessonPlansScreen() {
 
           {isAuthorized && tab === 'my' ? (
             <View style={styles.createWrap}>
-              <CreateLessonButton />
+              <CreateLessonButton
+                beforeOpen={() => requireSubscription()}
+              />
               {isTeacher ? (
                 <Button
                   title={t('lessons.createCourse')}
                   variant="secondary"
-                  onPress={() => setCreateCourseOpen(true)}
+                  onPress={() => {
+                    if (!requireSubscription()) {
+                      return;
+                    }
+                    setCreateCourseOpen(true);
+                  }}
                 />
               ) : null}
               {isTeacher ? (
@@ -588,7 +615,12 @@ export function LessonPlansScreen() {
             <View style={styles.createWrap}>
               <Button
                 title={t('lessons.createCourse')}
-                onPress={() => setCreateCourseOpen(true)}
+                onPress={() => {
+                  if (!requireSubscription()) {
+                    return;
+                  }
+                  setCreateCourseOpen(true);
+                }}
               />
             </View>
           ) : null}

@@ -305,6 +305,7 @@ export const ru = {
     participantsActiveHint:
       '*Светло-фиолетовым отмечен ученик, ответы которого отображаются на экране.',
     lessonChat: 'Чат урока',
+    selectStudentForChat: 'Выберите ученика в списке участников',
     chatShort: 'Чат',
     typeMessage: 'Введите сообщение',
     chatSend: 'Отправить',
@@ -444,6 +445,17 @@ export const ru = {
     promocode: 'Промокод',
     promocodeAlreadyUsed: 'Этот промокод уже был использован',
     promocodeInvalid: 'Промокод не действителен или не существует',
+    promocodeApplied: 'Промокод применен',
+    apply: 'Применить',
+    discount: 'Скидка',
+    total: 'Итого',
+    payWithRfCard: 'Оплатить картой РФ',
+    payWithNonRfCard: 'Оплатить картой не РФ',
+    or: 'или',
+    serverErrorTryLater:
+      'Внутренняя ошибка сервера. Попробуйте позже, или свяжитесь с техподдержкой',
+    phoneRequired: 'Номер телефона обязательное поле',
+    subscriptionPayment: 'Оплата подписки 2EASY',
     perMonth: '/ месяц',
     per3Months: '/ 3 месяца',
     perYear: '/ год',
@@ -666,6 +678,9 @@ export const ru = {
     reasonExpensive: 'слишком дорогая подписка',
     reasonOther: 'другая причина',
     reasonNotSpecified: 'не указана',
+    cancelled:
+      'Подписка успешно отменена. Вы можете продолжать пользоваться сервисом до окончания оплаченного периода',
+    alreadyCancelled: 'Ваша подписка уже была отменена',
   },
 
   legal: {

@@ -1,17 +1,7 @@
-import {API_URL} from '../../../shared/config';
+import {resolveMediaUri} from '../../../shared/lib/mediaUri';
 
 export function getImageUrl(path?: string | null): string {
-  if (!path) {
-    return '';
-  }
-  if (/^https?:\/\//i.test(path)) {
-    return path;
-  }
-  if (path.includes('608dfa18-3eae-4574-a997-0a7441c16d33.selstorage.ru')) {
-    return path;
-  }
-  const base = API_URL.replace(/\/api$/, '');
-  return `${base}/${path.replace(/^\//, '')}`;
+  return resolveMediaUri(path);
 }
 
 export function uuidv4(): string {

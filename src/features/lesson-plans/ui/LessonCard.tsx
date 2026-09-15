@@ -1,7 +1,8 @@
-import {ActivityIndicator, Image, Pressable, StyleSheet, Text, View} from 'react-native';
+import {ActivityIndicator, Pressable, StyleSheet, Text, View} from 'react-native';
 
 import {getLessonCoverSource} from '../../../entities/lesson';
 import {colors, radii} from '../../../shared/config/theme';
+import {SmartImage} from '../../../shared/ui';
 
 export type CatalogCardItem = {
   id: number;
@@ -47,7 +48,7 @@ export function LessonCard({
         onLongPress={onMenuPress}
         style={({pressed}) => [styles.card, pressed && styles.pressed]}>
         <View style={styles.imageWrap}>
-          <Image
+          <SmartImage
             source={getLessonCoverSource(item.image_path)}
             style={styles.image}
             resizeMode="cover"

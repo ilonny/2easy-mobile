@@ -10,12 +10,17 @@ import {
 } from 'react';
 import {
   Animated,
+  KeyboardAvoidingView,
+  Platform,
   StyleSheet,
   View,
   type ScrollViewProps,
+  type StyleProp,
+  type ViewStyle,
 } from 'react-native';
 import {ScrollView as GHScrollView} from 'react-native-gesture-handler';
 
+import {useKeyboardBottomOffset} from '../../../shared/lib/useKeyboardBottomOffset';
 import {ChipDragProvider} from '../ui/interaction/ChipDragContext';
 
 type StickyPayload = {
@@ -159,9 +164,13 @@ export function LessonScrollProvider({
 export function LessonScrollView({
   children,
   onScroll: onScrollProp,
+  contentContainerStyle,
+  keyboardShouldPersistTaps,
+  keyboardDismissMode,
   ...props
 }: ScrollViewProps & {children?: ReactNode}) {
   const {scrollY} = useLessonScroll();
+  const keyboardHeight = useKeyboardBottomOffset();
   const onScroll = useMemo(
     () =>
       Animated.event([{nativeEvent: {contentOffset: {y: scrollY}}}], {
@@ -171,13 +180,39 @@ export function LessonScrollView({
     [scrollY, onScrollProp],
   );
 
+  const extraBottom =
+    keyboardHeight > 0
+      ? Platform.OS === 'android'
+        ? keyboardHeight
+        : 24
+      : 0;
+  const flatContent = StyleSheet.flatten(contentContainerStyle) as
+    | ViewStyle
+    | undefined;
+  const basePaddingBottom =
+    typeof flatContent?.paddingBottom === 'number'
+      ? flatContent.paddingBottom
+      : 0;
+
   return (
-    <AnimatedGHScrollView
-      {...props}
-      scrollEventThrottle={16}
-      onScroll={onScroll}>
-      {children}
-    </AnimatedGHScrollView>
+    <KeyboardAvoidingView
+      style={styles.flex}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <AnimatedGHScrollView
+        {...props}
+        contentContainerStyle={
+          [
+            contentContainerStyle,
+            extraBottom ? {paddingBottom: basePaddingBottom + extraBottom} : null,
+          ] as StyleProp<ViewStyle>
+        }
+        keyboardShouldPersistTaps={keyboardShouldPersistTaps ?? 'handled'}
+        keyboardDismissMode={keyboardDismissMode ?? 'interactive'}
+        scrollEventThrottle={16}
+        onScroll={onScroll}>
+        {children}
+      </AnimatedGHScrollView>
+    </KeyboardAvoidingView>
   );
 }
 

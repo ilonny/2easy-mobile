@@ -22,8 +22,8 @@ import {
 import {useI18n} from '../../../shared/i18n';
 import {colors, radii} from '../../../shared/config/theme';
 import {catalogTileWidth, useLayout} from '../../../shared/lib/layout';
-import type {StudentsStackParamList} from '../../../shared/navigation/types';
-import {goHome} from '../../../shared/navigation/resetToLessonPlans';
+import type {RootStackParamList} from '../../../shared/navigation/types';
+import {goHome, openSectionRoute} from '../../../shared/navigation/resetToLessonPlans';
 import {
   ActionMenuModal,
   AppDialog,
@@ -32,6 +32,7 @@ import {
   type ActionMenuItem,
 } from '../../../shared/ui';
 import {AppHeader} from '../../app-shell';
+import {useSubscription} from '../../home/model/useSubscription';
 import {DictionaryModal} from '../../dictionary/ui/DictionaryModal';
 import {
   CreateIndividualHomeworkModal,
@@ -43,6 +44,7 @@ import {
 import {fetchSecureLessons} from '../../lesson-plans/api/lessonsApi';
 import {fetchCourses, type Course} from '../../lesson-plans/api/coursesApi';
 import {LessonCard} from '../../lesson-plans/ui/LessonCard';
+import {startLessonSession} from '../../lesson-player/api/lessonApi';
 import {saveStartLessonSelectedIds} from '../../lesson-player/lib/startLessonSelection';
 import {
   deleteCourseRelation,
@@ -57,7 +59,7 @@ import {AttachMaterialToStudentModal} from './AttachMaterialToStudentModal';
 import {CreateStudentModal} from './CreateStudentModal';
 import {StudentCard} from './StudentCard';
 
-type Nav = NativeStackNavigationProp<StudentsStackParamList>;
+type Nav = NativeStackNavigationProp<RootStackParamList>;
 type CabinetTab = 'lessons' | 'courses';
 
 type Props = {
@@ -83,7 +85,8 @@ function statusMark(
 export function StudentCabinetScreen({studentId}: Props) {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<Nav>();
-  const {profile} = useAuth();
+  const {profile, isAuthorized} = useAuth();
+  const {hasSubscription, loading: subLoading} = useSubscription();
   const {t} = useI18n();
   const {pageGutter, pageContentMaxWidth, catalogColumns, catalogRowWidth} =
     useLayout();
@@ -93,6 +96,20 @@ export function StudentCabinetScreen({studentId}: Props) {
   const isTeacher = profile?.role_id === 1 || profile?.role_id === 2;
   const isStudentSelf =
     !!profile?.isStudent && Number(profile.studentId) === Number(studentId);
+
+  const requireTeacherSubscription = () => {
+    if (!isTeacher) {
+      return true;
+    }
+    if (subLoading) {
+      return false;
+    }
+    if (!hasSubscription) {
+      openSectionRoute(navigation, 'Subscription', isAuthorized);
+      return false;
+    }
+    return true;
+  };
 
   const [tab, setTab] = useState<CabinetTab>('lessons');
   const [student, setStudent] = useState<Student | null>(null);
@@ -321,15 +338,25 @@ export function StudentCabinetScreen({studentId}: Props) {
       ]
     : [];
 
-  const openLesson = (item: Lesson) => {
+  const openLesson = async (item: Lesson) => {
     if (!(isTeacher || isStudentSelf)) {
+      return;
+    }
+    if (isTeacher && !requireTeacherSubscription()) {
       return;
     }
     if (item['lesson_relations.status'] === 'close' && isStudentSelf) {
       return;
     }
+    let sessionId: number | undefined;
     if (isTeacher) {
-      void saveStartLessonSelectedIds([studentId]);
+      await saveStartLessonSelectedIds([studentId]);
+      const response = await startLessonSession(item.id, [studentId]);
+      sessionId = positiveId(response?.session?.id);
+      if (!sessionId) {
+        setNotice({message: response?.message || t('common.error')});
+        return;
+      }
     }
     navigation.getParent()?.navigate('Lessons', {
       screen: 'LessonViewer',
@@ -337,6 +364,7 @@ export function StudentCabinetScreen({studentId}: Props) {
         lessonId: item.id,
         from: 'Lessons',
         studentId: isTeacher ? studentId : undefined,
+        sessionId,
       },
     });
   };
@@ -383,6 +411,9 @@ export function StudentCabinetScreen({studentId}: Props) {
   };
 
   const onHomeworkPress = async (lesson: Lesson) => {
+    if (isTeacher && !requireTeacherSubscription()) {
+      return;
+    }
     const is2easy = Number(lesson.user_id) === TWO_EASY_USER_ID;
     const resolved = resolvedHw[lesson.id];
     const knownId =
@@ -504,8 +535,18 @@ export function StudentCabinetScreen({studentId}: Props) {
                   student={student}
                   hideCabinetAction
                   onOpenCabinet={() => undefined}
-                  onEdit={() => setEditOpen(true)}
-                  onDelete={setPendingDelete}
+                  onEdit={() => {
+                    if (!requireTeacherSubscription()) {
+                      return;
+                    }
+                    setEditOpen(true);
+                  }}
+                  onDelete={item => {
+                    if (!requireTeacherSubscription()) {
+                      return;
+                    }
+                    setPendingDelete(item);
+                  }}
                 />
               ) : (
                 <View style={styles.selfCard}>
@@ -569,7 +610,12 @@ export function StudentCabinetScreen({studentId}: Props) {
               {isTeacher ? (
                 <Button
                   title={t('lessons.attachToStudent')}
-                  onPress={() => setAttachOpen(true)}
+                  onPress={() => {
+                    if (!requireTeacherSubscription()) {
+                      return;
+                    }
+                    setAttachOpen(true);
+                  }}
                 />
               ) : null}
             </View>
@@ -595,17 +641,21 @@ export function StudentCabinetScreen({studentId}: Props) {
                     if (tab === 'courses') {
                       openCourse(item as Course);
                     } else {
-                      openLesson(item as Lesson);
+                      void openLesson(item as Lesson);
                     }
                   }}
                   onMenuPress={
                     isTeacher
-                      ? () =>
+                      ? () => {
+                          if (!requireTeacherSubscription()) {
+                            return;
+                          }
                           setMenuTarget(
                             tab === 'courses'
                               ? {kind: 'course', item: item as Course}
                               : {kind: 'lesson', item: item as Lesson},
-                          )
+                          );
+                        }
                       : undefined
                   }
                   actionLabel={

@@ -9,18 +9,12 @@ import {
 
 import {colors, radii} from '../../../shared/config/theme';
 import {useLayout} from '../../../shared/lib/layout';
+import {isSvgUri, uriFromSource} from '../../../shared/lib/mediaUri';
 import {ZoomableImage} from '../../../shared/ui';
 
 type Props = {
   source: ImageSourcePropType;
 };
-
-function uriFromSource(source: ImageSourcePropType): string | null {
-  if (typeof source === 'object' && source && !Array.isArray(source) && 'uri' in source) {
-    return typeof source.uri === 'string' ? source.uri : null;
-  }
-  return null;
-}
 
 export function LessonCover({source}: Props) {
   const {height: screenH} = useWindowDimensions();
@@ -31,7 +25,7 @@ export function LessonCover({source}: Props) {
   const uri = uriFromSource(source);
 
   useEffect(() => {
-    if (!uri) {
+    if (!uri || isSvgUri(uri)) {
       return;
     }
     Image.getSize(

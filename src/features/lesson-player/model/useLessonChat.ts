@@ -1,12 +1,16 @@
 import {useCallback, useEffect, useRef, useState} from 'react';
-
 import {
   ChatWsAdapter,
   type ChatMessage,
 } from '../lib/chatWs';
 import {applyLocalReactionToggle} from '../lib/chatReactions';
 
-export function useLessonChat(lessonId: number, enabled: boolean) {
+export function useLessonChat(
+  lessonId: number,
+  studentId: number | undefined,
+  sessionId: number | undefined,
+  enabled: boolean,
+) {
   const [messageList, setMessageList] = useState<ChatMessage[]>([]);
   const [connected, setConnected] = useState(false);
   const adapterRef = useRef<ChatWsAdapter | null>(null);
@@ -24,7 +28,7 @@ export function useLessonChat(lessonId: number, enabled: boolean) {
     const adapter = new ChatWsAdapter();
     adapterRef.current = adapter;
 
-    void adapter.connect(lessonId, {
+    void adapter.connect(lessonId, studentId, sessionId, {
       onHistory: messages => {
         if (!cancelled) {
           setMessageList(messages);
@@ -58,13 +62,18 @@ export function useLessonChat(lessonId: number, enabled: boolean) {
           return;
         }
         setMessageList(prev =>
-          prev.map(m => (m.id === messageId ? {...m, reactions} : m)),
+          prev.map(m =>
+            m.id === messageId ? {...m, reactions} : m,
+          ),
         );
       },
       onConnectionChange: isConnected => {
         if (!cancelled) {
           setConnected(isConnected);
         }
+      },
+      onError: errorMessage => {
+        console.error('[lesson-chat]', errorMessage);
       },
     });
 
@@ -75,7 +84,7 @@ export function useLessonChat(lessonId: number, enabled: boolean) {
         adapterRef.current = null;
       }
     };
-  }, [enabled, lessonId]);
+  }, [enabled, lessonId, sessionId, studentId]);
 
   const sendMessage = useCallback((text: string, replyToId?: number | null) => {
     const trimmed = text.trim();

@@ -1,8 +1,10 @@
 import {useState} from 'react';
-import {Image, StyleSheet, View} from 'react-native';
+import {StyleSheet, View} from 'react-native';
 
 import {colors, radii} from '../../../../shared/config/theme';
 import {useLayout} from '../../../../shared/lib/layout';
+import {resolveMediaUri} from '../../../../shared/lib/mediaUri';
+import {SmartImage} from '../../../../shared/ui';
 import {ExHeader} from '../ExHeader';
 import {HtmlContent} from '../HtmlContent';
 import {ImageGallery} from '../ImageGallery';
@@ -27,8 +29,8 @@ function Col({
         }
       }}>
       {!!image?.dataURL && (
-        <Image
-          source={{uri: image.dataURL}}
+        <SmartImage
+          source={{uri: resolveMediaUri(image.dataURL)}}
           style={styles.editorImg}
           resizeMode="contain"
         />

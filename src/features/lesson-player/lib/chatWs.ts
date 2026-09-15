@@ -39,12 +39,22 @@ export type ChatRealtimeCallbacks = {
   onConnectionChange?: (connected: boolean) => void;
 };
 
-async function getChatWsUrl(lessonId: number) {
+async function getChatWsUrl(
+  lessonId: number,
+  studentId?: number,
+  sessionId?: number,
+) {
   const token = await readStorage(STORAGE_KEYS.token);
   const wsBase = API_BASE_URL.replace(/^http/i, 'ws');
   const params = new URLSearchParams({
     lesson_id: String(lessonId),
   });
+  if (studentId) {
+    params.set('student_id', String(studentId));
+  }
+  if (sessionId) {
+    params.set('session_id', String(sessionId));
+  }
   if (token) {
     params.set('token', token);
   }
@@ -68,15 +78,24 @@ export class ChatWsAdapter {
   private ws: WebSocket | null = null;
   private callbacks: ChatRealtimeCallbacks = {};
   private lessonId: number | null = null;
+  private studentId: number | null = null;
+  private sessionId: number | null = null;
   private pingTimer: ReturnType<typeof setInterval> | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private shouldReconnect = false;
   private connectionGen = 0;
   private pendingSends: PendingSend[] = [];
 
-  async connect(lessonId: number, callbacks: ChatRealtimeCallbacks) {
+  async connect(
+    lessonId: number,
+    studentId: number | undefined,
+    sessionId: number | undefined,
+    callbacks: ChatRealtimeCallbacks,
+  ) {
     this.teardownSocket();
     this.lessonId = lessonId;
+    this.studentId = studentId || null;
+    this.sessionId = sessionId || null;
     this.callbacks = callbacks;
     this.shouldReconnect = true;
     this.connectionGen += 1;
@@ -91,7 +110,11 @@ export class ChatWsAdapter {
       return;
     }
 
-    const url = await getChatWsUrl(this.lessonId);
+    const url = await getChatWsUrl(
+      this.lessonId,
+      this.studentId || undefined,
+      this.sessionId || undefined,
+    );
     if (gen !== this.connectionGen) {
       return;
     }
@@ -291,6 +314,8 @@ export class ChatWsAdapter {
     this.pendingSends = [];
     this.teardownSocket();
     this.lessonId = null;
+    this.studentId = null;
+    this.sessionId = null;
     this.callbacks = {};
   }
 }

@@ -50,6 +50,31 @@ export function isLessonLockedOnFreeTariff(
   );
 }
 
+/**
+ * Site LessonCard: logged-in teacher without any subscription cannot open
+ * lessons; trial additionally locks paid 2easy catalog items.
+ */
+export function isTeacherLessonAccessBlocked(
+  lesson: TrialLockLesson,
+  opts: {
+    isStudent?: boolean;
+    hasSubscription?: boolean;
+    isFreeTariff?: boolean;
+  },
+) {
+  if (opts.isStudent) {
+    return false;
+  }
+  if (!opts.hasSubscription) {
+    return true;
+  }
+  return isLessonLockedOnFreeTariff(
+    lesson,
+    opts.isFreeTariff,
+    opts.isStudent,
+  );
+}
+
 /** Free lessons first (site ProfileLessons sort on trial). */
 export function sortLessonsFreeFirst<T extends TrialLockLesson>(
   lessons: T[],

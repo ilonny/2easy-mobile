@@ -4,8 +4,8 @@ import {FlatList} from 'react-native-gesture-handler';
 
 import {colors, radii} from '../../../shared/config/theme';
 import {useLayout} from '../../../shared/lib/layout';
+import {resolveMediaUri} from '../../../shared/lib/mediaUri';
 import {ZoomableImage} from '../../../shared/ui/ZoomableImage';
-import {getImageUrl} from '../lib/getImageUrl';
 import type {ExAttachment} from '../model/types';
 import {LessonCover} from './LessonCover';
 
@@ -15,27 +15,7 @@ type Props = {
 };
 
 function resolveUri(img: ExAttachment): string {
-  const raw = img.dataURL || img.path || '';
-  if (!raw) {
-    return '';
-  }
-  if (/\.svg(?:\?|#|$)/i.test(raw) || raw.includes('/_next/static/')) {
-    return '';
-  }
-  if (raw.startsWith('about:')) {
-    return '';
-  }
-  if (
-    /^https?:\/\//i.test(raw) ||
-    /^file:\/\//i.test(raw) ||
-    raw.startsWith('content://') ||
-    raw.startsWith('ph://') ||
-    raw.startsWith('assets-library://') ||
-    raw.startsWith('data:')
-  ) {
-    return raw;
-  }
-  return getImageUrl(raw);
+  return resolveMediaUri(img.dataURL || img.path || '');
 }
 
 export function ImageGallery({images = [], viewType = 'carousel'}: Props) {

@@ -20,12 +20,13 @@ import {
   fetchStudents,
   type Student,
 } from '../../students/api/studentsApi';
+import {startLessonSession} from '../../lesson-player/api/lessonApi';
 
 type Props = {
   visible: boolean;
   lessonId: number;
   onClose: () => void;
-  onStarted: (selectedIds: number[]) => void;
+  onStarted: (selectedIds: number[], sessionId?: number) => void;
   /** start = attach + open lesson; homeworkCheck = pick one student, no relation. */
   mode?: 'start' | 'homeworkCheck';
 };
@@ -109,7 +110,15 @@ export function StartLessonStudentsModal({
         );
       }
       await saveStartLessonSelectedIds(chosenIds);
-      onStarted(chosenIds);
+      let sessionId: number | undefined;
+      if (!isHomeworkCheck) {
+        const result = await startLessonSession(lessonId, chosenIds);
+        sessionId = Number(result?.session?.id || 0) || undefined;
+        if (!result?.success || !sessionId) {
+          throw new Error(result?.message || 'Failed to start lesson');
+        }
+      }
+      onStarted(chosenIds, sessionId);
     } catch {
       setError(
         isHomeworkCheck
