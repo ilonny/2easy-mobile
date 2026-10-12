@@ -35,6 +35,7 @@ import {
   isHomeworkLesson,
   openStudentHomework,
   positiveId,
+  startHomeworkSessionForStudent,
 } from '../../homework';
 import {
   fetchLessonStudents,
@@ -138,7 +139,10 @@ export function LessonViewerScreen({
   } = useLessonBoardOpener({
     lessonId,
     isTeacher: !!isTeacher,
-    studentIdForBoard: isTeacher ? answerStudentId : undefined,
+    // Same as site: students must send their own studentId for individual boards.
+    studentIdForBoard: isTeacher
+      ? answerStudentId
+      : selfStudentId ?? studentIdProp,
     lessonSessionId,
   });
 
@@ -195,11 +199,11 @@ export function LessonViewerScreen({
       return;
     }
     try {
-      const selectedIds = sessionRoster.length
-        ? sessionRoster
-        : studentIdProp
-        ? [studentIdProp]
-        : await readStartLessonSelectedIds();
+      const selectedIds = studentIdProp
+        ? [Number(studentIdProp)]
+        : sessionRoster.length
+          ? sessionRoster
+          : await readStartLessonSelectedIds();
       if (!selectedIds.length) {
         setParticipants([]);
         return;
@@ -242,6 +246,13 @@ export function LessonViewerScreen({
         const roster = Array.isArray(result.session.student_ids)
           ? result.session.student_ids.map(Number).filter(Boolean)
           : [];
+        if (
+          studentIdProp &&
+          roster.length &&
+          !roster.includes(Number(studentIdProp))
+        ) {
+          return;
+        }
         setLessonSessionId(Number(result.session.id));
         setSessionRoster(roster);
         if (roster.length) {
@@ -254,7 +265,7 @@ export function LessonViewerScreen({
     return () => {
       cancelled = true;
     };
-  }, [isAuthorized, lessonId, sessionIdProp]);
+  }, [isAuthorized, lessonId, sessionIdProp, studentIdProp]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -312,7 +323,7 @@ export function LessonViewerScreen({
     }
     setResetting(true);
     try {
-      await Promise.all(
+      const results = await Promise.all(
         exercises.map(ex =>
           resetAnswers({
             lesson_id: lessonId,
@@ -321,11 +332,13 @@ export function LessonViewerScreen({
           }),
         ),
       );
-      exercises.forEach(ex => {
+      exercises.forEach((ex, index) => {
+        const sync_v = Number((results[index] as any)?.sync_v) || undefined;
         notifyLocalAnswersReset({
           lesson_id: lessonId,
           ex_id: ex.id,
           student_id: answerStudentId,
+          sync_v,
         });
       });
       setAnswersEpoch(epoch => epoch + 1);
@@ -402,7 +415,20 @@ export function LessonViewerScreen({
   };
 
   if (isLockedOnTrial) {
-    return null;
+    return (
+      <View style={styles.root}>
+        <View style={styles.centered}>
+          <Text style={styles.error}>
+            {t('subscriptionStatus.subscribeToContinue')}
+          </Text>
+          <Pressable
+            onPress={() => navigation.replace('Subscription')}
+            style={styles.lockCta}>
+            <Text style={styles.lockCtaText}>{t('common.next')}</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
   }
 
   return (
@@ -549,11 +575,13 @@ export function LessonViewerScreen({
                               );
                               const hwId = positiveId(data?.homework_lesson_id);
                               if (hwId) {
-                                await saveStartLessonSelectedIds([sid]);
+                                const sessionId =
+                                  await startHomeworkSessionForStudent(hwId, sid);
                                 navigation.navigate('LessonViewer', {
                                   lessonId: hwId,
                                   from,
                                   studentId: sid,
+                                  ...(sessionId ? {sessionId} : {}),
                                 });
                                 return;
                               }
@@ -577,12 +605,19 @@ export function LessonViewerScreen({
 
                             const fallback = positiveId(lesson.homework_lesson_id);
                             if (fallback) {
+                              const sid = answerStudentId;
+                              const sessionId =
+                                isTeacher && sid
+                                  ? await startHomeworkSessionForStudent(
+                                      fallback,
+                                      sid,
+                                    )
+                                  : undefined;
                               navigation.navigate('LessonViewer', {
                                 lessonId: fallback,
                                 from,
-                                ...(answerStudentId
-                                  ? {studentId: answerStudentId}
-                                  : {}),
+                                ...(sid ? {studentId: sid} : {}),
+                                ...(sessionId ? {sessionId} : {}),
                               });
                               return;
                             }
@@ -655,7 +690,6 @@ export function LessonViewerScreen({
 
         <LessonVideoCallWindow
           visible={videoOpen}
-          lessonId={lessonId}
           lessonOwnerId={lesson?.user_id}
           bottomOffset={
             LESSON_TOOLS_BAR_HEIGHT + Math.max(insets.bottom, 10) + 16
@@ -739,8 +773,21 @@ const styles = StyleSheet.create({
   },
   pageColumn: {gap: 12},
   homeworkWrap: {marginTop: 8, marginBottom: 8},
-  centered: {flex: 1, alignItems: 'center', justifyContent: 'center'},
+  centered: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+    gap: 16,
+  },
   error: {color: colors.danger, textAlign: 'center', padding: 24},
+  lockCta: {
+    backgroundColor: colors.primary,
+    borderRadius: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+  },
+  lockCtaText: {color: colors.white, fontWeight: '700', fontSize: 15},
   title: {
     fontSize: 26,
     fontWeight: '800',

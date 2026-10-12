@@ -5,7 +5,6 @@ import {colors, radii} from '../../../../shared/config/theme';
 import {useLessonPlayer} from '../../model/LessonPlayerContext';
 import {useExAnswer} from '../../model/useExAnswer';
 import {ExHeader} from '../ExHeader';
-import {HtmlContent} from '../HtmlContent';
 import {ImageGallery} from '../ImageGallery';
 import {
   DraggableChip,
@@ -14,7 +13,7 @@ import {
 } from '../interaction/DraggableChip';
 import {StickyChipPool} from '../interaction/StickyChipPool';
 import {answerFeedback} from '../interaction/answerFeedback';
-import {GapField, splitDataText} from './fillGapsLegacy';
+import {GapField, gapHtmlToPlainText, splitDataText} from './fillGapsLegacy';
 
 type Props = {data: any};
 
@@ -179,7 +178,15 @@ export function FillGapsDragExView({data}: Props) {
         <View style={styles.flow}>
           {parts.map((part, idx) => {
             if (part.type === 'text') {
-              return <HtmlContent key={`t-${idx}`} html={part.html} />;
+              const text = gapHtmlToPlainText(part.html);
+              if (!text) {
+                return null;
+              }
+              return (
+                <View key={`t-${idx}`} style={styles.textWrap}>
+                  <Text style={styles.text}>{text}</Text>
+                </View>
+              );
             }
             return renderGap(
               fieldsById.get(String(part.id)),
@@ -204,16 +211,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
-    gap: 6,
+    columnGap: 4,
+    rowGap: 6,
   },
+  textWrap: {flexGrow: 0, flexShrink: 1, maxWidth: '100%'},
+  text: {fontSize: 16, color: colors.text, lineHeight: 24},
   gap: {
-    minWidth: 120,
-    minHeight: 44,
+    flexGrow: 0,
+    flexShrink: 1,
+    minWidth: 56,
+    maxWidth: '100%',
+    minHeight: 36,
     borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  gapText: {color: colors.primary, fontWeight: '700'},
+  gapText: {color: colors.primary, fontWeight: '700', flexShrink: 1},
 });

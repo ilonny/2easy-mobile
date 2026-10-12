@@ -2,7 +2,7 @@ import {useEffect, useMemo, useState} from 'react';
 import {Pressable, Text, View} from 'react-native';
 
 import {useI18n} from '../../../../shared/i18n';
-import {TextField} from '../../../../shared/ui';
+import {TextField, TitleColorField} from '../../../../shared/ui';
 import {
   ImagePickerField,
   type PickedImage,
@@ -11,6 +11,7 @@ import {EditorShell, editorStyles} from './EditorShell';
 import {
   TITLE_COLOR,
   attachmentsToPicked,
+  readTitleColor,
   newId,
   persistExercise,
   resolvePickedAttachments,
@@ -46,9 +47,11 @@ export function TestEditor({
   currentSortIndexToShift,
   onClose,
   onSaved,
+  onBackToTemplates,
 }: EditorCommonProps & {visible: boolean}) {
   const {t} = useI18n();
   const [title, setTitle] = useState('');
+  const [titleColor, setTitleColor] = useState(TITLE_COLOR);
   const [subtitle, setSubtitle] = useState('');
   const [description, setDescription] = useState('');
   const [questions, setQuestions] = useState<Question[]>([emptyQuestion()]);
@@ -59,6 +62,7 @@ export function TestEditor({
     if (!visible) return;
     const d = exercise?.data || {};
     setTitle(String(d.title || ''));
+    setTitleColor(readTitleColor(d.titleColor));
     setSubtitle(String(d.subtitle || ''));
     setDescription(String(d.description || ''));
     setImages(attachmentsToPicked(d.images));
@@ -83,6 +87,7 @@ export function TestEditor({
 
   const applyAiData = (data: Record<string, unknown>) => {
     setTitle(String(data.title || ''));
+    setTitleColor(readTitleColor(data.titleColor));
     setSubtitle(String(data.subtitle || ''));
     setDescription(String(data.description || ''));
     if (data.images) {
@@ -133,7 +138,7 @@ export function TestEditor({
         currentSortIndexToShift,
         data: {
           title,
-          titleColor: TITLE_COLOR,
+          titleColor,
           subtitle,
           description,
           images: hero,
@@ -149,7 +154,7 @@ export function TestEditor({
   const previewData = useMemo(
     () => ({
       title,
-      titleColor: TITLE_COLOR,
+      titleColor,
       subtitle,
       description,
       images: pickedToPreviewMedia(images),
@@ -164,14 +169,15 @@ export function TestEditor({
         })),
       })),
     }),
-    [title, subtitle, description, images, questions],
+    [title, titleColor, subtitle, description, images, questions],
   );
 
   return (
     <EditorShell
       visible={visible}
-      title={exercise ? t('common.edit') : 'Test'}
+      title={exercise ? t('common.edit') : t('templates.test')}
       onClose={onClose}
+      onBackToTemplates={onBackToTemplates}
       onSave={() => {
         void onSave();
       }}
@@ -187,7 +193,7 @@ export function TestEditor({
           title,
           subtitle,
           description,
-          titleColor: TITLE_COLOR,
+          titleColor,
           questions: questions.map(q => ({
             id: q.id,
             value: q.text,
@@ -200,7 +206,13 @@ export function TestEditor({
         },
         onApply: applyAiData,
       }}>
-      <TextField label={t('editor.fieldTitle')} value={title} onChangeText={setTitle} />
+      <TitleColorField
+        label={t('editor.fieldTitle')}
+        value={title}
+        onChangeText={setTitle}
+        color={titleColor}
+        onColorChange={setTitleColor}
+      />
       <TextField
         label={t('editor.fieldSubtitle')}
         value={subtitle}
@@ -223,7 +235,10 @@ export function TestEditor({
       {questions.map((q, qIndex) => (
         <View key={q.id} style={editorStyles.itemCard}>
           <TextField
-            label={`Question ${qIndex + 1}`}
+            label={t('editor.questionN').replace(
+              '{{n}}',
+              String(qIndex + 1),
+            )}
             value={q.text}
             onChangeText={text =>
               setQuestions(prev =>
@@ -247,7 +262,10 @@ export function TestEditor({
           {q.options.map((opt, oIndex) => (
             <View key={opt.id}>
               <TextField
-                label={`Option ${oIndex + 1}`}
+                label={t('editor.optionN').replace(
+                  '{{n}}',
+                  String(oIndex + 1),
+                )}
                 value={opt.text}
                 onChangeText={text =>
                   setQuestions(prev =>
@@ -329,7 +347,7 @@ export function TestEditor({
       <Pressable
         style={editorStyles.addBtn}
         onPress={() => setQuestions(prev => prev.concat(emptyQuestion()))}>
-        <Text style={editorStyles.addBtnText}>+ Add question</Text>
+        <Text style={editorStyles.addBtnText}>{t('editor.addQuestion')}</Text>
       </Pressable>
     </EditorShell>
   );

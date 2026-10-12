@@ -26,6 +26,11 @@ type Props = {
   /** Extra base text style (e.g. centered header description). */
   baseStyle?: StyleProp<TextStyle>;
   contentWidth?: number;
+  /**
+   * For fill-in-the-gaps: shrink-wrap so text stays inline with gap controls.
+   * Default `width: 100%` forces each fragment onto its own line.
+   */
+  inline?: boolean;
 };
 
 const BAD_IMG_SRC = /(?:about:\/+|javascript:)/i;
@@ -85,6 +90,18 @@ function escapePlain(text: string): string {
     .replace(/"/g, '&quot;');
 }
 
+/** Decode common entities before treating content as plain text. */
+function decodeBasicEntities(text: string): string {
+  return text
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/gi, "'");
+}
+
 /** Normalize HTML or wrap plain text so RenderHTML always gets markup. */
 export function normalizeLessonHtml(
   html: string,
@@ -96,7 +113,7 @@ export function normalizeLessonHtml(
   }
   const asHtml = looksLikeHtml(trimmed)
     ? trimmed
-    : `<p>${escapePlain(trimmed).replace(/\n/g, '<br/>')}</p>`;
+    : `<p>${escapePlain(decodeBasicEntities(trimmed)).replace(/\n/g, '<br/>')}</p>`;
 
   return asHtml
     .replace(/<img\b[^>]*>/gi, tag => {
@@ -167,6 +184,17 @@ const defaultTagsStyles: Record<string, MixedStyleDeclaration> = {
   img: {maxWidth: '100%', marginVertical: 8},
   a: {color: colors.primary, textDecorationLine: 'underline'},
   span: {},
+};
+
+/** Zero block margins so fill-gaps sentence fragments stay inline. */
+const inlineTagsStyles: Record<string, MixedStyleDeclaration> = {
+  ...defaultTagsStyles,
+  body: {margin: 0, padding: 0, fontFamily: fontFamily.regular},
+  p: {marginTop: 0, marginBottom: 0, flexShrink: 1},
+  div: {marginBottom: 0, flexShrink: 1},
+  h1: {fontSize: 22, fontWeight: '800', marginBottom: 0, color: colors.text},
+  h2: {fontSize: 20, fontWeight: '700', marginBottom: 0, color: colors.text},
+  h3: {fontSize: 18, fontWeight: '700', marginBottom: 0, color: colors.text},
 };
 
 async function openHref(href?: string) {
@@ -374,7 +402,7 @@ function SelectableHtmlWebView({
   );
 }
 
-export function HtmlContent({html, baseStyle, contentWidth}: Props) {
+export function HtmlContent({html, baseStyle, contentWidth, inline}: Props) {
   const {width} = useWindowDimensions();
   const {pageContentMaxWidth, pageGutter} = useLayout();
   const dictionarySelection = useDictionarySelection();
@@ -419,8 +447,13 @@ export function HtmlContent({html, baseStyle, contentWidth}: Props) {
     ...(baseStyle as object),
   } as TextStyle;
   const fontSize = typeof base.fontSize === 'number' ? base.fontSize : 16;
+  // Inline fragments must stay shrink-wrapped; WebView/full-width HTML
+  // forces each piece onto its own line inside fill-gaps flexWrap rows.
   const needsWebView =
-    !!dictionarySelection?.enabled || htmlContainsSvg(cleaned);
+    !inline &&
+    (!!dictionarySelection?.enabled || htmlContainsSvg(cleaned));
+
+  const tagsStyles = inline ? inlineTagsStyles : defaultTagsStyles;
 
   const inner = needsWebView ? (
     <SelectableHtmlWebView
@@ -430,7 +463,7 @@ export function HtmlContent({html, baseStyle, contentWidth}: Props) {
     />
   ) : (
     <RenderHTML
-      contentWidth={measured}
+      contentWidth={inline ? Math.min(measured, 640) : measured}
       source={source}
       systemFonts={[...defaultSystemFonts, ...MANROPE_SYSTEM_FONTS]}
       baseStyle={{
@@ -439,9 +472,10 @@ export function HtmlContent({html, baseStyle, contentWidth}: Props) {
         lineHeight: 24,
         fontFamily: fontFamily.regular,
         flexShrink: 1,
+        ...(inline ? {margin: 0, padding: 0} : null),
         ...(baseStyle as object),
       }}
-      tagsStyles={defaultTagsStyles}
+      tagsStyles={tagsStyles}
       renderers={htmlRenderers}
       enableExperimentalMarginCollapsing
       renderersProps={renderersProps}
@@ -451,7 +485,7 @@ export function HtmlContent({html, baseStyle, contentWidth}: Props) {
 
   return (
     <View
-      style={htmlWrapStyle}
+      style={inline ? htmlInlineWrapStyle : htmlWrapStyle}
       onLayout={event => {
         if (contentWidth) {
           return;
@@ -470,4 +504,13 @@ const htmlWrapStyle = {
   width: '100%' as const,
   maxWidth: '100%' as const,
   overflow: 'hidden' as const,
+};
+
+/** Shrink-wrap for fill-gaps sentence fragments. */
+const htmlInlineWrapStyle = {
+  flexGrow: 0,
+  flexShrink: 1,
+  maxWidth: '100%' as const,
+  overflow: 'hidden' as const,
+  alignSelf: 'center' as const,
 };

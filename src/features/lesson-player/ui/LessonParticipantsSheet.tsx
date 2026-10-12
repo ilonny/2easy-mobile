@@ -3,6 +3,7 @@ import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
 import {useI18n} from '../../../shared/i18n';
 import {colors, radii} from '../../../shared/config/theme';
+import {UserAvatar} from '../../../shared/ui';
 import type {LessonParticipant} from '../../students/api/studentsApi';
 
 type Props = {
@@ -20,6 +21,10 @@ function participantName(s: LessonParticipant) {
 
 function participantEmail(s: LessonParticipant) {
   return s['student.email'] || s.email || '';
+}
+
+function participantAvatar(s: LessonParticipant) {
+  return s['student.avatar'] || s.avatar || null;
 }
 
 export function LessonParticipantsSheet({
@@ -71,16 +76,23 @@ export function LessonParticipantsSheet({
                         onSelect(id);
                         onClose();
                       }}>
-                      <Text
-                        style={[styles.name, active && styles.nameActive]}
-                        numberOfLines={1}>
-                        {participantName(s)}
-                      </Text>
-                      {!!participantEmail(s) && (
-                        <Text style={styles.email} numberOfLines={1}>
-                          {participantEmail(s)}
+                      <UserAvatar
+                        name={participantName(s)}
+                        avatar={participantAvatar(s)}
+                        size={40}
+                      />
+                      <View style={styles.rowText}>
+                        <Text
+                          style={[styles.name, active && styles.nameActive]}
+                          numberOfLines={1}>
+                          {participantName(s)}
                         </Text>
-                      )}
+                        {!!participantEmail(s) && (
+                          <Text style={styles.email} numberOfLines={1}>
+                            {participantEmail(s)}
+                          </Text>
+                        )}
+                      </View>
                     </Pressable>
                     {onOpenDictionary ? (
                       <Pressable
@@ -172,7 +184,8 @@ const styles = StyleSheet.create({
     borderColor: colors.primary,
     backgroundColor: colors.primarySoft,
   },
-  rowMain: {flex: 1, gap: 2},
+  rowMain: {flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10},
+  rowText: {flex: 1, gap: 2},
   name: {fontWeight: '700', fontSize: 15, color: colors.text},
   nameActive: {color: colors.primary},
   email: {fontSize: 12, color: colors.muted},

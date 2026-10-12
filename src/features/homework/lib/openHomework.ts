@@ -1,3 +1,4 @@
+import {startLessonSession} from '../../lesson-player/api/lessonApi';
 import {saveStartLessonSelectedIds} from '../../lesson-player/lib/startLessonSelection';
 import {
   createMyHomework,
@@ -51,6 +52,23 @@ export async function openTeacherStudentHomework(options: {
     return createdId;
   }
   return null;
+}
+
+/** Session for this student, so the viewer does not reuse another student's homework session. */
+export async function startHomeworkSessionForStudent(
+  homeworkLessonId: number,
+  studentId: number,
+): Promise<number | undefined> {
+  if (!homeworkLessonId || !studentId) {
+    return undefined;
+  }
+  await saveStartLessonSelectedIds([studentId]);
+  try {
+    const response = await startLessonSession(homeworkLessonId, [studentId]);
+    return positiveId(response?.session?.id);
+  } catch {
+    return undefined;
+  }
 }
 
 /** Student opens individual HW or create-my. */

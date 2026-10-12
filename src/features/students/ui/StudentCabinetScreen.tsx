@@ -40,6 +40,7 @@ import {
   openTeacherStudentHomework,
   positiveId,
   resolveHomeworkForStudentBatch,
+  startHomeworkSessionForStudent,
 } from '../../homework';
 import {fetchSecureLessons} from '../../lesson-plans/api/lessonsApi';
 import {fetchCourses, type Course} from '../../lesson-plans/api/coursesApi';
@@ -370,17 +371,20 @@ export function StudentCabinetScreen({studentId}: Props) {
   };
 
   const openHomeworkViewer = (homeworkLessonId: number) => {
-    if (isTeacher) {
-      void saveStartLessonSelectedIds([studentId]);
-    }
-    navigation.getParent()?.navigate('Lessons', {
-      screen: 'LessonViewer',
-      params: {
-        lessonId: homeworkLessonId,
-        from: 'Lessons',
-        studentId: isTeacher ? studentId : undefined,
-      },
-    });
+    void (async () => {
+      const sessionId = isTeacher
+        ? await startHomeworkSessionForStudent(homeworkLessonId, studentId)
+        : undefined;
+      navigation.getParent()?.navigate('Lessons', {
+        screen: 'LessonViewer',
+        params: {
+          lessonId: homeworkLessonId,
+          from: 'Lessons',
+          studentId: isTeacher ? studentId : undefined,
+          ...(sessionId ? {sessionId} : {}),
+        },
+      });
+    })();
   };
 
   const homeworkExistsForLesson = (lesson: Lesson) => {

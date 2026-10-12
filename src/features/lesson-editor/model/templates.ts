@@ -74,6 +74,13 @@ export const templates: TTemplate[] = [
     descriptionDefault: 'Gaps with options and three modes',
   },
   {
+    type: 'UNSCRAMBLE_WORDS',
+    titleKey: 'templates.unscrambleWords',
+    titleDefault: 'UNSCRAMBLE WORDS',
+    descriptionKey: 'templates.unscrambleWordsDesc',
+    descriptionDefault: 'Put shuffled sentence fragments into the correct order',
+  },
+  {
     type: 'match_words',
     titleKey: 'templates.match',
     titleDefault: 'Match',
@@ -142,6 +149,10 @@ const TYPE_META: Record<string, {titleKey: string; titleDefault: string}> = {
   FILL_GAPS_NEW: {
     titleKey: 'templates.fillGapsNew',
     titleDefault: 'Fill the gaps',
+  },
+  UNSCRAMBLE_WORDS: {
+    titleKey: 'templates.unscrambleWords',
+    titleDefault: 'UNSCRAMBLE WORDS',
   },
   'fill-gaps-drag': {
     titleKey: 'templates.fillGapsDrag',

@@ -38,7 +38,7 @@ export function MatchWordImageExView({data}: Props) {
   const {isTablet, isLandscape} = useLayout();
   const multiCol = isTablet || isLandscape;
   const {lessonId, studentId, activeStudentId, isTeacher} = useLessonPlayer();
-  const {writeAnswer, answers} = useExAnswer({
+  const {writeAnswer, answers, resetSeq} = useExAnswer({
     lessonId,
     exId: Number(data?.id),
     studentId,
@@ -74,6 +74,13 @@ export function MatchWordImageExView({data}: Props) {
   );
 
   useEffect(() => {
+    setCorrectIds([]);
+    setIncorrectIdsMap({});
+    setInputs({});
+    setSelectedChipId(undefined);
+  }, [resetSeq]);
+
+  useEffect(() => {
     try {
       const raw = answers[String(data?.id)]?.answer;
       if (!raw) {
@@ -83,6 +90,16 @@ export function MatchWordImageExView({data}: Props) {
         return;
       }
       const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      // Ignore answers saved under a different interaction mode.
+      if (
+        parsed?.viewType != null &&
+        String(parsed.viewType) !== String(viewType)
+      ) {
+        setCorrectIds([]);
+        setIncorrectIdsMap({});
+        setInputs({});
+        return;
+      }
       const nextCorrect: Array<string | number> = parsed?.correctIds || [];
       const nextIncorrect: Record<string, string> =
         parsed?.incorrectIdsMap || {};
@@ -104,17 +121,21 @@ export function MatchWordImageExView({data}: Props) {
     } catch {
       // ignore
     }
-  }, [answers, data?.id, data?.images]);
+  }, [answers, data?.id, data?.images, viewType]);
 
   const persist = (
     nextCorrect: Array<string | number>,
     nextIncorrect: Record<string, string>,
   ) => {
+    if (!nextCorrect.length && !Object.keys(nextIncorrect).length) {
+      return;
+    }
     writeAnswer(
       data.id,
       JSON.stringify({
         correctIds: nextCorrect,
         incorrectIdsMap: nextIncorrect,
+        viewType,
       }),
     );
   };

@@ -30,6 +30,7 @@ import {
   isHomeworkLesson,
   positiveId,
   resolveHomeworkForStudent,
+  startHomeworkSessionForStudent,
 } from '../../homework';
 import {useSubscription} from '../../home/model/useSubscription';
 import {
@@ -382,14 +383,15 @@ export function LessonEditorScreen({lessonId}: Props) {
   const onStartLessonWithStudents = (
     selectedIds: number[],
     sessionId?: number,
+    startedLessonId?: number,
   ) => {
     setStartStudentsOpen(false);
+    const studentId = Number(selectedIds[0] || 0);
     if (lessonIsHomework) {
-      const studentId = Number(selectedIds[0] || 0);
       const parentLessonId =
         positiveId(lesson?.lesson_id_homework) || lessonId;
       void (async () => {
-        let homeworkId = lessonId;
+        let homeworkId = startedLessonId || lessonId;
         if (studentId > 0 && parentLessonId > 0) {
           try {
             const data = await resolveHomeworkForStudent(
@@ -404,18 +406,23 @@ export function LessonEditorScreen({lessonId}: Props) {
             /* keep current homework lesson */
           }
         }
+        const hwSessionId =
+          studentId > 0
+            ? await startHomeworkSessionForStudent(homeworkId, studentId)
+            : undefined;
         navigation.navigate('LessonViewer', {
           lessonId: homeworkId,
           from: 'Lessons',
           ...(studentId > 0 ? {studentId} : {}),
+          ...(hwSessionId ? {sessionId: hwSessionId} : {}),
         });
       })();
       return;
     }
     navigation.navigate('LessonViewer', {
-      lessonId,
+      lessonId: startedLessonId || lessonId,
       from: 'Lessons',
-      ...(selectedIds.length === 1 ? {studentId: selectedIds[0]} : {}),
+      ...(selectedIds.length === 1 && studentId > 0 ? {studentId} : {}),
       ...(sessionId ? {sessionId} : {}),
     });
   };
@@ -637,6 +644,10 @@ export function LessonEditorScreen({lessonId}: Props) {
               sortIndex={editor?.sortIndex}
               currentSortIndexToShift={editor?.currentSortIndexToShift}
               onClose={() => setEditor(null)}
+              onBackToTemplates={() => {
+                setEditor(null);
+                setTemplateOpen(true);
+              }}
               onSaved={() => {
                 setEditor(null);
                 void load();
@@ -671,6 +682,8 @@ export function LessonEditorScreen({lessonId}: Props) {
           visible={startStudentsOpen}
           lessonId={lessonId}
           mode={lessonIsHomework ? 'homeworkCheck' : 'start'}
+          is2easy={is2easy}
+          teacherUserId={profileUserId}
           onClose={() => setStartStudentsOpen(false)}
           onStarted={onStartLessonWithStudents}
         />

@@ -2,7 +2,7 @@ import {useEffect, useMemo, useState} from 'react';
 import {Pressable, Text, View} from 'react-native';
 
 import {useI18n} from '../../../../shared/i18n';
-import {TextField} from '../../../../shared/ui';
+import {ColorField, TextField, TitleColorField} from '../../../../shared/ui';
 import {
   ImagePickerField,
   type PickedImage,
@@ -13,6 +13,7 @@ import {
   attachmentsToPicked,
   newId,
   persistExercise,
+  readTitleColor,
   resolvePickedAttachments,
   type EditorCommonProps,
   pickedToPreviewMedia,
@@ -41,29 +42,37 @@ export function TextChecklistEditor({
   currentSortIndexToShift,
   onClose,
   onSaved,
+  onBackToTemplates,
 }: EditorCommonProps & {visible: boolean}) {
   const {t} = useI18n();
   const [title, setTitle] = useState('');
+  const [titleColor, setTitleColor] = useState(TITLE_COLOR);
   const [subtitle, setSubtitle] = useState('');
   const [description, setDescription] = useState('');
   const [stickers, setStickers] = useState<Item[]>([{id: newId(), text: ''}]);
   const [images, setImages] = useState<PickedImage[]>([]);
   const [editorImages, setEditorImages] = useState<PickedImage[]>([]);
+  const [stickerBgColor, setStickerBgColor] = useState('#FFFFFF');
+  const [stickerTextColor, setStickerTextColor] = useState('#000000');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!visible) return;
     const d = exercise?.data || {};
     setTitle(String(d.title || ''));
+    setTitleColor(readTitleColor(d.titleColor));
     setSubtitle(String(d.subtitle || ''));
     setDescription(String(d.description || ''));
     setStickers(normalizeItems(d.stickers));
     setImages(attachmentsToPicked(d.images));
     setEditorImages(attachmentsToPicked(d.editorImages));
+    setStickerBgColor(readTitleColor(d.stickerBgColor, '#FFFFFF'));
+    setStickerTextColor(readTitleColor(d.stickerTextColor, '#000000'));
   }, [visible, exercise]);
 
   const applyAiData = (data: Record<string, unknown>) => {
     setTitle(String(data.title || ''));
+    setTitleColor(readTitleColor(data.titleColor));
     setSubtitle(String(data.subtitle || ''));
     setDescription(String(data.description || ''));
     setStickers(normalizeItems(data.stickers));
@@ -73,6 +82,8 @@ export function TextChecklistEditor({
     if (data.editorImages) {
       setEditorImages(attachmentsToPicked(data.editorImages as never));
     }
+    setStickerBgColor(readTitleColor(data.stickerBgColor, '#FFFFFF'));
+    setStickerTextColor(readTitleColor(data.stickerTextColor, '#000000'));
   };
 
   const onSave = async () => {
@@ -90,14 +101,14 @@ export function TextChecklistEditor({
         currentSortIndexToShift,
         data: {
           title,
-          titleColor: TITLE_COLOR,
+          titleColor,
           subtitle,
           description,
           stickers: stickers.map(s => s.text).filter(Boolean),
           images: hero,
           editorImages: inline,
-          stickerBgColor: '#FFFFFF',
-          stickerTextColor: '#000000',
+          stickerBgColor,
+          stickerTextColor,
         },
       });
       onSaved();
@@ -109,23 +120,24 @@ export function TextChecklistEditor({
   const previewData = useMemo(
     () => ({
       title,
-      titleColor: TITLE_COLOR,
+      titleColor,
       subtitle,
       description,
       stickers: stickers.map(s => s.text).filter(Boolean),
       images: pickedToPreviewMedia(images),
       editorImages: pickedToPreviewMedia(editorImages),
-      stickerBgColor: '#FFFFFF',
-      stickerTextColor: '#000000',
+      stickerBgColor,
+      stickerTextColor,
     }),
-    [title, subtitle, description, stickers, images, editorImages],
+    [title, titleColor, subtitle, description, stickers, images, editorImages, stickerBgColor, stickerTextColor],
   );
 
   return (
     <EditorShell
       visible={visible}
-      title={exercise ? t('common.edit') : 'Checklist'}
+      title={exercise ? t('common.edit') : t('templates.textChecklist')}
       onClose={onClose}
+      onBackToTemplates={onBackToTemplates}
       onSave={() => {
         void onSave();
       }}
@@ -142,13 +154,19 @@ export function TextChecklistEditor({
           subtitle,
           description,
           stickers: stickers.map(s => s.text).filter(Boolean),
-          titleColor: TITLE_COLOR,
-          stickerBgColor: '#FFFFFF',
-          stickerTextColor: '#000000',
+          titleColor,
+          stickerBgColor,
+          stickerTextColor,
         },
         onApply: applyAiData,
       }}>
-      <TextField label={t('editor.fieldTitle')} value={title} onChangeText={setTitle} />
+      <TitleColorField
+        label={t('editor.fieldTitle')}
+        value={title}
+        onChangeText={setTitle}
+        color={titleColor}
+        onColorChange={setTitleColor}
+      />
       <TextField
         label={t('editor.fieldSubtitle')}
         value={subtitle}
@@ -159,11 +177,24 @@ export function TextChecklistEditor({
         value={description}
         onChangeText={setDescription}
       />
+      <ColorField
+        label={t('editor.stickerBgColor')}
+        value={stickerBgColor}
+        onChange={setStickerBgColor}
+      />
+      <ColorField
+        label={t('editor.stickerTextColor')}
+        value={stickerTextColor}
+        onChange={setStickerTextColor}
+      />
       <Text style={editorStyles.sectionLabel}>Items</Text>
       {stickers.map((item, index) => (
         <View key={item.id} style={editorStyles.itemCard}>
           <TextField
-            label={`Item ${index + 1}`}
+            label={t('editor.checklistItemN').replace(
+              '{{n}}',
+              String(index + 1),
+            )}
             value={item.text}
             onChangeText={text =>
               setStickers(prev =>
@@ -184,7 +215,9 @@ export function TextChecklistEditor({
         onPress={() =>
           setStickers(prev => prev.concat({id: newId(), text: ''}))
         }>
-        <Text style={editorStyles.addBtnText}>+ Add item</Text>
+        <Text style={editorStyles.addBtnText}>
+          {t('editor.addChecklistItem')}
+        </Text>
       </Pressable>
       <View style={editorStyles.card}>
         <ImagePickerField

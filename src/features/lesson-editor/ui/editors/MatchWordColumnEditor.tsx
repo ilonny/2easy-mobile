@@ -2,7 +2,7 @@ import {useEffect, useMemo, useState} from 'react';
 import {Pressable, Text, View} from 'react-native';
 
 import {useI18n} from '../../../../shared/i18n';
-import {TextField} from '../../../../shared/ui';
+import {TextField, TitleColorField} from '../../../../shared/ui';
 import {
   ImagePickerField,
   type PickedImage,
@@ -11,6 +11,7 @@ import {EditorShell, editorStyles} from './EditorShell';
 import {
   TITLE_COLOR,
   attachmentsToPicked,
+  readTitleColor,
   newId,
   persistExercise,
   resolvePickedAttachments,
@@ -32,9 +33,11 @@ export function MatchWordColumnEditor({
   currentSortIndexToShift,
   onClose,
   onSaved,
+  onBackToTemplates,
 }: EditorCommonProps & {visible: boolean}) {
   const {t} = useI18n();
   const [title, setTitle] = useState('');
+  const [titleColor, setTitleColor] = useState(TITLE_COLOR);
   const [subtitle, setSubtitle] = useState('');
   const [description, setDescription] = useState('');
   const [columns, setColumns] = useState<Column[]>([
@@ -48,6 +51,7 @@ export function MatchWordColumnEditor({
     if (!visible) return;
     const d = exercise?.data || {};
     setTitle(String(d.title || ''));
+    setTitleColor(readTitleColor(d.titleColor));
     setSubtitle(String(d.subtitle || ''));
     setDescription(String(d.description || ''));
     const raw = (d.columns as Array<Record<string, unknown>>) || [];
@@ -67,6 +71,7 @@ export function MatchWordColumnEditor({
 
   const applyAiData = (data: Record<string, unknown>) => {
     setTitle(String(data.title || ''));
+    setTitleColor(readTitleColor(data.titleColor));
     setSubtitle(String(data.subtitle || ''));
     setDescription(String(data.description || ''));
     const raw = (data.columns as Array<Record<string, unknown>>) || [];
@@ -98,7 +103,7 @@ export function MatchWordColumnEditor({
         currentSortIndexToShift,
         data: {
           title,
-          titleColor: TITLE_COLOR,
+          titleColor,
           subtitle,
           description,
           images: hero,
@@ -118,20 +123,23 @@ export function MatchWordColumnEditor({
   const previewData = useMemo(
     () => ({
       title,
-      titleColor: TITLE_COLOR,
+      titleColor,
       subtitle,
       description,
       images: pickedToPreviewMedia(images),
       columns,
     }),
-    [title, subtitle, description, images, columns],
+    [title, titleColor, subtitle, description, images, columns],
   );
 
   return (
     <EditorShell
       visible={visible}
-      title={exercise ? t('common.edit') : 'Match columns'}
+      title={
+        exercise ? t('common.edit') : t('templates.matchWordColumn')
+      }
       onClose={onClose}
+      onBackToTemplates={onBackToTemplates}
       onSave={() => {
         void onSave();
       }}
@@ -148,11 +156,17 @@ export function MatchWordColumnEditor({
           subtitle,
           description,
           columns,
-          titleColor: TITLE_COLOR,
+          titleColor,
         },
         onApply: applyAiData,
       }}>
-      <TextField label={t('editor.fieldTitle')} value={title} onChangeText={setTitle} />
+      <TitleColorField
+        label={t('editor.fieldTitle')}
+        value={title}
+        onChangeText={setTitle}
+        color={titleColor}
+        onColorChange={setTitleColor}
+      />
       <TextField
         label={t('editor.fieldSubtitle')}
         value={subtitle}
@@ -166,7 +180,10 @@ export function MatchWordColumnEditor({
       {columns.map((col, index) => (
         <View key={col.id} style={editorStyles.itemCard}>
           <TextField
-            label={`Column ${index + 1} title`}
+            label={t('editor.columnTitleN').replace(
+              '{{n}}',
+              String(index + 1),
+            )}
             value={col.title}
             onChangeText={text =>
               setColumns(prev =>
@@ -174,11 +191,14 @@ export function MatchWordColumnEditor({
               )
             }
           />
-          <Text style={editorStyles.sectionLabel}>{t('editor.word')}s</Text>
+          <Text style={editorStyles.sectionLabel}>{t('editor.words')}</Text>
           {col.words.map((word, wIndex) => (
             <View key={`${col.id}-w-${wIndex}`}>
               <TextField
-                label={`${t('editor.word')} ${wIndex + 1}`}
+                label={t('editor.wordN').replace(
+                  '{{n}}',
+                  String(wIndex + 1),
+                )}
                 value={word}
                 onChangeText={text =>
                   setColumns(prev =>
@@ -226,7 +246,9 @@ export function MatchWordColumnEditor({
                 ),
               )
             }>
-            <Text style={editorStyles.addBtnText}>+ {t('editor.word')}</Text>
+            <Text style={editorStyles.addBtnText}>
+              + {t('editor.addWord')}
+            </Text>
           </Pressable>
           <Pressable
             onPress={() =>
@@ -239,7 +261,7 @@ export function MatchWordColumnEditor({
       <Pressable
         style={editorStyles.addBtn}
         onPress={() => setColumns(prev => prev.concat(emptyColumn()))}>
-        <Text style={editorStyles.addBtnText}>+ Add column</Text>
+        <Text style={editorStyles.addBtnText}>{t('editor.addColumn')}</Text>
       </Pressable>
       <View style={editorStyles.card}>
         <ImagePickerField

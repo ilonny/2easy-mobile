@@ -10,7 +10,7 @@ import {
 
 import {useI18n} from '../../../../shared/i18n';
 import {colors, radii} from '../../../../shared/config/theme';
-import {Button, TextField} from '../../../../shared/ui';
+import {Button, TextField, TitleColorField} from '../../../../shared/ui';
 import {uploadPhotos} from '../../../lesson-player/api/lessonApi';
 import {
   ImagePickerField,
@@ -21,6 +21,7 @@ import {RichHtmlEditor} from './RichHtmlEditor';
 import {
   TITLE_COLOR,
   attachmentsToPicked,
+  readTitleColor,
   persistExercise,
   pickedToPreviewMedia,
   resolvePickedAttachments,
@@ -85,9 +86,11 @@ export function AudioEditor({
   currentSortIndexToShift,
   onClose,
   onSaved,
+  onBackToTemplates,
 }: EditorCommonProps & {visible: boolean}) {
   const {t} = useI18n();
   const [title, setTitle] = useState('');
+  const [titleColor, setTitleColor] = useState(TITLE_COLOR);
   const [subtitle, setSubtitle] = useState('');
   const [description, setDescription] = useState('');
   const [content, setContent] = useState('');
@@ -105,6 +108,7 @@ export function AudioEditor({
     }
     const d = exercise?.data || {};
     setTitle(String(d.title || ''));
+    setTitleColor(readTitleColor(d.titleColor));
     setSubtitle(String(d.subtitle || ''));
     setDescription(String(d.description || ''));
     setContent(String(d.content || ''));
@@ -236,7 +240,7 @@ export function AudioEditor({
         currentSortIndexToShift,
         data: {
           title,
-          titleColor: TITLE_COLOR,
+          titleColor,
           subtitle,
           description,
           content,
@@ -271,7 +275,7 @@ export function AudioEditor({
     const hero = pickedToPreviewMedia(images);
     return {
       title,
-      titleColor: TITLE_COLOR,
+      titleColor,
       subtitle,
       description,
       content,
@@ -284,6 +288,7 @@ export function AudioEditor({
     };
   }, [
     title,
+    titleColor,
     subtitle,
     description,
     content,
@@ -298,6 +303,7 @@ export function AudioEditor({
       visible={visible}
       title={exercise ? t('common.edit') : t('templates.audio')}
       onClose={onClose}
+      onBackToTemplates={onBackToTemplates}
       onSave={() => {
         void onSave();
       }}
@@ -305,10 +311,12 @@ export function AudioEditor({
       previewType="audio"
       previewLessonId={lessonId}
       previewData={previewData}>
-      <TextField
+      <TitleColorField
         label={t('editor.fieldTitle')}
         value={title}
         onChangeText={setTitle}
+        color={titleColor}
+        onColorChange={setTitleColor}
       />
       <TextField
         label={t('editor.fieldSubtitle')}

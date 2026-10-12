@@ -44,6 +44,8 @@ type Props = {
   previewLessonId?: number;
   /** Per-exercise AI assistant (site CreateExWithAiButton). */
   ai?: EditorAiProps;
+  /** Create flow: jump back to template list without discarding the lesson. */
+  onBackToTemplates?: () => void;
 };
 
 export function EditorShell({
@@ -57,6 +59,7 @@ export function EditorShell({
   previewData,
   previewLessonId,
   ai,
+  onBackToTemplates,
 }: Props) {
   const insets = useSafeAreaInsets();
   const {t} = useI18n();
@@ -80,6 +83,21 @@ export function EditorShell({
               {paddingHorizontal: pageGutter},
               isTablet && styles.headerTablet,
             ]}>
+            <View style={styles.headerSide}>
+              {onBackToTemplates ? (
+                <Pressable
+                  onPress={onBackToTemplates}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('editor.backToOtherTemplates')}>
+                  <Text style={styles.backTemplates} numberOfLines={2}>
+                    {t('editor.backToOtherTemplates')}
+                  </Text>
+                </Pressable>
+              ) : (
+                <View style={styles.headerSideSpacer} />
+              )}
+            </View>
             <View style={styles.headerText}>
               <Text style={styles.kicker}>{t('editor.exerciseEditor')}</Text>
               <Text
@@ -88,12 +106,14 @@ export function EditorShell({
                 {title}
               </Text>
             </View>
-            <Pressable
-              onPress={onClose}
-              hitSlop={10}
-              style={[styles.closeBtn, isTablet && styles.closeBtnTablet]}>
-              <Text style={styles.close}>✕</Text>
-            </Pressable>
+            <View style={[styles.headerSide, styles.headerSideEnd]}>
+              <Pressable
+                onPress={onClose}
+                hitSlop={10}
+                style={[styles.closeBtn, isTablet && styles.closeBtnTablet]}>
+                <Text style={styles.close}>✕</Text>
+              </Pressable>
+            </View>
           </View>
           <ScrollView
             style={styles.flex}
@@ -171,20 +191,32 @@ const styles = StyleSheet.create({
     paddingBottom: 14,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
+    gap: 8,
   },
   headerTablet: {paddingBottom: 18},
-  headerText: {flex: 1, marginRight: 12, gap: 2},
+  headerSide: {width: 96, paddingTop: 2},
+  headerSideEnd: {alignItems: 'flex-end'},
+  headerSideSpacer: {width: 36, height: 36},
+  headerText: {flex: 1, gap: 2, alignItems: 'center'},
+  backTemplates: {
+    color: colors.primary,
+    fontWeight: '600',
+    fontSize: 13,
+    lineHeight: 18,
+  },
   kicker: {
     fontSize: 12,
     fontWeight: '600',
     color: colors.muted,
     textTransform: 'uppercase',
     letterSpacing: 0.4,
+    textAlign: 'center',
   },
   title: {
     fontSize: 20,
     fontWeight: '800',
     color: colors.primary,
+    textAlign: 'center',
   },
   titleTablet: {fontSize: 24},
   closeBtn: {

@@ -4,7 +4,7 @@ import {launchImageLibrary} from 'react-native-image-picker';
 
 import {useI18n} from '../../../../shared/i18n';
 import {colors, radii} from '../../../../shared/config/theme';
-import {Button, TextField} from '../../../../shared/ui';
+import {Button, TextField, TitleColorField} from '../../../../shared/ui';
 import {uploadPhotos} from '../../../lesson-player/api/lessonApi';
 import {
   ImagePickerField,
@@ -14,6 +14,7 @@ import {EditorShell, editorStyles} from './EditorShell';
 import {
   TITLE_COLOR,
   attachmentsToPicked,
+  readTitleColor,
   linkToVideoEmbed,
   newId,
   persistExercise,
@@ -96,9 +97,11 @@ export function VideoEditor({
   currentSortIndexToShift,
   onClose,
   onSaved,
+  onBackToTemplates,
 }: EditorCommonProps & {visible: boolean}) {
   const {t} = useI18n();
   const [title, setTitle] = useState('');
+  const [titleColor, setTitleColor] = useState(TITLE_COLOR);
   const [subtitle, setSubtitle] = useState('');
   const [description, setDescription] = useState('');
   const [videos, setVideos] = useState<VideoItem[]>([emptyVideo()]);
@@ -112,6 +115,7 @@ export function VideoEditor({
     }
     const d = exercise?.data || {};
     setTitle(String(d.title || ''));
+    setTitleColor(readTitleColor(d.titleColor));
     setSubtitle(String(d.subtitle || ''));
     setDescription(String(d.description || ''));
     setImages(attachmentsToPicked(d.images));
@@ -299,7 +303,7 @@ export function VideoEditor({
         currentSortIndexToShift,
         data: {
           title,
-          titleColor: TITLE_COLOR,
+          titleColor,
           subtitle,
           description,
           images: hero,
@@ -315,7 +319,7 @@ export function VideoEditor({
   const previewData = useMemo(
     () => ({
       title,
-      titleColor: TITLE_COLOR,
+      titleColor,
       subtitle,
       description,
       images: pickedToPreviewMedia(images),
@@ -339,7 +343,7 @@ export function VideoEditor({
         };
       }),
     }),
-    [title, subtitle, description, images, videos],
+    [title, titleColor, subtitle, description, images, videos],
   );
 
   return (
@@ -347,6 +351,7 @@ export function VideoEditor({
       visible={visible}
       title={exercise ? t('common.edit') : t('templates.video')}
       onClose={onClose}
+      onBackToTemplates={onBackToTemplates}
       onSave={() => {
         void onSave();
       }}
@@ -354,10 +359,12 @@ export function VideoEditor({
       previewType="video"
       previewLessonId={lessonId}
       previewData={previewData}>
-      <TextField
+      <TitleColorField
         label={t('editor.fieldTitle')}
         value={title}
         onChangeText={setTitle}
+        color={titleColor}
+        onColorChange={setTitleColor}
       />
       <TextField
         label={t('editor.fieldSubtitle')}

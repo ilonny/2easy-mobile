@@ -13,6 +13,7 @@ import {Text2ColEditor} from './Text2ColEditor';
 import {TextChecklistEditor} from './TextChecklistEditor';
 import {TextDefaultEditor} from './TextDefaultEditor';
 import {TextStickerEditor} from './TextStickerEditor';
+import {UnscrambleWordsEditor} from './UnscrambleWordsEditor';
 import {VideoEditor} from './VideoEditor';
 
 export type EditorRootModalProps = {
@@ -24,6 +25,7 @@ export type EditorRootModalProps = {
   currentSortIndexToShift?: number;
   onClose: () => void;
   onSaved: () => void;
+  onBackToTemplates?: () => void;
 };
 
 export function EditorRootModal({
@@ -35,6 +37,7 @@ export function EditorRootModal({
   currentSortIndexToShift,
   onClose,
   onSaved,
+  onBackToTemplates,
 }: EditorRootModalProps) {
   if (!visible || !type) {
     return null;
@@ -48,6 +51,7 @@ export function EditorRootModal({
     currentSortIndexToShift,
     onClose,
     onSaved,
+    onBackToTemplates: exercise ? undefined : onBackToTemplates,
   };
 
   switch (type) {
@@ -81,6 +85,8 @@ export function EditorRootModal({
       return <MatchWordColumnEditor {...common} />;
     case 'FILL_GAPS_NEW':
       return <FillGapsNewEditor {...common} />;
+    case 'UNSCRAMBLE_WORDS':
+      return <UnscrambleWordsEditor {...common} />;
     default:
       return null;
   }

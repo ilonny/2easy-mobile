@@ -2,7 +2,7 @@ import {useEffect, useMemo, useState} from 'react';
 import {Pressable, Text, View} from 'react-native';
 
 import {useI18n} from '../../../../shared/i18n';
-import {TextField} from '../../../../shared/ui';
+import {TextField, TitleColorField} from '../../../../shared/ui';
 import {
   ImagePickerField,
   type PickedImage,
@@ -11,6 +11,7 @@ import {EditorShell, editorStyles} from './EditorShell';
 import {
   TITLE_COLOR,
   attachmentsToPicked,
+  readTitleColor,
   newId,
   persistExercise,
   resolvePickedAttachments,
@@ -28,9 +29,11 @@ export function FreeInputFormEditor({
   currentSortIndexToShift,
   onClose,
   onSaved,
+  onBackToTemplates,
 }: EditorCommonProps & {visible: boolean}) {
   const {t} = useI18n();
   const [title, setTitle] = useState('');
+  const [titleColor, setTitleColor] = useState(TITLE_COLOR);
   const [subtitle, setSubtitle] = useState('');
   const [description, setDescription] = useState('');
   const [questions, setQuestions] = useState<Question[]>([
@@ -43,6 +46,7 @@ export function FreeInputFormEditor({
     if (!visible) return;
     const d = exercise?.data || {};
     setTitle(String(d.title || ''));
+    setTitleColor(readTitleColor(d.titleColor));
     setSubtitle(String(d.subtitle || ''));
     setDescription(String(d.description || ''));
     setImages(attachmentsToPicked(d.images));
@@ -59,6 +63,7 @@ export function FreeInputFormEditor({
 
   const applyAiData = (data: Record<string, unknown>) => {
     setTitle(String(data.title || ''));
+    setTitleColor(readTitleColor(data.titleColor));
     setSubtitle(String(data.subtitle || ''));
     setDescription(String(data.description || ''));
     if (data.images) {
@@ -87,7 +92,7 @@ export function FreeInputFormEditor({
         currentSortIndexToShift,
         data: {
           title,
-          titleColor: TITLE_COLOR,
+          titleColor,
           subtitle,
           description,
           images: hero,
@@ -107,7 +112,7 @@ export function FreeInputFormEditor({
   const previewData = useMemo(
     () => ({
       title,
-      titleColor: TITLE_COLOR,
+      titleColor,
       subtitle,
       description,
       images: pickedToPreviewMedia(images),
@@ -117,14 +122,15 @@ export function FreeInputFormEditor({
         images: [],
       })),
     }),
-    [title, subtitle, description, images, questions],
+    [title, titleColor, subtitle, description, images, questions],
   );
 
   return (
     <EditorShell
       visible={visible}
-      title={exercise ? t('common.edit') : 'Free input'}
+      title={exercise ? t('common.edit') : t('templates.freeInput')}
       onClose={onClose}
+      onBackToTemplates={onBackToTemplates}
       onSave={() => {
         void onSave();
       }}
@@ -140,7 +146,7 @@ export function FreeInputFormEditor({
           title,
           subtitle,
           description,
-          titleColor: TITLE_COLOR,
+          titleColor,
           questions: questions.map(q => ({
             id: q.id,
             value: q.text,
@@ -149,7 +155,13 @@ export function FreeInputFormEditor({
         },
         onApply: applyAiData,
       }}>
-      <TextField label={t('editor.fieldTitle')} value={title} onChangeText={setTitle} />
+      <TitleColorField
+        label={t('editor.fieldTitle')}
+        value={title}
+        onChangeText={setTitle}
+        color={titleColor}
+        onColorChange={setTitleColor}
+      />
       <TextField
         label={t('editor.fieldSubtitle')}
         value={subtitle}
@@ -172,7 +184,7 @@ export function FreeInputFormEditor({
       {questions.map((q, index) => (
         <View key={q.id} style={editorStyles.itemCard}>
           <TextField
-            label={`Prompt ${index + 1}`}
+            label={t('editor.promptN').replace('{{n}}', String(index + 1))}
             value={q.text}
             onChangeText={text =>
               setQuestions(prev =>
@@ -193,7 +205,7 @@ export function FreeInputFormEditor({
         onPress={() =>
           setQuestions(prev => prev.concat({id: newId(), text: ''}))
         }>
-        <Text style={editorStyles.addBtnText}>+ Add prompt</Text>
+        <Text style={editorStyles.addBtnText}>{t('editor.addPrompt')}</Text>
       </Pressable>
     </EditorShell>
   );

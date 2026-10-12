@@ -10,6 +10,7 @@ export type SessionProfile = {
   id?: number;
   user_id?: string | number;
   tag?: string;
+  avatar?: string | null;
   token?: string;
 };
 

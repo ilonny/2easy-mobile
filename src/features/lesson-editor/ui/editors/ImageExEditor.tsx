@@ -2,7 +2,7 @@ import {useEffect, useMemo, useState} from 'react';
 import {Pressable, Text, View} from 'react-native';
 
 import {useI18n} from '../../../../shared/i18n';
-import {TextField} from '../../../../shared/ui';
+import {TextField, TitleColorField} from '../../../../shared/ui';
 import {getImageUrl} from '../../../lesson-player/lib/getImageUrl';
 import {
   ImagePickerField,
@@ -13,6 +13,7 @@ import {
   TITLE_COLOR,
   newId,
   persistExercise,
+  readTitleColor,
   resolvePickedAttachments,
   type EditorCommonProps,
   pickedToPreviewMedia,
@@ -28,9 +29,11 @@ export function ImageExEditor({
   currentSortIndexToShift,
   onClose,
   onSaved,
+  onBackToTemplates,
 }: EditorCommonProps & {visible: boolean}) {
   const {t} = useI18n();
   const [title, setTitle] = useState('');
+  const [titleColor, setTitleColor] = useState(TITLE_COLOR);
   const [subtitle, setSubtitle] = useState('');
   const [description, setDescription] = useState('');
   const [viewType, setViewType] = useState<ViewType>('carousel');
@@ -43,6 +46,7 @@ export function ImageExEditor({
     }
     const d = exercise?.data || {};
     setTitle(String(d.title || ''));
+    setTitleColor(readTitleColor(d.titleColor));
     setSubtitle(String(d.subtitle || ''));
     setDescription(String(d.description || ''));
     setViewType(
@@ -80,7 +84,7 @@ export function ImageExEditor({
         currentSortIndexToShift,
         data: {
           title,
-          titleColor: TITLE_COLOR,
+          titleColor,
           subtitle,
           description,
           viewType,
@@ -102,14 +106,14 @@ export function ImageExEditor({
   const previewData = useMemo(
     () => ({
       title,
-      titleColor: TITLE_COLOR,
+      titleColor,
       subtitle,
       description,
       viewType,
       attachments: pickedToPreviewMedia(images),
       images: pickedToPreviewMedia(images),
     }),
-    [title, subtitle, description, viewType, images],
+    [title, titleColor, subtitle, description, viewType, images],
   );
 
   return (
@@ -117,6 +121,7 @@ export function ImageExEditor({
       visible={visible}
       title={exercise ? t('common.edit') : t('editor.imagesTitle')}
       onClose={onClose}
+      onBackToTemplates={onBackToTemplates}
       onSave={() => {
         void onSave();
       }}
@@ -125,7 +130,13 @@ export function ImageExEditor({
       previewLessonId={lessonId}
       previewData={previewData}>
       <View style={editorStyles.card}>
-        <TextField label={t('editor.fieldTitle')} value={title} onChangeText={setTitle} />
+        <TitleColorField
+          label={t('editor.fieldTitle')}
+          value={title}
+          onChangeText={setTitle}
+          color={titleColor}
+          onColorChange={setTitleColor}
+        />
         <TextField
           label={t('editor.fieldSubtitle')}
           value={subtitle}

@@ -1,0 +1,10 @@
+#!/bin/bash
+DIR="$(cd "$(dirname "$0")" && pwd)"
+export PATH="$DIR:/usr/local/bin:/opt/homebrew/bin:$PATH"
+if [ -x /usr/local/bin/npx ]; then
+  exec /usr/local/bin/npx "$@"
+elif [ -x /opt/homebrew/bin/npx ]; then
+  exec /opt/homebrew/bin/npx "$@"
+fi
+echo "npx not found" >&2
+exit 127

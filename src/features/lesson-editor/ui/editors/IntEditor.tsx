@@ -3,7 +3,7 @@ import {StyleSheet, Text, View} from 'react-native';
 
 import {useI18n} from '../../../../shared/i18n';
 import {colors} from '../../../../shared/config/theme';
-import {TextField} from '../../../../shared/ui';
+import {TextField, TitleColorField} from '../../../../shared/ui';
 import {
   ImagePickerField,
   type PickedImage,
@@ -12,6 +12,7 @@ import {EditorShell, editorStyles} from './EditorShell';
 import {
   TITLE_COLOR,
   attachmentsToPicked,
+  readTitleColor,
   persistExercise,
   resolvePickedAttachments,
   type EditorCommonProps,
@@ -26,9 +27,11 @@ export function IntEditor({
   currentSortIndexToShift,
   onClose,
   onSaved,
+  onBackToTemplates,
 }: EditorCommonProps & {visible: boolean}) {
   const {t} = useI18n();
   const [title, setTitle] = useState('');
+  const [titleColor, setTitleColor] = useState(TITLE_COLOR);
   const [subtitle, setSubtitle] = useState('');
   const [description, setDescription] = useState('');
   const [iframe, setIframe] = useState('');
@@ -39,6 +42,7 @@ export function IntEditor({
     if (!visible) return;
     const d = exercise?.data || {};
     setTitle(String(d.title || ''));
+    setTitleColor(readTitleColor(d.titleColor));
     setSubtitle(String(d.subtitle || ''));
     setDescription(String(d.description || ''));
     setIframe(String(d.iframe || d.content || ''));
@@ -57,7 +61,7 @@ export function IntEditor({
         currentSortIndexToShift,
         data: {
           title,
-          titleColor: TITLE_COLOR,
+          titleColor,
           subtitle,
           description,
           iframe,
@@ -73,13 +77,13 @@ export function IntEditor({
   const previewData = useMemo(
     () => ({
       title,
-      titleColor: TITLE_COLOR,
+      titleColor,
       subtitle,
       description,
       iframe,
       images: pickedToPreviewMedia(images),
     }),
-    [title, subtitle, description, iframe, images],
+    [title, titleColor, subtitle, description, iframe, images],
   );
 
   return (
@@ -91,6 +95,7 @@ export function IntEditor({
           : t('templates.integrations')
       }
       onClose={onClose}
+      onBackToTemplates={onBackToTemplates}
       onSave={() => {
         void onSave();
       }}
@@ -98,7 +103,13 @@ export function IntEditor({
       previewType="int"
       previewLessonId={lessonId}
       previewData={previewData}>
-      <TextField label={t('editor.fieldTitle')} value={title} onChangeText={setTitle} />
+      <TitleColorField
+        label={t('editor.fieldTitle')}
+        value={title}
+        onChangeText={setTitle}
+        color={titleColor}
+        onColorChange={setTitleColor}
+      />
       <TextField
         label={t('editor.fieldSubtitle')}
         value={subtitle}

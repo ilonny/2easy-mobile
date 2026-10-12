@@ -24,6 +24,7 @@ export function NoteEditor({
   currentSortIndexToShift,
   onClose,
   onSaved,
+  onBackToTemplates,
 }: EditorCommonProps & {visible: boolean}) {
   const {t} = useI18n();
   const [title, setTitle] = useState('');
@@ -81,8 +82,9 @@ export function NoteEditor({
   return (
     <EditorShell
       visible={visible}
-      title={exercise ? t('common.edit') : 'Note'}
+      title={exercise ? t('common.edit') : t('templates.note')}
       onClose={onClose}
+      onBackToTemplates={onBackToTemplates}
       onSave={() => {
         void onSave();
       }}

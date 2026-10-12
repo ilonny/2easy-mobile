@@ -20,16 +20,61 @@ import {
   fetchStudents,
   type Student,
 } from '../../students/api/studentsApi';
-import {startLessonSession} from '../../lesson-player/api/lessonApi';
+import {
+  ensureTeacherLessonCopy,
+  readLessonSessionId,
+  startLessonSession,
+} from '../../lesson-player/api/lessonApi';
 
 type Props = {
   visible: boolean;
   lessonId: number;
   onClose: () => void;
-  onStarted: (selectedIds: number[], sessionId?: number) => void;
+  onStarted: (
+    selectedIds: number[],
+    sessionId?: number,
+    startedLessonId?: number,
+  ) => void;
   /** start = attach + open lesson; homeworkCheck = pick one student, no relation. */
   mode?: 'start' | 'homeworkCheck';
+  /** Catalog 2easy lesson (user_id === 1) — copy if attach/session fails first try. */
+  is2easy?: boolean;
+  teacherUserId?: number;
 };
+
+function relationAttached(res?: {success?: boolean; message?: string} | null) {
+  if (!res) {
+    return false;
+  }
+  if (res.success !== false) {
+    return true;
+  }
+  const message = String(res.message || '');
+  return /уже прикреплен|already attach/i.test(message);
+}
+
+async function attachStudentsToLesson(lessonId: number, studentIds: number[]) {
+  const results = await Promise.all(
+    studentIds.map(student_id =>
+      createLessonRelation({
+        lesson_id: lessonId,
+        student_id,
+        status: 'open',
+      }),
+    ),
+  );
+  return results.every(relationAttached);
+}
+
+async function startSessionWithRetry(lessonId: number, studentIds: number[]) {
+  const first = await startLessonSession(lessonId, studentIds);
+  const firstId = readLessonSessionId(first);
+  if (firstId) {
+    return firstId;
+  }
+  const retry = await startLessonSession(lessonId, studentIds);
+  return readLessonSessionId(retry);
+}
 
 function shortName(name: string) {
   return name
@@ -47,6 +92,8 @@ export function StartLessonStudentsModal({
   onClose,
   onStarted,
   mode = 'start',
+  is2easy = false,
+  teacherUserId = 0,
 }: Props) {
   const insets = useSafeAreaInsets();
   const {t} = useI18n();
@@ -98,27 +145,36 @@ export function StartLessonStudentsModal({
     setSubmitting(true);
     setError('');
     try {
+      let startedLessonId = lessonId;
       if (!isHomeworkCheck) {
-        await Promise.all(
-          chosenIds.map(student_id =>
-            createLessonRelation({
-              lesson_id: lessonId,
-              student_id,
-              status: 'open',
-            }),
-          ),
-        );
+        let attached = await attachStudentsToLesson(startedLessonId, chosenIds);
+        if (!attached && is2easy && teacherUserId > 0) {
+          const copiedId = await ensureTeacherLessonCopy(
+            lessonId,
+            teacherUserId,
+          );
+          if (copiedId > 0 && copiedId !== startedLessonId) {
+            startedLessonId = copiedId;
+            attached = await attachStudentsToLesson(startedLessonId, chosenIds);
+          }
+        }
+        if (!attached) {
+          throw new Error('attach failed');
+        }
       }
       await saveStartLessonSelectedIds(chosenIds);
       let sessionId: number | undefined;
       if (!isHomeworkCheck) {
-        const result = await startLessonSession(lessonId, chosenIds);
-        sessionId = Number(result?.session?.id || 0) || undefined;
-        if (!result?.success || !sessionId) {
-          throw new Error(result?.message || 'Failed to start lesson');
+        try {
+          sessionId =
+            (await startSessionWithRetry(startedLessonId, chosenIds)) ||
+            undefined;
+        } catch {
+          // Open lesson mode even if session isolation fails.
+          sessionId = undefined;
         }
       }
-      onStarted(chosenIds, sessionId);
+      onStarted(chosenIds, sessionId, startedLessonId);
     } catch {
       setError(
         isHomeworkCheck

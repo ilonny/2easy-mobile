@@ -11,6 +11,17 @@ export {uuidv4};
 
 export const TITLE_COLOR = '#3F28C6';
 
+export function readTitleColor(raw: unknown, fallback = TITLE_COLOR): string {
+  const s = String(raw || '').trim();
+  if (/^#[0-9a-fA-F]{6}$/.test(s)) {
+    return s.toUpperCase();
+  }
+  if (/^#[0-9a-fA-F]{3}$/.test(s)) {
+    return `#${s[1]}${s[1]}${s[2]}${s[2]}${s[3]}${s[3]}`.toUpperCase();
+  }
+  return fallback;
+}
+
 export const MEDIA_KEYS = [
   'images',
   'editorImages',
@@ -26,6 +37,8 @@ export type EditorCommonProps = {
   currentSortIndexToShift?: number;
   onClose: () => void;
   onSaved: () => void;
+  /** Create flow only: return to template picker (site `backToOtherTemplates`). */
+  onBackToTemplates?: () => void;
 };
 
 /**

@@ -1,5 +1,5 @@
 import {useMemo, useState} from 'react';
-import {Image, Pressable, StyleSheet, Text, View} from 'react-native';
+import {Pressable, StyleSheet, Text, View} from 'react-native';
 import {
   useNavigation,
   useNavigationState,
@@ -10,11 +10,13 @@ import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 
 import {useAuth} from '../../../entities/session';
 import {useI18n} from '../../../shared/i18n';
-import {colors} from '../../../shared/config/theme';
 import type {RootStackParamList} from '../../../shared/navigation/types';
 import {resetToRoute} from '../../../shared/navigation/resetToLessonPlans';
+import {BrandLogo} from '../../../shared/ui/BrandLogo';
 import {ProfileMenuButton} from '../../lesson-plans/ui/ProfileMenuButton';
 import {AppSidebar} from './AppSidebar';
+
+const BRAND_VIOLET = '#5A42D4';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -108,12 +110,30 @@ export function AppHeader({style}: Props) {
 
   if (!isAuthorized) {
     return (
-      <View style={[styles.row, style]}>
-        <Text style={styles.logoLeft}>2EASY</Text>
-        <ProfileMenuButton
-          onLogin={() => navigation.navigate('Login')}
-          onRegister={() => navigation.navigate('Registration')}
-        />
+      <View style={[styles.rowGuest, style]}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="2easy"
+          hitSlop={8}
+          onPress={() => navigation.navigate('Home')}>
+          <BrandLogo height={32} />
+        </Pressable>
+        <View style={styles.guestActions}>
+          <Pressable
+            accessibilityRole="button"
+            hitSlop={6}
+            onPress={() => navigation.navigate('Login')}
+            style={({pressed}) => pressed && styles.pressed}>
+            <Text style={styles.loginLink}>{t('common.login')}</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => navigation.navigate('Registration')}
+            style={({pressed}) => [styles.tryFree, pressed && styles.pressed]}>
+            <Text style={styles.tryFreeText}>{t('header.tryFree')}</Text>
+            <Text style={styles.tryFreeFire}>🔥</Text>
+          </Pressable>
+        </View>
       </View>
     );
   }
@@ -157,11 +177,7 @@ export function AppHeader({style}: Props) {
           }}
           hitSlop={8}
           style={styles.logoCenterWrap}>
-          <Image
-            source={require('../../../shared/assets/home/logo.png')}
-            style={styles.logoImage}
-            resizeMode="contain"
-          />
+          <BrandLogo height={34} />
         </Pressable>
 
         <View style={styles.right}>
@@ -183,11 +199,12 @@ export function AppHeader({style}: Props) {
 }
 
 const styles = StyleSheet.create({
-  row: {
+  rowGuest: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    minHeight: 44,
+    minHeight: 48,
+    gap: 12,
   },
   rowAuth: {
     flexDirection: 'row',
@@ -195,11 +212,42 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     minHeight: 48,
   },
-  logoLeft: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: colors.primary,
-    letterSpacing: 0.5,
+  guestActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flexShrink: 1,
+  },
+  loginLink: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#181818',
+    letterSpacing: -0.1,
+    paddingHorizontal: 4,
+    paddingVertical: 8,
+  },
+  tryFree: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: BRAND_VIOLET,
+    borderRadius: 14,
+    paddingLeft: 12,
+    paddingRight: 6,
+    paddingVertical: 7,
+    maxWidth: 180,
+  },
+  tryFreeText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: -0.1,
+  },
+  tryFreeFire: {
+    fontSize: 18,
+  },
+  pressed: {
+    opacity: 0.88,
   },
   menuButton: {
     width: 44,
@@ -271,10 +319,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 1,
-  },
-  logoImage: {
-    width: 128,
-    height: 34,
   },
   right: {
     zIndex: 2,

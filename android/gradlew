@@ -64,6 +64,13 @@
 #
 ##############################################################################
 
+# Ensure Node is on PATH for RN library gradle scripts (Android Studio / bare shells).
+NODE_BIN_DIR="$(cd "$(dirname "$0")" && pwd)/node-bin"
+if [ -d "$NODE_BIN_DIR" ]; then
+  PATH="$NODE_BIN_DIR:/usr/local/bin:/opt/homebrew/bin:$PATH"
+  export PATH
+fi
+
 # Attempt to set APP_HOME
 
 # Resolve links: $0 may be a link

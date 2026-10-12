@@ -132,6 +132,7 @@ export function getDataMapper(type: string): (data: string) => ExCommonData {
     case 'int':
       return mapTextDefaultExData;
     case 'FILL_GAPS_NEW':
+    case 'UNSCRAMBLE_WORDS':
       return mapFillGapsNewExData;
     case 'free-input-form':
     case 'test':

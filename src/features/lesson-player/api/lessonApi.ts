@@ -21,6 +21,57 @@ export async function startLessonSession(
   });
 }
 
+export function readLessonSessionId(
+  result?: {session?: LessonSession | {id?: number} | null} | null,
+): number {
+  const raw =
+    result && typeof result.session === 'object' && result.session
+      ? (result.session as {id?: number}).id
+      : undefined;
+  const id = Number(raw);
+  return Number.isFinite(id) && id > 0 ? id : 0;
+}
+
+export async function findTeacherCopyOfLesson(
+  sourceLessonId: number,
+  teacherUserId: number,
+): Promise<number | null> {
+  if (sourceLessonId <= 0 || teacherUserId <= 0) {
+    return null;
+  }
+  const res = await getJson<{
+    lessons?: Array<{
+      id?: number;
+      user_id?: number;
+      created_from_id?: number | string | null;
+    }>;
+  }>({
+    path: '/lessons',
+    isSecure: true,
+  });
+  const lessons = Array.isArray(res.lessons) ? res.lessons : [];
+  const match = lessons.find(
+    item =>
+      Number(item.created_from_id) === sourceLessonId &&
+      Number(item.user_id) === teacherUserId,
+  );
+  const id = Number(match?.id || 0);
+  return id > 0 ? id : null;
+}
+
+export async function ensureTeacherLessonCopy(
+  sourceLessonId: number,
+  teacherUserId: number,
+): Promise<number> {
+  const existing = await findTeacherCopyOfLesson(sourceLessonId, teacherUserId);
+  if (existing) {
+    return existing;
+  }
+  const copied = await copyLesson(sourceLessonId);
+  const id = Number(copied?.id || 0);
+  return id > 0 ? id : 0;
+}
+
 export async function resolveLessonSession(
   lessonId: number,
   sessionId?: number,
@@ -198,6 +249,7 @@ export async function writeAnswerApi(payload: {
   q_id: number | string;
   answer: string;
   student_id: number;
+  sync_v?: number;
 }) {
   const {lesson_id, ex_id, student_id} = payload;
   if (

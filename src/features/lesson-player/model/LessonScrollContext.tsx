@@ -20,6 +20,7 @@ import {
 } from 'react-native';
 import {ScrollView as GHScrollView} from 'react-native-gesture-handler';
 
+import {useLayout} from '../../../shared/lib/layout';
 import {useKeyboardBottomOffset} from '../../../shared/lib/useKeyboardBottomOffset';
 import {ChipDragProvider} from '../ui/interaction/ChipDragContext';
 
@@ -71,6 +72,7 @@ export function LessonScrollProvider({
   /** Fires when sticky chip pool pins/unpins at the top. */
   onStickyChange?: (active: boolean) => void;
 }) {
+  const {pageGutter, pageContentMaxWidth} = useLayout();
   const scrollY = useRef(new Animated.Value(0)).current;
   const [stickyOverlay, setStickyOverlayState] =
     useState<StickyPayload | null>(null);
@@ -152,7 +154,16 @@ export function LessonScrollProvider({
             <Animated.View
               pointerEvents="box-none"
               style={[styles.overlay, {top: overlayTop}]}>
-              <View style={styles.overlayInner}>{stickyOverlay.node}</View>
+              <View
+                style={[
+                  styles.overlayInner,
+                  {
+                    maxWidth: pageContentMaxWidth,
+                    paddingHorizontal: pageGutter,
+                  },
+                ]}>
+                {stickyOverlay.node}
+              </View>
             </Animated.View>
           ) : null}
         </View>
@@ -236,13 +247,15 @@ const styles = StyleSheet.create({
   flex: {flex: 1, overflow: 'visible'},
   overlay: {
     position: 'absolute',
-    left: 12,
-    right: 12,
+    left: 0,
+    right: 0,
     zIndex: 80,
     elevation: 16,
     overflow: 'visible',
+    alignItems: 'center',
   },
   overlayInner: {
+    width: '100%',
     backgroundColor: 'transparent',
     overflow: 'visible',
     shadowColor: '#000',

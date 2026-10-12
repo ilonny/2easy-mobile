@@ -27,6 +27,7 @@ import {
   openTeacherStudentHomework,
   positiveId,
   resolveHomeworkForStudentBatch,
+  startHomeworkSessionForStudent,
 } from '../../homework';
 import {
   fetchCourseLessons,
@@ -134,17 +135,20 @@ export function StudentCourseScreen({courseId, studentId}: Props) {
   }, [load]);
 
   const openHomeworkViewer = (homeworkLessonId: number) => {
-    if (isTeacher) {
-      void saveStartLessonSelectedIds([studentId]);
-    }
-    navigation.getParent()?.navigate('Lessons', {
-      screen: 'LessonViewer',
-      params: {
-        lessonId: homeworkLessonId,
-        from: 'Lessons',
-        studentId: isTeacher ? studentId : undefined,
-      },
-    });
+    void (async () => {
+      const sessionId = isTeacher
+        ? await startHomeworkSessionForStudent(homeworkLessonId, studentId)
+        : undefined;
+      navigation.getParent()?.navigate('Lessons', {
+        screen: 'LessonViewer',
+        params: {
+          lessonId: homeworkLessonId,
+          from: 'Lessons',
+          studentId: isTeacher ? studentId : undefined,
+          ...(sessionId ? {sessionId} : {}),
+        },
+      });
+    })();
   };
 
   const homeworkExistsForLesson = (lesson: Lesson) => {

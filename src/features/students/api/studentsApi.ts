@@ -5,6 +5,7 @@ export type Student = {
   name: string;
   email?: string;
   tag?: string;
+  avatar?: string | null;
   user_id?: number | string;
 };
 
@@ -140,9 +141,23 @@ export type LessonParticipant = {
   student_id: number;
   'student.name'?: string;
   'student.email'?: string;
+  'student.avatar'?: string | null;
   name?: string;
   email?: string;
+  avatar?: string | null;
 };
+
+export async function fetchStudentPassword(studentId: number) {
+  return getJson<{
+    success?: boolean;
+    password?: string;
+    message?: string;
+    student_id?: number;
+  }>({
+    path: `/student/${studentId}/password`,
+    isSecure: true,
+  });
+}
 
 export async function fetchLessonStudents(
   lessonId: number,

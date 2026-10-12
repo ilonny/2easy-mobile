@@ -31,6 +31,18 @@ function normalize(s: string) {
   return (s || '').trim().toLowerCase();
 }
 
+function decodeGapText(text: string) {
+  return (text || '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/gi, "'")
+    .replace(/\u00a0/g, ' ');
+}
+
 function hasCorrect(gap?: Gap) {
   return !!(gap?.options || []).some(
     o => o.isCorrect && (o.value || '').trim(),
@@ -287,10 +299,15 @@ export function FillGapsNewExView({data}: Props) {
       if (node.color) {
         style.color = node.color;
       }
+      const text = decodeGapText(node.text);
+      if (!text) {
+        return null;
+      }
+      // Wrap Text so flexWrap shrink-wraps (bare Text takes full row width).
       return (
-        <Text key={`t-${idx}`} style={[styles.text, style]}>
-          {node.text}
-        </Text>
+        <View key={`t-${idx}`} style={styles.textWrap}>
+          <Text style={[styles.text, style]}>{text}</Text>
+        </View>
       );
     }
     if (node.type === 'gap' && node.gapId) {
@@ -367,13 +384,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
-    gap: 4,
+    columnGap: 4,
+    rowGap: 6,
     overflow: 'visible',
     zIndex: 1,
   },
+  textWrap: {flexGrow: 0, flexShrink: 1, maxWidth: '100%'},
   text: {fontSize: 16, color: colors.text, lineHeight: 24},
   gapInput: {
-    minWidth: 72,
+    flexGrow: 0,
+    flexShrink: 1,
+    minWidth: 64,
+    maxWidth: '100%',
     borderRadius: radii.sm,
     backgroundColor: colors.primarySoft,
     paddingHorizontal: 10,
@@ -382,13 +404,16 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   gapSelect: {
-    minWidth: 120,
-    minHeight: 44,
+    flexGrow: 0,
+    flexShrink: 1,
+    minWidth: 56,
+    maxWidth: '100%',
+    minHeight: 36,
     borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  gapText: {color: colors.primary, fontWeight: '700'},
+  gapText: {color: colors.primary, fontWeight: '700', flexShrink: 1},
 });

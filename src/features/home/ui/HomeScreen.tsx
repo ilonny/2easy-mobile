@@ -1,7 +1,7 @@
-import {useRef, useState} from 'react';
+import {useCallback, useRef, useState} from 'react';
 import {
-  Image,
-  ImageBackground,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,199 +11,163 @@ import {useNavigation} from '@react-navigation/native';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
-import {useAuth} from '../../../entities/session';
 import {useI18n} from '../../../shared/i18n';
 import {useLayout} from '../../../shared/lib/layout';
 import type {RootStackParamList} from '../../../shared/navigation/types';
+import {BrandLogo} from '../../../shared/ui/BrandLogo';
 import {PaymentModal} from '../../catalog/ui/PaymentModal';
-import {discussionCards, speakingGames} from '../model/data';
-import {useSubscription} from '../model/useSubscription';
-import {GamesCarousel} from './GamesCarousel';
+import {
+  deliveryFeatures,
+  prepFeatures,
+  reviewFeatures,
+} from '../model/landingData';
 import {HomeHeader} from './HomeHeader';
-import {InfoBlock} from './InfoBlock';
-import {LessonsCarousel} from './LessonsCarousel';
-import {PillCta} from './PillCta';
-import {SubscribeSection, type TariffOption} from './SubscribeSection';
+import type {TariffOption} from './SubscribeSection';
+import {LandingContent} from './landing/LandingContent';
+import {LandingFaq} from './landing/LandingFaq';
+import {LandingFeatureSection} from './landing/LandingFeatureSection';
+import {LandingFinalCta} from './landing/LandingFinalCta';
+import {LandingHero} from './landing/LandingHero';
+import {LandingScrollProvider, useLandingScroll} from './landing/LandingScrollContext';
+import {LandingStickerRain} from './landing/LandingStickerRain';
+import {LandingTariffs} from './landing/LandingTariffs';
+import {landing} from './landing/landingTheme';
+
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
-export function HomeScreen() {
+function HomeScreenBody() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<Nav>();
-  const {isAuthorized, profile} = useAuth();
-  const {hasSubscription, hasPaidTariff, subscription} = useSubscription();
   const {t} = useI18n();
-  const {pageGutter, pageContentMaxWidth, isTablet} = useLayout();
+  const {isTablet} = useLayout();
+  const {setScrollY, viewportHeight} = useLandingScroll();
   const scrollRef = useRef<ScrollView>(null);
   const tariffsY = useRef(0);
   const [paymentTariff, setPaymentTariff] = useState<TariffOption | null>(null);
+  const [stickersActive, setStickersActive] = useState(false);
+  const stickersActiveRef = useRef(false);
+  const scrollYRef = useRef(0);
+  const lastNotifyRef = useRef(0);
+  const sectionGap = isTablet ? 120 : 88;
 
-  const goRegister = () => navigation.navigate('Registration');
-  const goLogin = () => navigation.navigate('Login');
   const scrollToTariffs = () => {
-    scrollRef.current?.scrollTo({y: Math.max(0, tariffsY.current - 24), animated: true});
+    scrollRef.current?.scrollTo({
+      y: Math.max(0, tariffsY.current - 24),
+      animated: true,
+    });
   };
 
-  const showGuestCtas = !isAuthorized;
-  const showTariffsCta = isAuthorized && !hasSubscription;
-  const showMidStartFree = !profile?.name;
+  const maybeActivateStickers = useCallback(
+    (y: number) => {
+      if (
+        stickersActiveRef.current ||
+        tariffsY.current <= 0 ||
+        tariffsY.current >= y + viewportHeight * 0.7
+      ) {
+        return;
+      }
+      stickersActiveRef.current = true;
+      setStickersActive(true);
+    },
+    [viewportHeight],
+  );
+
+  const onScroll = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const y = event.nativeEvent.contentOffset.y;
+      scrollYRef.current = y;
+      const now = Date.now();
+      // Throttle visibility listeners — keep the scroll gesture itself at 60fps.
+      if (now - lastNotifyRef.current > 120) {
+        lastNotifyRef.current = now;
+        setScrollY(y);
+      }
+      maybeActivateStickers(y);
+    },
+    [maybeActivateStickers, setScrollY],
+  );
 
   return (
     <View style={styles.root}>
-      <ImageBackground
-        source={require('../../../shared/assets/home/main_page_bg.png')}
-        style={styles.bg}
-        imageStyle={styles.bgImage}
-        resizeMode="cover">
-        <HomeHeader />
-        <ScrollView
-          ref={scrollRef}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={[
-            styles.content,
-            {
-              paddingHorizontal: pageGutter,
-              paddingBottom: insets.bottom + 40,
-              maxWidth: pageContentMaxWidth,
-              width: '100%',
-              alignSelf: 'center',
-            },
-          ]}>
-          <Text style={styles.eyebrow}>{t('home.teachersJoined')}</Text>
-          <Text style={[styles.h1, isTablet && styles.h1Tablet]}>
-            {t('home.mainTitle')}{' '}
-            <Text style={styles.highlight}>{t('home.mainTitleHighlight')}</Text>{' '}
-            {t('home.mainTitleEnd')}
-          </Text>
-
-          {showGuestCtas ? (
-            <View style={styles.heroCtas}>
-              <View style={styles.ctaWrap}>
-                <View style={styles.chip}>
-                  <Text style={styles.chipText}>{t('home.sevenDaysFree')}</Text>
-                </View>
-                <PillCta title={t('home.startFree')} onPress={goRegister} />
-              </View>
-              <PillCta
-                title={t('home.loginToAccount')}
-                onPress={goLogin}
-                variant="secondary"
-              />
-            </View>
-          ) : null}
-
-          {showTariffsCta ? (
-            <View style={styles.heroCtas}>
-              <PillCta title={t('home.tariffs')} onPress={scrollToTariffs} />
-            </View>
-          ) : null}
-
-          <Image
-            source={require('../../../shared/assets/home/main_image.png')}
-            style={styles.heroImage}
-            resizeMode="contain"
+      <HomeHeader />
+      <ScrollView
+        ref={scrollRef}
+        showsVerticalScrollIndicator={false}
+        scrollEventThrottle={16}
+        onScroll={onScroll}
+        nestedScrollEnabled
+        // Android: gap + clipped subviews + ExoPlayer mount often reset offset to 0.
+        removeClippedSubviews={false}
+        overScrollMode="never"
+        contentContainerStyle={[
+          styles.content,
+          {paddingBottom: insets.bottom + 48},
+        ]}>
+        <View style={{marginBottom: sectionGap}}>
+          <LandingHero onChooseTariff={scrollToTariffs} />
+        </View>
+        <View style={{marginBottom: sectionGap}}>
+          <LandingContent />
+        </View>
+        <View style={{marginBottom: sectionGap}}>
+          <LandingFeatureSection
+            labelKey="landing.prep.label"
+            titleKey="landing.prep.title"
+            icon="✎"
+            features={prepFeatures}
           />
-
-          <Text style={[styles.h1, isTablet && styles.h1Tablet, styles.sectionTitle]}>
-            {t('home.easyTitle')}
-          </Text>
-
-          <InfoBlock
-            title={t('home.createLessonsTitle')}
-            description={t('home.createLessonsDesc')}
-            media={require('../../../shared/assets/home/main_image.png')}
+        </View>
+        <View style={{marginBottom: sectionGap}}>
+          <LandingFeatureSection
+            labelKey="landing.delivery.label"
+            titleKey="landing.delivery.title"
+            icon="◉"
+            features={deliveryFeatures}
+            horizontalOnPhone
+            tall
           />
-          <View style={styles.spacer} />
-          <InfoBlock
-            title={t('home.lessonPlansTitle')}
-            description={t('home.lessonPlansDesc')}
-            media={require('../../../shared/assets/home/games/taboo.png')}
-            mediaFirst
+        </View>
+        <View style={{marginBottom: sectionGap}}>
+          <LandingFeatureSection
+            labelKey="landing.review.label"
+            titleKey="landing.review.title"
+            icon="▣"
+            features={reviewFeatures}
           />
-          <View style={styles.spacer} />
-          <InfoBlock
-            title={t('home.studentAccountsTitle')}
-            description={t('home.studentAccountsDesc')}
-            media={require('../../../shared/assets/home/games/discussion-cards.png')}
-          />
+        </View>
+        <View
+          style={{marginBottom: sectionGap}}
+          onLayout={event => {
+            tariffsY.current = event.nativeEvent.layout.y;
+            maybeActivateStickers(scrollYRef.current);
+          }}>
+          <LandingTariffs onSubscribe={tariff => setPaymentTariff(tariff)} />
+        </View>
+        <View style={{marginBottom: sectionGap}}>
+          <LandingFaq />
+        </View>
+        <LandingFinalCta />
 
-          {showMidStartFree ? (
-            <View style={styles.midCta}>
-              <PillCta title={t('home.startFree')} onPress={goRegister} />
-            </View>
-          ) : (
-            <View style={styles.spacer} />
-          )}
-
-          <Text style={[styles.h1, styles.sectionTitle]}>
-            {t('home.lessonPlansSection')}
+        <View style={styles.footer}>
+          <BrandLogo height={28} />
+          <Text style={styles.footerCopy}>{t('footer.copyright')}</Text>
+          <Text
+            style={styles.footerLink}
+            onPress={() =>
+              navigation.navigate('LegalDocument', {docId: 'privacy_policy'})
+            }>
+            {t('footer.privacyPolicy')}
           </Text>
-          <Text style={styles.sectionDesc}>
-            {t('home.lessonPlansSectionDesc')}
+          <Text
+            style={styles.footerLink}
+            onPress={() =>
+              navigation.navigate('LegalDocument', {docId: 'public_offer'})
+            }>
+            {t('footer.publicOffer')}
           </Text>
-          <LessonsCarousel />
-
-          <Text style={[styles.h1, styles.sectionTitle]}>
-            {t('home.speakingGamesSection')}
-          </Text>
-          <Text style={styles.sectionDesc}>
-            {t('home.speakingGamesSectionDesc')}
-          </Text>
-          <GamesCarousel data={speakingGames} />
-
-          <Text style={[styles.h1, styles.sectionTitle]}>
-            {t('home.discussionCardsSection')}
-          </Text>
-          <Text style={styles.sectionDesc}>
-            {t('home.discussionCardsSectionDesc')}
-          </Text>
-          <GamesCarousel data={discussionCards} />
-
-          {showMidStartFree ? (
-            <View style={styles.midCta}>
-              <PillCta title={t('home.startFree')} onPress={goRegister} />
-            </View>
-          ) : (
-            <View style={styles.spacer} />
-          )}
-
-          <View
-            onLayout={event => {
-              tariffsY.current = event.nativeEvent.layout.y;
-            }}>
-            <SubscribeSection
-              onStartFree={goRegister}
-              onSubscribe={tariff => {
-                if (!isAuthorized) {
-                  goRegister();
-                  return;
-                }
-                setPaymentTariff(tariff);
-              }}
-              hasPaidTariff={hasPaidTariff}
-              subscribeTypeId={subscription?.subscribe_type_id}
-            />
-          </View>
-
-          <View style={styles.footer}>
-            <Text style={styles.footerLogo}>2EASY</Text>
-            <Text style={styles.footerCopy}>{t('footer.copyright')}</Text>
-            <Text
-              style={styles.footerLink}
-              onPress={() =>
-                navigation.navigate('LegalDocument', {docId: 'privacy_policy'})
-              }>
-              {t('footer.privacyPolicy')}
-            </Text>
-            <Text
-              style={styles.footerLink}
-              onPress={() =>
-                navigation.navigate('LegalDocument', {docId: 'public_offer'})
-              }>
-              {t('footer.publicOffer')}
-            </Text>
-          </View>
-        </ScrollView>
-      </ImageBackground>
+        </View>
+      </ScrollView>
+      <LandingStickerRain active={stickersActive} />
       <PaymentModal
         visible={!!paymentTariff}
         tariff={paymentTariff}
@@ -213,112 +177,40 @@ export function HomeScreen() {
   );
 }
 
+export function HomeScreen() {
+  return (
+    <LandingScrollProvider>
+      <HomeScreenBody />
+    </LandingScrollProvider>
+  );
+}
+
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#F9F9F9',
-  },
-  bg: {
-    flex: 1,
-  },
-  bgImage: {
-    width: '100%',
-    height: undefined,
-    aspectRatio: 1.2,
-    alignSelf: 'flex-start',
+    backgroundColor: landing.white,
   },
   content: {
     paddingTop: 8,
-  },
-  eyebrow: {
-    textAlign: 'center',
-    color: '#3F28C6',
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    fontSize: 13,
-    marginBottom: 16,
-  },
-  h1: {
-    textAlign: 'center',
-    fontSize: 24,
-    fontWeight: '700',
-    lineHeight: 30,
-    color: '#1A1A1A',
-    marginBottom: 20,
-  },
-  h1Tablet: {
-    fontSize: 34,
-    lineHeight: 42,
-  },
-  highlight: {
-    color: '#3E1BC9',
-  },
-  heroCtas: {
-    gap: 12,
-    marginBottom: 20,
-  },
-  ctaWrap: {
-    position: 'relative',
-    paddingTop: 10,
-  },
-  chip: {
-    position: 'absolute',
-    top: 0,
-    left: 8,
-    zIndex: 2,
-    backgroundColor: '#17C964',
-    borderRadius: 100,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    transform: [{rotate: '-6deg'}],
-  },
-  chipText: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-    fontSize: 12,
-  },
-  heroImage: {
-    width: '120%',
-    marginLeft: '-10%',
-    height: 220,
-    marginBottom: 28,
-  },
-  sectionTitle: {
-    marginTop: 28,
-    marginBottom: 8,
-  },
-  sectionDesc: {
-    textAlign: 'center',
-    fontSize: 16,
-    lineHeight: 22,
-    color: '#2D2D2D',
-    marginBottom: 18,
-  },
-  spacer: {
-    height: 28,
-  },
-  midCta: {
-    marginVertical: 28,
+    backgroundColor: landing.white,
+    borderBottomLeftRadius: 40,
+    borderBottomRightRadius: 40,
   },
   footer: {
-    marginTop: 40,
+    marginTop: 8,
     alignItems: 'center',
     gap: 10,
     paddingTop: 24,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: '#E4E4E7',
-  },
-  footerLogo: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#3F28C6',
+    paddingHorizontal: 20,
   },
   footerCopy: {
     color: '#787878',
     fontSize: 13,
   },
   footerLink: {
-    color: '#3F28C6',
+    color: landing.violet,
     fontSize: 13,
     textDecorationLine: 'underline',
   },

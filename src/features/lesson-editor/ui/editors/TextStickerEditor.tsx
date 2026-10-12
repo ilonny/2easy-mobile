@@ -2,7 +2,7 @@ import {useEffect, useMemo, useState} from 'react';
 import {Pressable, Text, View} from 'react-native';
 
 import {useI18n} from '../../../../shared/i18n';
-import {TextField} from '../../../../shared/ui';
+import {ColorField, TextField, TitleColorField} from '../../../../shared/ui';
 import {
   ImagePickerField,
   type PickedImage,
@@ -13,15 +13,13 @@ import {
   attachmentsToPicked,
   newId,
   persistExercise,
+  readTitleColor,
   resolvePickedAttachments,
   type EditorCommonProps,
   pickedToPreviewMedia,
 } from './editorShared';
 
 type Sticker = {id: string; text: string};
-
-const BG_PRESETS = ['#FFF7D6', '#E8F5E9', '#E3F2FD', '#FCE4EC', '#FFFFFF'];
-const TEXT_PRESETS = ['#000000', '#3F28C6', '#B45309', '#065F46', '#FFFFFF'];
 
 function normalizeStickers(raw: unknown): Sticker[] {
   if (!Array.isArray(raw) || !raw.length) {
@@ -44,9 +42,11 @@ export function TextStickerEditor({
   currentSortIndexToShift,
   onClose,
   onSaved,
+  onBackToTemplates,
 }: EditorCommonProps & {visible: boolean}) {
   const {t} = useI18n();
   const [title, setTitle] = useState('');
+  const [titleColor, setTitleColor] = useState(TITLE_COLOR);
   const [subtitle, setSubtitle] = useState('');
   const [description, setDescription] = useState('');
   const [stickers, setStickers] = useState<Sticker[]>([
@@ -61,6 +61,7 @@ export function TextStickerEditor({
     if (!visible) return;
     const d = exercise?.data || {};
     setTitle(String(d.title || ''));
+    setTitleColor(readTitleColor(d.titleColor));
     setSubtitle(String(d.subtitle || ''));
     setDescription(String(d.description || ''));
     setStickers(normalizeStickers(d.stickers));
@@ -71,6 +72,7 @@ export function TextStickerEditor({
 
   const applyAiData = (data: Record<string, unknown>) => {
     setTitle(String(data.title || ''));
+    setTitleColor(readTitleColor(data.titleColor));
     setSubtitle(String(data.subtitle || ''));
     setDescription(String(data.description || ''));
     setStickers(normalizeStickers(data.stickers));
@@ -93,7 +95,7 @@ export function TextStickerEditor({
         currentSortIndexToShift,
         data: {
           title,
-          titleColor: TITLE_COLOR,
+          titleColor,
           subtitle,
           description,
           stickers: stickers.map(s => s.text).filter(Boolean),
@@ -111,7 +113,7 @@ export function TextStickerEditor({
   const previewData = useMemo(
     () => ({
       title,
-      titleColor: TITLE_COLOR,
+      titleColor,
       subtitle,
       description,
       stickers: stickers.map(s => s.text).filter(Boolean),
@@ -119,14 +121,15 @@ export function TextStickerEditor({
       stickerBgColor,
       stickerTextColor,
     }),
-    [title, subtitle, description, stickers, images, stickerBgColor, stickerTextColor],
+    [title, titleColor, subtitle, description, stickers, images, stickerBgColor, stickerTextColor],
   );
 
   return (
     <EditorShell
       visible={visible}
-      title={exercise ? t('common.edit') : 'Stickers'}
+      title={exercise ? t('common.edit') : t('templates.textSticker')}
       onClose={onClose}
+      onBackToTemplates={onBackToTemplates}
       onSave={() => {
         void onSave();
       }}
@@ -145,11 +148,17 @@ export function TextStickerEditor({
           stickers: stickers.map(s => s.text).filter(Boolean),
           stickerBgColor,
           stickerTextColor,
-          titleColor: TITLE_COLOR,
+          titleColor,
         },
         onApply: applyAiData,
       }}>
-      <TextField label={t('editor.fieldTitle')} value={title} onChangeText={setTitle} />
+      <TitleColorField
+        label={t('editor.fieldTitle')}
+        value={title}
+        onChangeText={setTitle}
+        color={titleColor}
+        onColorChange={setTitleColor}
+      />
       <TextField
         label={t('editor.fieldSubtitle')}
         value={subtitle}
@@ -160,51 +169,21 @@ export function TextStickerEditor({
         value={description}
         onChangeText={setDescription}
       />
-      <Text style={editorStyles.sectionLabel}>{t('editor.stickerBgColor')}</Text>
-      <View style={editorStyles.row}>
-        {BG_PRESETS.map(c => (
-          <Pressable
-            key={c}
-            onPress={() => setStickerBgColor(c)}
-            style={[
-              colorSwatch.base,
-              {backgroundColor: c},
-              stickerBgColor === c && colorSwatch.active,
-            ]}
-          />
-        ))}
-      </View>
-      <TextField
+      <ColorField
         label={t('editor.stickerBgColor')}
         value={stickerBgColor}
-        onChangeText={setStickerBgColor}
-        autoCapitalize="none"
+        onChange={setStickerBgColor}
       />
-      <Text style={editorStyles.sectionLabel}>{t('editor.stickerTextColor')}</Text>
-      <View style={editorStyles.row}>
-        {TEXT_PRESETS.map(c => (
-          <Pressable
-            key={c}
-            onPress={() => setStickerTextColor(c)}
-            style={[
-              colorSwatch.base,
-              {backgroundColor: c},
-              stickerTextColor === c && colorSwatch.active,
-            ]}
-          />
-        ))}
-      </View>
-      <TextField
+      <ColorField
         label={t('editor.stickerTextColor')}
         value={stickerTextColor}
-        onChangeText={setStickerTextColor}
-        autoCapitalize="none"
+        onChange={setStickerTextColor}
       />
       <Text style={editorStyles.sectionLabel}>Stickers</Text>
       {stickers.map((sticker, index) => (
         <View key={sticker.id} style={editorStyles.itemCard}>
           <TextField
-            label={`Sticker ${index + 1}`}
+            label={t('editor.stickerN').replace('{{n}}', String(index + 1))}
             value={sticker.text}
             onChangeText={text =>
               setStickers(prev =>
@@ -225,7 +204,7 @@ export function TextStickerEditor({
         onPress={() =>
           setStickers(prev => prev.concat({id: newId(), text: ''}))
         }>
-        <Text style={editorStyles.addBtnText}>+ Add sticker</Text>
+        <Text style={editorStyles.addBtnText}>{t('editor.addSticker')}</Text>
       </Pressable>
       <View style={editorStyles.card}>
         <ImagePickerField
@@ -239,17 +218,3 @@ export function TextStickerEditor({
     </EditorShell>
   );
 }
-
-const colorSwatch = {
-  base: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  active: {
-    borderWidth: 3,
-    borderColor: TITLE_COLOR,
-  },
-};

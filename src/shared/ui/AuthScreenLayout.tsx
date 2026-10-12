@@ -1,6 +1,5 @@
 import type {PropsWithChildren} from 'react';
 import {
-  Image,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -11,6 +10,7 @@ import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
 import {colors, spacing} from '../config/theme';
 import {useLayout} from '../lib/layout';
+import {BrandLogo} from './BrandLogo';
 import {Panel} from './Panel';
 
 export function AuthScreenLayout({children}: PropsWithChildren) {
@@ -35,11 +35,7 @@ export function AuthScreenLayout({children}: PropsWithChildren) {
           keyboardShouldPersistTaps="handled">
           <View style={[styles.column, {maxWidth: authFormMaxWidth}]}>
             <View style={[styles.logoCard, isTablet && styles.logoCardTablet]}>
-              <Image
-                source={require('../assets/logo.png')}
-                style={[styles.logo, isTablet && styles.logoTablet]}
-                resizeMode="contain"
-              />
+              <BrandLogo height={isTablet ? 48 : 40} />
             </View>
             <Panel>{children}</Panel>
           </View>
@@ -77,13 +73,5 @@ const styles = StyleSheet.create({
   logoCardTablet: {
     paddingVertical: 24,
     borderRadius: 12,
-  },
-  logo: {
-    width: 180,
-    height: 84,
-  },
-  logoTablet: {
-    width: 220,
-    height: 102,
   },
 });

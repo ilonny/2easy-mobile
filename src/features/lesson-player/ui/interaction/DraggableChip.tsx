@@ -9,6 +9,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import {colors} from '../../../../shared/config/theme';
+import {useLayout} from '../../../../shared/lib/layout';
 import {useChipDrag} from './ChipDragContext';
 
 export type DropTarget = {
@@ -46,6 +47,7 @@ export function DraggableChip({
   onDropOnTarget,
   hitTestDropTarget,
 }: Props) {
+  const {isTablet} = useLayout();
   const {beginDrag, endDrag} = useChipDrag();
   const tx = useSharedValue(0);
   const ty = useSharedValue(0);
@@ -165,7 +167,9 @@ export function DraggableChip({
         collapsable={false}
         style={[
           styles.chip,
-          label.length > 22 && styles.chipCompact,
+          isTablet && styles.chipTablet,
+          label.length > 22 &&
+            (isTablet ? styles.chipCompactTablet : styles.chipCompact),
           selected && styles.chipOn,
           disabled && styles.disabled,
           styles.chipShadow,
@@ -174,8 +178,11 @@ export function DraggableChip({
         <Text
           style={[
             styles.chipText,
-            label.length > 22 && styles.chipTextLong,
-            label.length > 40 && styles.chipTextXLong,
+            isTablet && styles.chipTextTablet,
+            label.length > 22 &&
+              (isTablet ? styles.chipTextLongTablet : styles.chipTextLong),
+            label.length > 40 &&
+              (isTablet ? styles.chipTextXLongTablet : styles.chipTextXLong),
           ]}
           numberOfLines={3}>
           {label}
@@ -282,14 +289,29 @@ const styles = StyleSheet.create({
   chip: {
     backgroundColor: colors.primary,
     borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    maxWidth: 260,
+    minHeight: 40,
+    justifyContent: 'center',
+  },
+  chipTablet: {
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    maxWidth: 360,
+    minHeight: 46,
+    justifyContent: 'center',
+  },
+  chipCompact: {
     paddingHorizontal: 10,
     paddingVertical: 6,
     maxWidth: 220,
   },
-  chipCompact: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    maxWidth: 180,
+  chipCompactTablet: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    maxWidth: 300,
   },
   chipShadow: {
     shadowColor: '#000',
@@ -298,9 +320,12 @@ const styles = StyleSheet.create({
   },
   chipOn: {backgroundColor: '#271399'},
   disabled: {opacity: 0.4},
-  chipText: {color: '#fff', fontWeight: '700', fontSize: 13, lineHeight: 16},
-  chipTextLong: {fontSize: 12, lineHeight: 15, fontWeight: '600'},
-  chipTextXLong: {fontSize: 11, lineHeight: 14, fontWeight: '600'},
+  chipText: {color: '#fff', fontWeight: '700', fontSize: 16, lineHeight: 20},
+  chipTextTablet: {fontSize: 18, lineHeight: 23},
+  chipTextLong: {fontSize: 14, lineHeight: 18, fontWeight: '600'},
+  chipTextLongTablet: {fontSize: 16, lineHeight: 21, fontWeight: '600'},
+  chipTextXLong: {fontSize: 13, lineHeight: 17, fontWeight: '600'},
+  chipTextXLongTablet: {fontSize: 15, lineHeight: 19, fontWeight: '600'},
   dropHighlight: {
     borderWidth: 2,
     borderColor: colors.primary,

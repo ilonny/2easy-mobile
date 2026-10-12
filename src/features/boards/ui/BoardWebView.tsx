@@ -87,10 +87,38 @@ function buildBoardChromeInjectJs(hideBackToEdit: boolean) {
       }
     });
   }
+  /** Site BodyContainer survey CTA — not useful inside the native board WebView. */
+  function hideShareOpinion() {
+    try {
+      localStorage.setItem('isSurveyShowed2', '1');
+    } catch (e) {}
+    document.querySelectorAll('button').forEach(function (btn) {
+      var text = (btn.textContent || '').replace(/\\s+/g, ' ').trim();
+      if (
+        text === 'Поделитесь мнением' ||
+        text === 'Share your opinion'
+      ) {
+        var wrap = btn.parentElement;
+        if (wrap) {
+          wrap.style.setProperty('display', 'none', 'important');
+          wrap.setAttribute('aria-hidden', 'true');
+        } else {
+          btn.style.setProperty('display', 'none', 'important');
+        }
+      }
+    });
+    document.querySelectorAll('iframe[src*="webask.io"]').forEach(function (el) {
+      var dialog = el.closest('[role="dialog"]') || el.parentElement;
+      if (dialog) {
+        dialog.style.setProperty('display', 'none', 'important');
+      }
+    });
+  }
   function apply() {
     hideHeaderClose();
     hideBackToEditBtn();
     hideSiteChrome();
+    hideShareOpinion();
   }
   if (!document.getElementById('rn-board-hide-close')) {
     var styleEl = document.createElement('style');
@@ -162,6 +190,8 @@ export function BoardWebView({boardId, catalog, onClose}: Props) {
     localStorage.setItem('token', ${tokenJson});
     localStorage.setItem('profile', ${JSON.stringify(profileJson)});
     localStorage.setItem('2easy-cookie-consent', '1');
+    // Suppress BodyContainer «Share your opinion» survey in the native board WebView.
+    localStorage.setItem('isSurveyShowed2', '1');
   } catch (e) {}
 })();
 true;
@@ -217,6 +247,22 @@ true;
             }}
             onError={() => setLoadError(true)}
             onHttpError={() => setLoadError(true)}
+            onShouldStartLoadWithRequest={(request: {url?: string}) => {
+              const next = String(request?.url || '');
+              if (!next || next === 'about:blank') {
+                return true;
+              }
+              // Keep the WebView on the board page — auth/login redirects
+              // otherwise dump students onto the site lessons list.
+              if (
+                next.includes(`/board/${boardId}`) ||
+                next.startsWith('blob:') ||
+                next.startsWith('data:')
+              ) {
+                return true;
+              }
+              return false;
+            }}
             startInLoadingState
             renderLoading={() => (
               <View style={[styles.centered, StyleSheet.absoluteFill]}>

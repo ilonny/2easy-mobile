@@ -5,10 +5,9 @@ import {colors, radii} from '../../../../shared/config/theme';
 import {useLessonPlayer} from '../../model/LessonPlayerContext';
 import {useExAnswer} from '../../model/useExAnswer';
 import {ExHeader} from '../ExHeader';
-import {HtmlContent} from '../HtmlContent';
 import {ImageGallery} from '../ImageGallery';
 import {OptionSelect} from '../interaction/OptionSelect';
-import {GapField, splitDataText} from './fillGapsLegacy';
+import {GapField, gapHtmlToPlainText, splitDataText} from './fillGapsLegacy';
 
 type Props = {data: any};
 
@@ -105,7 +104,15 @@ export function FillGapsSelectExView({data}: Props) {
         <View style={styles.flow}>
           {parts.map((part, idx) => {
             if (part.type === 'text') {
-              return <HtmlContent key={`t-${idx}`} html={part.html} />;
+              const text = gapHtmlToPlainText(part.html);
+              if (!text) {
+                return null;
+              }
+              return (
+                <View key={`t-${idx}`} style={styles.textWrap}>
+                  <Text style={styles.text}>{text}</Text>
+                </View>
+              );
             }
             return renderGap(
               fieldsById.get(String(part.id)),
@@ -134,9 +141,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
-    gap: 6,
+    columnGap: 4,
+    rowGap: 6,
     overflow: 'visible',
     zIndex: 2,
   },
-  gapWrap: {zIndex: 3},
+  textWrap: {flexGrow: 0, flexShrink: 1, maxWidth: '100%'},
+  text: {fontSize: 16, color: colors.text, lineHeight: 24},
+  gapWrap: {zIndex: 3, flexGrow: 0, flexShrink: 1, maxWidth: '100%'},
 });

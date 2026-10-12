@@ -1,14 +1,14 @@
 import {useEffect, useMemo, useState} from 'react';
-import {StyleSheet, TextInput, View} from 'react-native';
+import {StyleSheet, Text, TextInput, View} from 'react-native';
 
 import {colors, radii} from '../../../../shared/config/theme';
 import {useLessonPlayer} from '../../model/LessonPlayerContext';
 import {useExAnswer} from '../../model/useExAnswer';
 import {ExHeader} from '../ExHeader';
-import {HtmlContent} from '../HtmlContent';
 import {ImageGallery} from '../ImageGallery';
 import {
   GapField,
+  gapHtmlToPlainText,
   isCorrectOption,
   splitDataText,
 } from './fillGapsLegacy';
@@ -60,7 +60,15 @@ export function FillGapsInputExView({data}: Props) {
         <View style={styles.flow}>
           {parts.map((part, idx) => {
             if (part.type === 'text') {
-              return <HtmlContent key={`t-${idx}`} html={part.html} />;
+              const text = gapHtmlToPlainText(part.html);
+              if (!text) {
+                return null;
+              }
+              return (
+                <View key={`t-${idx}`} style={styles.textWrap}>
+                  <Text style={styles.text}>{text}</Text>
+                </View>
+              );
             }
             const field = fieldsById.get(String(part.id));
             const val = local[String(part.id)] ?? '';
@@ -124,14 +132,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
-    gap: 6,
+    columnGap: 4,
+    rowGap: 6,
   },
+  textWrap: {flexGrow: 0, flexShrink: 1, maxWidth: '100%'},
+  text: {fontSize: 16, color: colors.text, lineHeight: 24},
   input: {
-    minWidth: 80,
+    flexGrow: 0,
+    flexShrink: 1,
+    minWidth: 64,
+    maxWidth: '100%',
     borderRadius: radii.sm,
     backgroundColor: colors.primarySoft,
     paddingHorizontal: 10,
-    paddingVertical: 8,
+    paddingVertical: 6,
     color: colors.text,
     fontSize: 16,
   },

@@ -2,7 +2,7 @@ import {useEffect, useMemo, useState} from 'react';
 import {Text, View} from 'react-native';
 
 import {useI18n} from '../../../../shared/i18n';
-import {TextField} from '../../../../shared/ui';
+import {TextField, TitleColorField} from '../../../../shared/ui';
 import {
   ImagePickerField,
   type PickedImage,
@@ -12,6 +12,7 @@ import {RichHtmlEditor} from './RichHtmlEditor';
 import {
   TITLE_COLOR,
   attachmentsToPicked,
+  readTitleColor,
   persistExercise,
   resolvePickedAttachments,
   type EditorCommonProps,
@@ -26,9 +27,11 @@ export function TextDefaultEditor({
   currentSortIndexToShift,
   onClose,
   onSaved,
+  onBackToTemplates,
 }: EditorCommonProps & {visible: boolean}) {
   const {t} = useI18n();
   const [title, setTitle] = useState('');
+  const [titleColor, setTitleColor] = useState(TITLE_COLOR);
   const [subtitle, setSubtitle] = useState('');
   const [description, setDescription] = useState('');
   const [content, setContent] = useState('');
@@ -42,6 +45,7 @@ export function TextDefaultEditor({
     if (!visible) return;
     const d = exercise?.data || {};
     setTitle(String(d.title || ''));
+    setTitleColor(readTitleColor(d.titleColor));
     setSubtitle(String(d.subtitle || ''));
     setDescription(String(d.description || ''));
     setContent(String(d.content || ''));
@@ -51,6 +55,7 @@ export function TextDefaultEditor({
 
   const applyAiData = (data: Record<string, unknown>) => {
     setTitle(String(data.title || ''));
+    setTitleColor(readTitleColor(data.titleColor));
     setSubtitle(String(data.subtitle || ''));
     setDescription(String(data.description || ''));
     setContent(String(data.content || ''));
@@ -77,7 +82,7 @@ export function TextDefaultEditor({
         currentSortIndexToShift,
         data: {
           title,
-          titleColor: TITLE_COLOR,
+          titleColor,
           subtitle,
           description,
           content,
@@ -95,7 +100,7 @@ export function TextDefaultEditor({
   const previewData = useMemo(
     () => ({
       title,
-      titleColor: TITLE_COLOR,
+      titleColor,
       subtitle,
       description,
       content,
@@ -103,14 +108,15 @@ export function TextDefaultEditor({
       editorImages: pickedToPreviewMedia(editorImages),
       viewType: 'carousel',
     }),
-    [title, subtitle, description, content, images, editorImages],
+    [title, titleColor, subtitle, description, content, images, editorImages],
   );
 
   return (
     <EditorShell
       visible={visible}
-      title={exercise ? t('common.edit') : 'Text'}
+      title={exercise ? t('common.edit') : t('templates.text')}
       onClose={onClose}
+      onBackToTemplates={onBackToTemplates}
       onSave={() => {
         void onSave();
       }}
@@ -127,15 +133,17 @@ export function TextDefaultEditor({
           subtitle,
           description,
           content,
-          titleColor: TITLE_COLOR,
+          titleColor,
           viewType: 'carousel',
         },
         onApply: applyAiData,
       }}>
-      <TextField
+      <TitleColorField
         label={t('editor.fieldTitle')}
         value={title}
         onChangeText={setTitle}
+        color={titleColor}
+        onColorChange={setTitleColor}
       />
       <TextField
         label={t('editor.fieldSubtitle')}
@@ -152,7 +160,7 @@ export function TextDefaultEditor({
         key={`content-${editorKey}`}
         html={content}
         onChangeHtml={setContent}
-        placeholder={t('editor.content')}
+        placeholder={t('editor.contentPlaceholder')}
       />
       <View style={editorStyles.card}>
         <ImagePickerField

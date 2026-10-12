@@ -34,7 +34,7 @@ export function AppNavigator() {
       <Stack.Screen
         name="Home"
         component={HomePage}
-        options={{contentStyle: {backgroundColor: '#F9F9F9'}}}
+        options={{contentStyle: {backgroundColor: '#FFFFFF'}}}
       />
       <Stack.Screen
         name="MainTabs"

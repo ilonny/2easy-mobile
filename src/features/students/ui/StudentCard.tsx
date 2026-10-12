@@ -3,8 +3,9 @@ import {Pressable, StyleSheet, Text, View} from 'react-native';
 
 import {useI18n} from '../../../shared/i18n';
 import {colors, radii} from '../../../shared/config/theme';
-import {ActionMenuModal} from '../../../shared/ui';
+import {ActionMenuModal, UserAvatar} from '../../../shared/ui';
 import type {Student} from '../api/studentsApi';
+import {StudentPasswordReveal} from './StudentPasswordReveal';
 
 type Props = {
   student: Student;
@@ -13,17 +14,9 @@ type Props = {
   onDelete: (student: Student) => void;
   /** Hide “open cabinet” (already inside cabinet). */
   hideCabinetAction?: boolean;
+  /** Show password reveal (teacher student list). */
+  showPassword?: boolean;
 };
-
-function shortName(name: string) {
-  return name
-    .split(' ')
-    .map(part => part[0] || '')
-    .filter(Boolean)
-    .slice(0, 2)
-    .join('')
-    .toUpperCase();
-}
 
 export function StudentCard({
   student,
@@ -31,6 +24,7 @@ export function StudentCard({
   onEdit,
   onDelete,
   hideCabinetAction,
+  showPassword = true,
 }: Props) {
   const {t} = useI18n();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -65,11 +59,7 @@ export function StudentCard({
         }
         onLongPress={openMenu}
         style={({pressed}) => [styles.card, pressed && styles.pressed]}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>
-            {shortName(student.name) || 'A'}
-          </Text>
-        </View>
+        <UserAvatar name={student.name} avatar={student.avatar} size={48} />
         <View style={styles.meta}>
           <Text style={styles.name}>{student.name}</Text>
           {!!student.email && <Text style={styles.email}>{student.email}</Text>}
@@ -78,6 +68,9 @@ export function StudentCard({
               <Text style={styles.tagText}>{student.tag}</Text>
             </View>
           )}
+          {showPassword && !hideCabinetAction ? (
+            <StudentPasswordReveal studentId={student.id} />
+          ) : null}
         </View>
         <Pressable onPress={openMenu} hitSlop={10} style={styles.menuBtn}>
           <Text style={styles.menuText}>⋮</Text>
@@ -109,19 +102,6 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.94,
-  },
-  avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: colors.primarySoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: {
-    fontWeight: '700',
-    color: '#4031C3',
-    fontSize: 16,
   },
   meta: {
     flex: 1,

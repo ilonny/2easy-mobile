@@ -2,7 +2,7 @@ import {useEffect, useMemo, useState} from 'react';
 import {Pressable, Text, View} from 'react-native';
 
 import {useI18n} from '../../../../shared/i18n';
-import {TextField} from '../../../../shared/ui';
+import {TextField, TitleColorField} from '../../../../shared/ui';
 import {
   ImagePickerField,
   type PickedImage,
@@ -16,6 +16,7 @@ import {
 import {
   TITLE_COLOR,
   attachmentsToPicked,
+  readTitleColor,
   newId,
   persistExercise,
   resolvePickedAttachments,
@@ -59,9 +60,11 @@ export function FillGapsNewEditor({
   currentSortIndexToShift,
   onClose,
   onSaved,
+  onBackToTemplates,
 }: EditorCommonProps & {visible: boolean}) {
   const {t} = useI18n();
   const [title, setTitle] = useState('');
+  const [titleColor, setTitleColor] = useState(TITLE_COLOR);
   const [subtitle, setSubtitle] = useState('');
   const [description, setDescription] = useState('');
   const [mode, setMode] = useState<Mode>('input');
@@ -76,6 +79,7 @@ export function FillGapsNewEditor({
     if (!visible) return;
     const d = exercise?.data || {};
     setTitle(String(d.title || ''));
+    setTitleColor(readTitleColor(d.titleColor));
     setSubtitle(String(d.subtitle || ''));
     setDescription(String(d.description || ''));
     const m = d.mode as Mode;
@@ -87,6 +91,7 @@ export function FillGapsNewEditor({
 
   const applyAiData = (data: Record<string, unknown>) => {
     setTitle(String(data.title || ''));
+    setTitleColor(readTitleColor(data.titleColor));
     setSubtitle(String(data.subtitle || ''));
     setDescription(String(data.description || ''));
     const m = data.mode as Mode;
@@ -123,7 +128,7 @@ export function FillGapsNewEditor({
         data: {
           mode,
           title,
-          titleColor: TITLE_COLOR,
+          titleColor,
           subtitle,
           description,
           content: content.length ? content : defaultContent(),
@@ -154,21 +159,22 @@ export function FillGapsNewEditor({
     () => ({
       mode,
       title,
-      titleColor: TITLE_COLOR,
+      titleColor,
       subtitle,
       description,
       content,
       gaps,
       images: pickedToPreviewMedia(images),
     }),
-    [mode, title, subtitle, description, content, gaps, images],
+    [mode, title, titleColor, subtitle, description, content, gaps, images],
   );
 
   return (
     <EditorShell
       visible={visible}
-      title={exercise ? t('common.edit') : 'Fill gaps'}
+      title={exercise ? t('common.edit') : t('templates.fillGapsNew')}
       onClose={onClose}
+      onBackToTemplates={onBackToTemplates}
       onSave={() => {
         void onSave();
       }}
@@ -187,11 +193,17 @@ export function FillGapsNewEditor({
           description,
           content,
           gaps,
-          titleColor: TITLE_COLOR,
+          titleColor,
         },
         onApply: applyAiData,
       }}>
-      <TextField label={t('editor.fieldTitle')} value={title} onChangeText={setTitle} />
+      <TitleColorField
+        label={t('editor.fieldTitle')}
+        value={title}
+        onChangeText={setTitle}
+        color={titleColor}
+        onColorChange={setTitleColor}
+      />
       <TextField
         label={t('editor.fieldSubtitle')}
         value={subtitle}

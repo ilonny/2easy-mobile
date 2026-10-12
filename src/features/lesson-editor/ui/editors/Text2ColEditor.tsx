@@ -2,7 +2,7 @@ import {useEffect, useMemo, useState} from 'react';
 import {Text, View} from 'react-native';
 
 import {useI18n} from '../../../../shared/i18n';
-import {TextField} from '../../../../shared/ui';
+import {TextField, TitleColorField} from '../../../../shared/ui';
 import {
   ImagePickerField,
   type PickedImage,
@@ -12,6 +12,7 @@ import {RichHtmlEditor} from './RichHtmlEditor';
 import {
   TITLE_COLOR,
   attachmentsToPicked,
+  readTitleColor,
   persistExercise,
   resolvePickedAttachments,
   type EditorCommonProps,
@@ -26,9 +27,11 @@ export function Text2ColEditor({
   currentSortIndexToShift,
   onClose,
   onSaved,
+  onBackToTemplates,
 }: EditorCommonProps & {visible: boolean}) {
   const {t} = useI18n();
   const [title, setTitle] = useState('');
+  const [titleColor, setTitleColor] = useState(TITLE_COLOR);
   const [subtitle, setSubtitle] = useState('');
   const [description, setDescription] = useState('');
   const [content, setContent] = useState('');
@@ -46,6 +49,7 @@ export function Text2ColEditor({
     if (!visible) return;
     const d = exercise?.data || {};
     setTitle(String(d.title || ''));
+    setTitleColor(readTitleColor(d.titleColor));
     setSubtitle(String(d.subtitle || ''));
     setDescription(String(d.description || ''));
     setContent(String(d.content || ''));
@@ -57,6 +61,7 @@ export function Text2ColEditor({
 
   const applyAiData = (data: Record<string, unknown>) => {
     setTitle(String(data.title || ''));
+    setTitleColor(readTitleColor(data.titleColor));
     setSubtitle(String(data.subtitle || ''));
     setDescription(String(data.description || ''));
     setContent(String(data.content || ''));
@@ -89,7 +94,7 @@ export function Text2ColEditor({
         currentSortIndexToShift,
         data: {
           title,
-          titleColor: TITLE_COLOR,
+          titleColor,
           subtitle,
           description,
           content,
@@ -108,7 +113,7 @@ export function Text2ColEditor({
   const previewData = useMemo(
     () => ({
       title,
-      titleColor: TITLE_COLOR,
+      titleColor,
       subtitle,
       description,
       content,
@@ -117,14 +122,15 @@ export function Text2ColEditor({
       editorImages: pickedToPreviewMedia(editorImages),
       secondEditorImages: pickedToPreviewMedia(secondEditorImages),
     }),
-    [title, subtitle, description, content, secondContent, images, editorImages, secondEditorImages],
+    [title, titleColor, subtitle, description, content, secondContent, images, editorImages, secondEditorImages],
   );
 
   return (
     <EditorShell
       visible={visible}
-      title={exercise ? t('common.edit') : 'Text 2 columns'}
+      title={exercise ? t('common.edit') : t('templates.text2Col')}
       onClose={onClose}
+      onBackToTemplates={onBackToTemplates}
       onSave={() => {
         void onSave();
       }}
@@ -142,11 +148,17 @@ export function Text2ColEditor({
           description,
           content,
           secondContent,
-          titleColor: TITLE_COLOR,
+          titleColor,
         },
         onApply: applyAiData,
       }}>
-      <TextField label={t('editor.fieldTitle')} value={title} onChangeText={setTitle} />
+      <TitleColorField
+        label={t('editor.fieldTitle')}
+        value={title}
+        onChangeText={setTitle}
+        color={titleColor}
+        onColorChange={setTitleColor}
+      />
       <TextField
         label={t('editor.fieldSubtitle')}
         value={subtitle}
@@ -189,7 +201,7 @@ export function Text2ColEditor({
       </View>
       <View style={editorStyles.card}>
         <ImagePickerField
-          label={`${t('editor.editorImages')} (2)`}
+          label={t('editor.editorImagesSecond')}
           images={secondEditorImages}
           onChange={setSecondEditorImages}
           multiple

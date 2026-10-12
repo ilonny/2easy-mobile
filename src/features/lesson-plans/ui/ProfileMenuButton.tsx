@@ -15,7 +15,7 @@ import {useI18n} from '../../../shared/i18n';
 import {colors, radii} from '../../../shared/config/theme';
 import type {RootStackParamList} from '../../../shared/navigation/types';
 import {resetToRoute} from '../../../shared/navigation/resetToLessonPlans';
-import {LanguageSwitcher} from '../../../shared/ui';
+import {LanguageSwitcher, UserAvatar} from '../../../shared/ui';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -45,13 +45,17 @@ export function ProfileMenuButton({onLogin, onRegister}: Props) {
   }, [open, windowWidth]);
 
   const close = () => setOpen(false);
-  const initial = (profile?.name?.trim()?.[0] || '?').toUpperCase();
 
   const onLogout = async () => {
     close();
     // Reset while nav is still mounted, then clear session (guest stack remounts on Home).
     resetToRoute(navigation, 'Home');
     await clearSession();
+  };
+
+  const openProfile = () => {
+    close();
+    navigation.navigate('MainTabs', {screen: 'Profile'});
   };
 
   return (
@@ -68,7 +72,11 @@ export function ProfileMenuButton({onLogin, onRegister}: Props) {
             pressed && styles.pressed,
           ]}>
           {isAuthorized ? (
-            <Text style={styles.initial}>{initial}</Text>
+            <UserAvatar
+              name={profile?.name}
+              avatar={profile?.avatar}
+              size={36}
+            />
           ) : (
             <Text style={styles.icon}>👤</Text>
           )}
@@ -87,6 +95,9 @@ export function ProfileMenuButton({onLogin, onRegister}: Props) {
                     {profile.name}
                   </Text>
                 )}
+                <Pressable style={styles.item} onPress={openProfile}>
+                  <Text style={styles.itemLabel}>{t('profile.personalData')}</Text>
+                </Pressable>
                 <Pressable style={styles.item} onPress={() => void onLogout()}>
                   <Text style={styles.itemLabel}>{t('auth.logout')}</Text>
                 </Pressable>

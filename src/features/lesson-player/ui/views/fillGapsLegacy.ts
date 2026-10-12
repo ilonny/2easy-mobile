@@ -8,13 +8,47 @@ export type GapField = {
   value?: string;
 };
 
-/** Split HTML around answerWrapper spans so we can interleave gap controls. */
+function decodeBasicEntities(text: string): string {
+  return text
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/gi, "'");
+}
+
+/**
+ * Plain text for inline fill-gaps flow. HtmlContent width:100% forces each
+ * fragment onto its own line in a flexWrap row.
+ */
+export function gapHtmlToPlainText(html?: string): string {
+  if (!html) {
+    return '';
+  }
+  return decodeBasicEntities(
+    html
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/p>/gi, '\n')
+      .replace(/<[^>]+>/g, ''),
+  )
+    .replace(/\u00a0/g, ' ')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n[ \t]+/g, '\n')
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+/** Split HTML around answerWrapper nodes so we can interleave gap controls. */
 export function splitDataText(dataText?: string): Array<
   {type: 'text'; html: string} | {type: 'gap'; id: string}
 > {
   const html = dataText || '';
+  // Match both closed tags and self-closing editor placeholders.
   const re =
-    /<[^>]*class=["'][^"']*answerWrapper[^"']*["'][^>]*\bid=["']([^"']+)["'][^>]*>[\s\S]*?<\/[^>]+>/gi;
+    /<[^>]*class=["'][^"']*answerWrapper[^"']*["'][^>]*\bid=["']([^"']+)["'][^>]*(?:\/>|>[\s\S]*?<\/[^>]+>)/gi;
   const parts: Array<{type: 'text'; html: string} | {type: 'gap'; id: string}> =
     [];
   let last = 0;

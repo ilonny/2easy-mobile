@@ -2,7 +2,7 @@ import {useEffect, useMemo, useState} from 'react';
 import {Pressable, Text, View} from 'react-native';
 
 import {useI18n} from '../../../../shared/i18n';
-import {TextField} from '../../../../shared/ui';
+import {TextField, TitleColorField} from '../../../../shared/ui';
 import {
   ImagePickerField,
   type PickedImage,
@@ -11,6 +11,7 @@ import {EditorShell, editorStyles} from './EditorShell';
 import {
   TITLE_COLOR,
   attachmentsToPicked,
+  readTitleColor,
   newId,
   persistExercise,
   resolvePickedAttachments,
@@ -28,9 +29,11 @@ export function MatchWordWordEditor({
   currentSortIndexToShift,
   onClose,
   onSaved,
+  onBackToTemplates,
 }: EditorCommonProps & {visible: boolean}) {
   const {t} = useI18n();
   const [title, setTitle] = useState('');
+  const [titleColor, setTitleColor] = useState(TITLE_COLOR);
   const [subtitle, setSubtitle] = useState('');
   const [description, setDescription] = useState('');
   const [matches, setMatches] = useState<Match[]>([
@@ -43,6 +46,7 @@ export function MatchWordWordEditor({
     if (!visible) return;
     const d = exercise?.data || {};
     setTitle(String(d.title || ''));
+    setTitleColor(readTitleColor(d.titleColor));
     setSubtitle(String(d.subtitle || ''));
     setDescription(String(d.description || ''));
     const raw = (d.matches as Match[]) || [];
@@ -60,6 +64,7 @@ export function MatchWordWordEditor({
 
   const applyAiData = (data: Record<string, unknown>) => {
     setTitle(String(data.title || ''));
+    setTitleColor(readTitleColor(data.titleColor));
     setSubtitle(String(data.subtitle || ''));
     setDescription(String(data.description || ''));
     const raw = (data.matches as Match[]) || [];
@@ -89,7 +94,7 @@ export function MatchWordWordEditor({
         currentSortIndexToShift,
         data: {
           title,
-          titleColor: TITLE_COLOR,
+          titleColor,
           subtitle,
           description,
           images: hero,
@@ -105,20 +110,23 @@ export function MatchWordWordEditor({
   const previewData = useMemo(
     () => ({
       title,
-      titleColor: TITLE_COLOR,
+      titleColor,
       subtitle,
       description,
       images: pickedToPreviewMedia(images),
       matches,
     }),
-    [title, subtitle, description, images, matches],
+    [title, titleColor, subtitle, description, images, matches],
   );
 
   return (
     <EditorShell
       visible={visible}
-      title={exercise ? t('common.edit') : 'Match words'}
+      title={
+        exercise ? t('common.edit') : t('templates.matchWordWord')
+      }
       onClose={onClose}
+      onBackToTemplates={onBackToTemplates}
       onSave={() => {
         void onSave();
       }}
@@ -135,11 +143,17 @@ export function MatchWordWordEditor({
           subtitle,
           description,
           matches,
-          titleColor: TITLE_COLOR,
+          titleColor,
         },
         onApply: applyAiData,
       }}>
-      <TextField label={t('editor.fieldTitle')} value={title} onChangeText={setTitle} />
+      <TitleColorField
+        label={t('editor.fieldTitle')}
+        value={title}
+        onChangeText={setTitle}
+        color={titleColor}
+        onColorChange={setTitleColor}
+      />
       <TextField
         label={t('editor.fieldSubtitle')}
         value={subtitle}
@@ -153,7 +167,7 @@ export function MatchWordWordEditor({
       {matches.map((m, index) => (
         <View key={m.id} style={editorStyles.itemCard}>
           <TextField
-            label={`Word ${index + 1}`}
+            label={t('editor.wordN').replace('{{n}}', String(index + 1))}
             value={m.value}
             onChangeText={value =>
               setMatches(prev =>
@@ -162,7 +176,7 @@ export function MatchWordWordEditor({
             }
           />
           <TextField
-            label="Definition"
+            label={t('editor.definition')}
             value={m.correctValue}
             onChangeText={correctValue =>
               setMatches(prev =>
@@ -187,7 +201,7 @@ export function MatchWordWordEditor({
             prev.concat({id: newId(), value: '', correctValue: ''}),
           )
         }>
-        <Text style={editorStyles.addBtnText}>+ Add pair</Text>
+        <Text style={editorStyles.addBtnText}>+ {t('editor.addPair')}</Text>
       </Pressable>
       <View style={editorStyles.card}>
         <ImagePickerField

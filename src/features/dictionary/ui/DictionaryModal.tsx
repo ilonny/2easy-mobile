@@ -74,7 +74,11 @@ export function DictionaryModal({visible, studentId, onClose}: Props) {
       const list = await fetchDictionary(studentId, {
         search: search.trim() || undefined,
         isLearned:
-          tab === 'learned' ? true : tab === 'unlearned' ? false : undefined,
+          tab === 'learned'
+            ? true
+            : tab === 'unlearned' || tab === 'training'
+              ? false
+              : undefined,
       });
       setItems(list);
       setSelectedIds([]);

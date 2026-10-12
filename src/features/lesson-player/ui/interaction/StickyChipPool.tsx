@@ -9,6 +9,7 @@ import {
 import {StyleSheet, View} from 'react-native';
 
 import {colors, radii} from '../../../../shared/config/theme';
+import {useLayout} from '../../../../shared/lib/layout';
 import {useLessonScroll} from '../../model/LessonScrollContext';
 import {useChipDrag} from './ChipDragContext';
 
@@ -28,6 +29,7 @@ type Props = {
  */
 export function StickyChipPool({children, scopeRef}: Props) {
   const id = useId();
+  const {isTablet} = useLayout();
   const {
     scrollY,
     stickyTop,
@@ -40,6 +42,7 @@ export function StickyChipPool({children, scopeRef}: Props) {
   const poolTopRef = useRef(0);
   const scopeBottomRef = useRef(Number.POSITIVE_INFINITY);
   const poolHeightRef = useRef(0);
+  const measuredRef = useRef(false);
   const [height, setHeight] = useState(0);
   const [stuck, setStuck] = useState(false);
 
@@ -47,8 +50,12 @@ export function StickyChipPool({children, scopeRef}: Props) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const current = (scrollY as any).__getValue?.() ?? 0;
     wrapRef.current?.measureInWindow((_x, winY, _w, h) => {
+      // Content-space Y of the pool (scroll offset when it meets the
+      // expanded header). Do not subtract the live pin here — that made
+      // chips stick a full header too early, especially on tablet.
       poolTopRef.current = current + winY - stickyTopExpanded;
       poolHeightRef.current = h;
+      measuredRef.current = h > 0;
       setHeight(h);
     });
     const scopeNode = scopeRef?.current;
@@ -62,26 +69,32 @@ export function StickyChipPool({children, scopeRef}: Props) {
   };
 
   useEffect(() => {
+    measure();
+    // Re-base after the collapsing header reports its real height.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stickyTopExpanded]);
+
+  useEffect(() => {
     const listener = scrollY.addListener(({value}) => {
-      // Refresh bounds while scrolling (exercise height can change).
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const current = value;
       const scopeNode = scopeRef?.current;
       if (scopeNode) {
         scopeNode.measureInWindow((_x, winY, _w, h) => {
-          scopeBottomRef.current = current + winY - stickyTopExpanded + h;
+          scopeBottomRef.current = value + winY - stickyTopExpanded + h;
         });
       }
 
-      const poolTop = poolTopRef.current;
-      if (poolTop <= 0) {
+      if (!measuredRef.current) {
         return;
       }
+      const poolTop = poolTopRef.current;
       const pin = stickyTop;
       const poolH = poolHeightRef.current || height || 0;
       const scopeBottom = scopeBottomRef.current;
-      const pastPoolTop = value >= poolTop - pin;
-      const beforeScopeEnd = value < scopeBottom - pin - poolH;
+      // Stick only once the pool's natural window Y reaches the pin line:
+      // winY ≈ poolTop + stickyTopExpanded - scrollY.
+      const pastPoolTop = value >= poolTop + stickyTopExpanded - pin;
+      const beforeScopeEnd =
+        value < scopeBottom + stickyTopExpanded - pin - poolH;
       setStuck(pastPoolTop && beforeScopeEnd);
     });
     return () => scrollY.removeListener(listener);
@@ -92,7 +105,11 @@ export function StickyChipPool({children, scopeRef}: Props) {
       setStickyOverlay({
         id,
         height,
-        node: <View style={styles.pool}>{children}</View>,
+        node: (
+          <View style={[styles.pool, isTablet && styles.poolTablet]}>
+            {children}
+          </View>
+        ),
       });
     } else {
       releaseStickyOverlay(id);
@@ -100,7 +117,15 @@ export function StickyChipPool({children, scopeRef}: Props) {
     return () => {
       releaseStickyOverlay(id);
     };
-  }, [stuck, children, height, id, setStickyOverlay, releaseStickyOverlay]);
+  }, [
+    stuck,
+    children,
+    height,
+    id,
+    isTablet,
+    setStickyOverlay,
+    releaseStickyOverlay,
+  ]);
 
   return (
     <View
@@ -115,6 +140,7 @@ export function StickyChipPool({children, scopeRef}: Props) {
       <View
         style={[
           styles.pool,
+          isTablet && styles.poolTablet,
           stuck && styles.invisible,
           isDragging && styles.poolDragging,
         ]}
@@ -149,6 +175,11 @@ const styles = StyleSheet.create({
     overflow: 'visible',
     zIndex: 20,
     elevation: 20,
+  },
+  poolTablet: {
+    gap: 12,
+    padding: 14,
+    borderRadius: radii.lg,
   },
   poolDragging: {
     zIndex: 90,

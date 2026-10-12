@@ -16,13 +16,31 @@ import {WebView} from 'react-native-webview';
 import {useAuth} from '../../../entities/session';
 import {useI18n} from '../../../shared/i18n';
 import {colors, radii} from '../../../shared/config/theme';
+import {useLayout} from '../../../shared/lib/layout';
 
 const JITSI_DOMAIN = 'meet.2easyeng.com';
-const HEADER_H = 44;
-const MIN_W = 280;
-const MIN_H = 200;
-const MAX_W = 600;
-const MAX_H = 500;
+const HEADER_H = 52;
+const MIN_W = 300;
+const MIN_H = 220;
+const MAX_W = 720;
+const MAX_H = 640;
+
+function defaultVideoSize(
+  screenW: number,
+  screenH: number,
+  isTablet: boolean,
+) {
+  if (isTablet) {
+    return {
+      w: Math.min(440, Math.max(380, screenW - 64)),
+      h: Math.min(420, Math.max(340, Math.floor(screenH * 0.44))),
+    };
+  }
+  return {
+    w: Math.min(360, Math.max(MIN_W, screenW - 24)),
+    h: Math.min(340, Math.max(MIN_H, Math.floor(screenH * 0.42))),
+  };
+}
 
 /**
  * Keep a mobile Safari UA. A desktop/Macintosh UA makes WKWebView hide
@@ -35,7 +53,6 @@ const MOBILE_SAFARI_UA =
 
 type Props = {
   visible: boolean;
-  lessonId: number;
   lessonOwnerId?: number;
   bottomOffset?: number;
   onClose: () => void;
@@ -58,6 +75,11 @@ function resolveTeacherUserId(
     return String(profile.id);
   }
   return lessonOwnerId ? String(lessonOwnerId) : null;
+}
+
+/** Stable per-teacher room so switching lesson ↔ homework stays on the same call. */
+function buildTeacherRoomName(teacherUserId: string) {
+  return `2easy-t-${teacherUserId}`;
 }
 
 function clamp(n: number, min: number, max: number) {
@@ -103,18 +125,21 @@ function buildRoomUrl(roomName: string, displayName: string) {
 
 export function LessonVideoCallWindow({
   visible,
-  lessonId,
   lessonOwnerId,
   bottomOffset = 90,
   onClose,
 }: Props) {
   const insets = useSafeAreaInsets();
   const {width: screenW, height: screenH} = useWindowDimensions();
+  const {isTablet} = useLayout();
   const {profile} = useAuth();
   const {t} = useI18n();
 
-  const defaultW = Math.min(320, Math.max(MIN_W, screenW - 24));
-  const defaultH = Math.min(300, Math.max(MIN_H, Math.floor(screenH * 0.38)));
+  const {w: defaultW, h: defaultH} = defaultVideoSize(
+    screenW,
+    screenH,
+    isTablet,
+  );
 
   const [size, setSize] = useState({w: defaultW, h: defaultH});
   const [position, setPosition] = useState({
@@ -147,8 +172,7 @@ export function LessonVideoCallWindow({
       setPermissionDenied(false);
       return;
     }
-    const w = Math.min(320, Math.max(MIN_W, screenW - 24));
-    const h = Math.min(300, Math.max(MIN_H, Math.floor(screenH * 0.38)));
+    const {w, h} = defaultVideoSize(screenW, screenH, isTablet);
     setSize({w, h});
     setPosition({
       x: Math.max(12, screenW - w - 12),
@@ -167,18 +191,15 @@ export function LessonVideoCallWindow({
     return () => {
       cancelled = true;
     };
-  }, [visible, screenW, screenH, insets.top, bottomOffset]);
+  }, [visible, screenW, screenH, insets.top, bottomOffset, isTablet]);
 
   const teacherUserId = resolveTeacherUserId(profile, lessonOwnerId);
   const roomName = useMemo(() => {
-    if (!lessonId) {
+    if (!teacherUserId) {
       return '';
     }
-    if (!teacherUserId) {
-      return `2easy-lesson-${lessonId}`;
-    }
-    return `2easy-lesson-${lessonId}-teacher-${teacherUserId}`;
-  }, [lessonId, teacherUserId]);
+    return buildTeacherRoomName(teacherUserId);
+  }, [teacherUserId]);
 
   const displayName =
     [profile?.name, profile?.surname].filter(Boolean).join(' ') ||
@@ -238,8 +259,8 @@ export function LessonVideoCallWindow({
         },
         onPanResponderMove: (_, g) => {
           const screen = screenRef.current;
-          const capW = Math.min(MAX_W, screen.w - 8);
-          const capH = Math.min(MAX_H, screen.h - screen.top - 48);
+          const capW = Math.min(MAX_W, screen.w - 16);
+          const capH = Math.min(MAX_H, screen.h - screen.top - 56);
           const nextW = clamp(resizeStart.current.w + g.dx, MIN_W, capW);
           const nextH = clamp(resizeStart.current.h + g.dy, MIN_H, capH);
           setSize({w: nextW, h: nextH});
@@ -293,10 +314,30 @@ export function LessonVideoCallWindow({
             height: size.h + HEADER_H,
           },
         ]}>
-        <View style={styles.header} {...dragPan.panHandlers}>
-          <Text style={styles.title} numberOfLines={1}>
-            {t('videoCall.title')}
-          </Text>
+        <View
+          style={styles.header}
+          accessibilityLabel={t('videoCall.dragHint')}
+          {...dragPan.panHandlers}>
+          <View style={styles.dragGrip} accessibilityElementsHidden>
+            <View style={styles.dragCol}>
+              <View style={styles.dragDot} />
+              <View style={styles.dragDot} />
+              <View style={styles.dragDot} />
+            </View>
+            <View style={styles.dragCol}>
+              <View style={styles.dragDot} />
+              <View style={styles.dragDot} />
+              <View style={styles.dragDot} />
+            </View>
+          </View>
+          <View style={styles.titleWrap}>
+            <Text style={styles.title} numberOfLines={1}>
+              {t('videoCall.title')}
+            </Text>
+            <Text style={styles.dragHint} numberOfLines={1}>
+              {t('videoCall.dragHint')}
+            </Text>
+          </View>
           <Pressable onPress={onClose} hitSlop={10} style={styles.closeBtn}>
             <Text style={styles.close}>✕</Text>
           </Pressable>
@@ -346,10 +387,14 @@ export function LessonVideoCallWindow({
             </View>
           )}
           <View
-            style={styles.resizeHandle}
+            style={[styles.resizeHandle, isTablet && styles.resizeHandleTablet]}
             accessibilityLabel={t('videoCall.resize')}
             {...resizePan.panHandlers}>
-            <View style={styles.resizeGrip} />
+            <View style={styles.resizeBadge}>
+              <View style={[styles.resizeLine, styles.resizeLineLong]} />
+              <View style={styles.resizeLine} />
+              <View style={[styles.resizeLine, styles.resizeLineShort]} />
+            </View>
           </View>
         </View>
       </View>
@@ -380,14 +425,36 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 10,
     gap: 8,
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    backgroundColor: 'rgba(0,0,0,0.45)',
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(255,255,255,0.08)',
+    borderBottomColor: 'rgba(255,255,255,0.12)',
   },
+  dragGrip: {
+    width: 22,
+    height: 28,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    borderRadius: 6,
+    backgroundColor: 'rgba(255,255,255,0.14)',
+  },
+  dragCol: {gap: 3, justifyContent: 'center'},
+  dragDot: {
+    width: 3.5,
+    height: 3.5,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+  },
+  titleWrap: {flex: 1, gap: 1},
   title: {
-    flex: 1,
     color: colors.white,
-    fontSize: 13,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  dragHint: {
+    color: 'rgba(255,255,255,0.72)',
+    fontSize: 11,
     fontWeight: '600',
   },
   closeBtn: {
@@ -414,18 +481,37 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 0,
     bottom: 0,
-    width: 36,
-    height: 36,
+    width: 52,
+    height: 52,
     alignItems: 'flex-end',
     justifyContent: 'flex-end',
-    padding: 6,
+    padding: 8,
   },
-  resizeGrip: {
-    width: 16,
-    height: 16,
-    borderRightWidth: 3,
-    borderBottomWidth: 3,
-    borderColor: 'rgba(255,255,255,0.55)',
-    borderBottomRightRadius: 2,
+  resizeHandleTablet: {
+    width: 60,
+    height: 60,
+    padding: 10,
   },
+  resizeBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: 'rgba(63,40,198,0.92)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+    transform: [{rotate: '-45deg'}],
+    shadowColor: '#000',
+    shadowOpacity: 0.35,
+    shadowRadius: 4,
+    shadowOffset: {width: 0, height: 2},
+  },
+  resizeLine: {
+    height: 2,
+    width: 10,
+    borderRadius: 1,
+    backgroundColor: colors.white,
+  },
+  resizeLineLong: {width: 14},
+  resizeLineShort: {width: 6},
 });

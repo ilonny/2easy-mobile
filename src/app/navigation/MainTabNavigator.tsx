@@ -104,7 +104,7 @@ export function MainTabNavigator() {
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.muted,
         tabBarHideOnKeyboard: true,
-        tabBarStyle: isStudent ? hiddenTabBarStyle : visibleTabBarStyle,
+        tabBarStyle: visibleTabBarStyle,
         tabBarItemStyle: {
           paddingTop: 2,
         },
@@ -136,33 +136,35 @@ export function MainTabNavigator() {
       <Tab.Screen
         name="Students"
         component={StudentsStackNavigator}
-        options={{
-          tabBarButton: isStudent ? () => null : undefined,
-          tabBarItemStyle: isStudent ? {display: 'none'} : undefined,
-          tabBarStyle: isStudent ? hiddenTabBarStyle : visibleTabBarStyle,
-          tabBarAccessibilityLabel: isStudent
-            ? t('students.cabinetTab')
-            : t('profile.myStudents'),
-          tabBarLabel: ({focused}) => (
-            <TabLabel
-              label={
-                isStudent ? t('students.cabinetTab') : t('profile.myStudents')
-              }
-              focused={focused}
-            />
-          ),
-          tabBarIcon: ({focused}) => (
-            <TabIcon emoji={TAB_EMOJI.Students} focused={focused} />
-          ),
+        options={({route}) => {
+          const focused =
+            getFocusedRouteNameFromRoute(route) ??
+            (isStudent ? 'StudentCabinet' : 'StudentsList');
+          const hideDeep = shouldHideTabBar(focused);
+          return {
+            tabBarStyle: hideDeep ? hiddenTabBarStyle : visibleTabBarStyle,
+            tabBarAccessibilityLabel: isStudent
+              ? t('students.cabinetTab')
+              : t('profile.myStudents'),
+            tabBarLabel: ({focused: f}) => (
+              <TabLabel
+                label={
+                  isStudent ? t('students.cabinetTab') : t('profile.myStudents')
+                }
+                focused={f}
+              />
+            ),
+            tabBarIcon: ({focused: f}) => (
+              <TabIcon emoji={TAB_EMOJI.Students} focused={f} />
+            ),
+          };
         }}
       />
       <Tab.Screen
         name="Profile"
         component={ProfilePage}
         options={{
-          tabBarButton: isStudent ? () => null : undefined,
-          tabBarItemStyle: isStudent ? {display: 'none'} : undefined,
-          tabBarStyle: isStudent ? hiddenTabBarStyle : visibleTabBarStyle,
+          tabBarStyle: visibleTabBarStyle,
           tabBarAccessibilityLabel: t('profile.profileLabel'),
           tabBarLabel: ({focused}) => (
             <TabLabel label={t('profile.profileLabel')} focused={focused} />

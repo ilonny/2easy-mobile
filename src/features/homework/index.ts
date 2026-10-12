@@ -20,6 +20,7 @@ export {
   lessonHasHomeworkLink,
   openStudentHomework,
   openTeacherStudentHomework,
+  startHomeworkSessionForStudent,
 } from './lib/openHomework';
 export type {HomeworkLessonFields} from './lib/openHomework';
 export {positiveId} from './lib/exDisplay';

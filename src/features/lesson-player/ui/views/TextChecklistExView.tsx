@@ -57,16 +57,22 @@ export function TextChecklistExView({data}: Props) {
                 style={styles.item}
                 onPress={() =>
                   writeAnswer(sticker, checked ? '0' : '1')
-                }>
-                <View style={[styles.box, checked && styles.boxOn]}>
+                }
+                accessibilityRole="checkbox"
+                accessibilityState={{checked}}>
+                <View
+                  style={[styles.box, checked && styles.boxOn]}
+                  pointerEvents="none">
                   {checked ? <Text style={styles.check}>✓</Text> : null}
                 </View>
                 {looksLikeHtml(sticker) ? (
-                  <View style={styles.labelHtml}>
+                  <View style={styles.labelHtml} pointerEvents="none">
                     <HtmlContent html={sticker} />
                   </View>
                 ) : (
-                  <Text style={styles.label}>{sticker}</Text>
+                  <Text style={styles.label} pointerEvents="none">
+                    {sticker}
+                  </Text>
                 )}
               </Pressable>
             );
@@ -93,7 +99,14 @@ const styles = StyleSheet.create({
     padding: 14,
     gap: 12,
   },
-  item: {flexDirection: 'row', alignItems: 'flex-start', gap: 10},
+  item: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    width: '100%',
+    minHeight: 44,
+    paddingVertical: 6,
+  },
   box: {
     width: 24,
     height: 24,

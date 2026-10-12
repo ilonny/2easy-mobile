@@ -1,4 +1,4 @@
-import {useCallback, useEffect, useMemo, useRef, type ComponentType} from 'react';
+import {useCallback, useEffect, useMemo, useRef, useState, type ComponentType} from 'react';
 import {
   Pressable,
   StyleSheet,
@@ -7,7 +7,9 @@ import {
 } from 'react-native';
 import {WebView} from 'react-native-webview';
 
+import {useI18n} from '../../../../shared/i18n';
 import {colors, radii} from '../../../../shared/config/theme';
+import {ColorPickerModal} from '../../../../shared/ui';
 
 type Props = {
   html: string;
@@ -28,7 +30,7 @@ const TOOLBAR: Array<{cmd: string; label: string; arg?: string}> = [
   {cmd: 'justifyLeft', label: '⬅'},
   {cmd: 'justifyCenter', label: '☰'},
   {cmd: 'justifyRight', label: '➡'},
-  {cmd: 'foreColor', label: 'A', arg: '#3F28C6'},
+  {cmd: 'foreColor', label: 'A'},
   {cmd: 'createLink', label: '🔗'},
 ];
 
@@ -67,6 +69,7 @@ function buildEditorHtml(initialHtml: string, placeholder: string) {
   var initial = ${safe};
   editor.innerHTML = initial || '';
   var emitTimer = null;
+  var savedRange = null;
 
   function post(type, payload) {
     if (window.ReactNativeWebView) {
@@ -99,9 +102,18 @@ function buildEditorHtml(initialHtml: string, placeholder: string) {
         if (editor.innerHTML !== next) {
           editor.innerHTML = next;
         }
+      } else if (msg.type === 'saveSelection') {
+        var sel = window.getSelection();
+        savedRange = sel && sel.rangeCount ? sel.getRangeAt(0).cloneRange() : null;
       } else if (msg.type === 'exec') {
         var cmd = msg.payload && msg.payload.cmd;
         var arg = msg.payload && msg.payload.arg;
+        if (savedRange) {
+          var restore = window.getSelection();
+          restore.removeAllRanges();
+          restore.addRange(savedRange);
+        }
+        editor.focus();
         if (cmd === 'createLink') {
           var url = arg || prompt('URL', 'https://');
           if (url) document.execCommand('createLink', false, url);
@@ -129,14 +141,18 @@ export function RichHtmlEditor({
   html,
   onChangeHtml,
   minHeight = 180,
-  placeholder = 'Write text…',
+  placeholder,
 }: Props) {
+  const {t} = useI18n();
+  const resolvedPlaceholder = placeholder || t('editor.contentPlaceholder');
   const webRef = useRef<any>(null);
   const lastSent = useRef(html);
   const ready = useRef(false);
+  const [colorPickerOpen, setColorPickerOpen] = useState(false);
+  const [textColor, setTextColor] = useState<string>(colors.primary);
 
   const source = useMemo(
-    () => ({html: buildEditorHtml(html, placeholder)}),
+    () => ({html: buildEditorHtml(html, resolvedPlaceholder)}),
     // Only bootstrap once; later updates go via postMessage
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
@@ -187,13 +203,31 @@ export function RichHtmlEditor({
     [html, onChangeHtml],
   );
 
-  const runCmd = (cmd: string, arg?: string) => {
-    const msg = JSON.stringify({type: 'exec', payload: {cmd, arg}});
+  const inject = (payload: object) => {
+    const msg = JSON.stringify(payload);
     webRef.current?.injectJavaScript(
       `window.dispatchEvent(new MessageEvent('message',{data:${JSON.stringify(
         msg,
       )}}));true;`,
     );
+  };
+
+  const runCmd = (cmd: string, arg?: string) => {
+    inject({type: 'exec', payload: {cmd, arg}});
+  };
+
+  const onToolbarPress = (cmd: string, arg?: string) => {
+    if (cmd === 'foreColor') {
+      inject({type: 'saveSelection'});
+      setTimeout(() => setColorPickerOpen(true), 20);
+      return;
+    }
+    runCmd(cmd, arg);
+  };
+
+  const applyTextColor = (hex: string) => {
+    setTextColor(hex);
+    runCmd('foreColor', hex);
   };
 
   return (
@@ -203,16 +237,20 @@ export function RichHtmlEditor({
           <Pressable
             key={item.cmd + (item.arg || '')}
             style={styles.toolBtn}
-            onPress={() => runCmd(item.cmd, item.arg)}>
+            onPress={() => onToolbarPress(item.cmd, item.arg)}>
             <Text
               style={[
                 styles.toolLabel,
                 item.cmd === 'bold' && styles.bold,
                 item.cmd === 'italic' && styles.italic,
                 item.cmd === 'underline' && styles.underline,
+                item.cmd === 'foreColor' && {color: textColor},
               ]}>
               {item.label}
             </Text>
+            {item.cmd === 'foreColor' ? (
+              <View style={[styles.colorBar, {backgroundColor: textColor}]} />
+            ) : null}
           </Pressable>
         ))}
       </View>
@@ -226,6 +264,12 @@ export function RichHtmlEditor({
         javaScriptEnabled
         domStorageEnabled
         allowsInlineMediaPlayback
+      />
+      <ColorPickerModal
+        visible={colorPickerOpen}
+        value={textColor}
+        onChange={applyTextColor}
+        onClose={() => setColorPickerOpen(false)}
       />
     </View>
   );
@@ -259,8 +303,17 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
     borderWidth: 1,
     borderColor: colors.border,
+    overflow: 'hidden',
   },
   toolLabel: {fontSize: 13, fontWeight: '600', color: colors.text},
+  colorBar: {
+    position: 'absolute',
+    left: 6,
+    right: 6,
+    bottom: 4,
+    height: 3,
+    borderRadius: 1,
+  },
   bold: {fontWeight: '800'},
   italic: {fontStyle: 'italic'},
   underline: {textDecorationLine: 'underline'},

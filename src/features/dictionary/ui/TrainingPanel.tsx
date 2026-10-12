@@ -1,4 +1,4 @@
-import {useMemo, useState} from 'react';
+import {useCallback, useEffect, useMemo, useState} from 'react';
 import {
   Pressable,
   ScrollView,
@@ -18,6 +18,7 @@ import {
   shuffleArray,
   type TrainingMode,
 } from '../lib/training';
+import {TrainingWordPicker} from './TrainingWordPicker';
 
 type Props = {
   words: DictionaryItem[];
@@ -26,9 +27,74 @@ type Props = {
 
 const MODES: TrainingMode[] = ['cards', 'quizOptions', 'quizInput'];
 
+type Step = 'modes' | 'words' | 'session';
+
 export function TrainingPanel({words, allWords}: Props) {
   const {t} = useI18n();
+  const [step, setStep] = useState<Step>('modes');
   const [mode, setMode] = useState<TrainingMode | null>(null);
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [sessionWords, setSessionWords] = useState<DictionaryItem[]>([]);
+
+  useEffect(() => {
+    setSelectedIds(prev =>
+      prev.filter(id => words.some(item => item.id === id)),
+    );
+  }, [words]);
+
+  const handleSelectMode = useCallback((nextMode: TrainingMode) => {
+    setMode(nextMode);
+    setSelectedIds([]);
+    setStep('words');
+  }, []);
+
+  const handleBackToModes = useCallback(() => {
+    setStep('modes');
+    setMode(null);
+    setSelectedIds([]);
+  }, []);
+
+  const toggleItem = useCallback((id: number) => {
+    setSelectedIds(prev =>
+      prev.includes(id) ? prev.filter(itemId => itemId !== id) : [...prev, id],
+    );
+  }, []);
+
+  const toggleAll = useCallback(() => {
+    setSelectedIds(prev => {
+      const allSelected =
+        words.length > 0 && words.every(item => prev.includes(item.id));
+      return allSelected ? [] : words.map(item => item.id);
+    });
+  }, [words]);
+
+  const toggleGroup = useCallback((ids: number[], select: boolean) => {
+    setSelectedIds(prev => {
+      if (select) {
+        return Array.from(new Set([...prev, ...ids]));
+      }
+      const remove = new Set(ids);
+      return prev.filter(id => !remove.has(id));
+    });
+  }, []);
+
+  const handleStart = useCallback(() => {
+    if (!mode || !selectedIds.length) {
+      return;
+    }
+    const selectedSet = new Set(selectedIds);
+    const next = words.filter(item => selectedSet.has(item.id));
+    if (!next.length) {
+      return;
+    }
+    setSessionWords(next);
+    setStep('session');
+  }, [mode, selectedIds, words]);
+
+  const handleSessionClose = useCallback(() => {
+    setSessionWords([]);
+    setStep('words');
+  }, []);
 
   if (!words.length) {
     return (
@@ -36,14 +102,14 @@ export function TrainingPanel({words, allWords}: Props) {
     );
   }
 
-  if (!mode) {
+  if (step === 'modes') {
     return (
       <ScrollView contentContainerStyle={styles.modes}>
         <Text style={styles.choose}>{t('dictionary.training.chooseMode')}</Text>
         {MODES.map(key => (
           <Pressable
             key={key}
-            onPress={() => setMode(key)}
+            onPress={() => handleSelectMode(key)}
             style={styles.modeCard}>
             <Text style={styles.modeTitle}>
               {t(`dictionary.training.mode${capitalize(key)}`)}
@@ -57,23 +123,64 @@ export function TrainingPanel({words, allWords}: Props) {
     );
   }
 
+  if (step === 'words') {
+    return (
+      <View style={styles.wordsStep}>
+        <View style={styles.wordsHeader}>
+          <Pressable onPress={handleBackToModes} style={styles.back}>
+            <Text style={styles.backText}>
+              ← {t('dictionary.training.backToModes')}
+            </Text>
+          </Pressable>
+          {mode ? (
+            <Text style={styles.modeHint}>
+              {t(`dictionary.training.mode${capitalize(mode)}`)}
+            </Text>
+          ) : null}
+        </View>
+        <TrainingWordPicker
+          items={words}
+          selectedIds={selectedIds}
+          onToggle={toggleItem}
+          onToggleAll={toggleAll}
+          onToggleGroup={toggleGroup}
+        />
+        <View style={styles.footer}>
+          <Button
+            title={t('dictionary.resetSelection')}
+            variant="secondary"
+            disabled={!selectedIds.length}
+            onPress={() => setSelectedIds([])}
+            style={styles.footerBtn}
+          />
+          <Button
+            title={t('dictionary.training.start')}
+            disabled={!selectedIds.length || !mode}
+            onPress={handleStart}
+            style={styles.footerBtn}
+          />
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.session}>
-      <Pressable onPress={() => setMode(null)} style={styles.back}>
+      <Pressable onPress={handleSessionClose} style={styles.back}>
         <Text style={styles.backText}>
           ← {t('dictionary.training.backToModes')}
         </Text>
       </Pressable>
       {mode === 'cards' ? (
-        <CardsSession words={words} onClose={() => setMode(null)} />
-      ) : (
+        <CardsSession words={sessionWords} onClose={handleSessionClose} />
+      ) : mode ? (
         <QuizSession
           mode={mode}
-          words={words}
-          distractorPool={allWords}
-          onClose={() => setMode(null)}
+          words={sessionWords}
+          distractorPool={allWords.length ? allWords : words}
+          onClose={handleSessionClose}
         />
-      )}
+      ) : null}
     </View>
   );
 }
@@ -325,6 +432,16 @@ const styles = StyleSheet.create({
   },
   modeTitle: {fontSize: 16, fontWeight: '700', color: colors.text},
   modeDesc: {marginTop: 4, fontSize: 13, color: colors.textSecondary},
+  wordsStep: {flex: 1, minHeight: 0, gap: 8},
+  wordsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  modeHint: {color: colors.textSecondary, fontSize: 13, fontWeight: '600'},
+  footer: {flexDirection: 'row', gap: 10, paddingTop: 4},
+  footerBtn: {flex: 1},
   session: {flex: 1},
   back: {paddingVertical: 8},
   backText: {color: colors.primary, fontWeight: '700'},

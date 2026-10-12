@@ -1,6 +1,46 @@
 pluginManagement { includeBuild("../node_modules/@react-native/gradle-plugin") }
 plugins { id("com.facebook.react.settings") }
-extensions.configure(com.facebook.react.ReactSettingsExtension){ ex -> ex.autolinkLibrariesFromCommand() }
+
+// Android Studio GUI often has a PATH without Node. Use an absolute binary for autolinking.
+def resolveNodeBinary() {
+    def fromEnv = System.getenv("NODE_BINARY")
+    if (fromEnv != null && !fromEnv.isEmpty() && new File(fromEnv).exists()) {
+        return fromEnv
+    }
+    def local = new File(rootDir, "node-bin/node")
+    if (local.exists()) {
+        return local.canonicalFile.absolutePath
+    }
+    for (candidate in ["/usr/local/bin/node", "/opt/homebrew/bin/node"]) {
+        if (new File(candidate).exists()) {
+            return candidate
+        }
+    }
+    return "node"
+}
+
+// Ensure Node is discoverable for RN library build scripts without corrupting ProcessEnvironment.
+def ensureNodeOnPath() {
+    def env = new ProcessBuilder().environment()
+    def nodeDirs = [
+        new File(rootDir, "node-bin").canonicalFile.absolutePath,
+        "/usr/local/bin",
+        "/opt/homebrew/bin",
+    ].findAll { dir -> new File(dir, "node").exists() }
+    def path = env.get("PATH") ?: ""
+    def missing = nodeDirs.findAll { !path.split(File.pathSeparator).toList().contains(it) }
+    if (!missing.isEmpty()) {
+        env.put("PATH", (missing + [path]).join(File.pathSeparator))
+    }
+}
+ensureNodeOnPath()
+
+def nodeBinary = resolveNodeBinary()
+def cliJs = new File(rootDir, "../node_modules/@react-native-community/cli/build/bin.js").canonicalFile.absolutePath
+
+extensions.configure(com.facebook.react.ReactSettingsExtension) { ex ->
+    ex.autolinkLibrariesFromCommand([nodeBinary, cliJs, "config"])
+}
 rootProject.name = 'com.twoeasy.mobile'
 include ':app'
 includeBuild('../node_modules/@react-native/gradle-plugin')

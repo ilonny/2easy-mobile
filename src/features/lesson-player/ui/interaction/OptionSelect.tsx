@@ -119,14 +119,17 @@ export function OptionSelect({
 
 const styles = StyleSheet.create({
   trigger: {
-    minWidth: 88,
+    flexGrow: 0,
+    flexShrink: 1,
+    minWidth: 72,
+    maxWidth: '100%',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     backgroundColor: colors.primarySoft,
     borderRadius: radii.sm,
     paddingHorizontal: 10,
-    paddingVertical: 8,
+    paddingVertical: 6,
     borderWidth: 1,
     borderColor: '#DDD6FE',
   },
