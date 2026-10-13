@@ -63,7 +63,7 @@ function parseGapAnswerKey(key: string): {gapId: string} {
 
 export function FillGapsNewExView({data}: Props) {
   const {lessonId, studentId, activeStudentId, isTeacher} = useLessonPlayer();
-  const {writeAnswer, answers} = useExAnswer({
+  const {writeAnswer, answers, resetSeq} = useExAnswer({
     lessonId,
     exId: Number(data?.id),
     studentId,
@@ -86,12 +86,30 @@ export function FillGapsNewExView({data}: Props) {
   const [map, setMap] = useState<AnswersMap>({});
   const [selectedPoolId, setSelectedPoolId] = useState<string | null>(null);
   const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mapRef = useRef<AnswersMap>({});
+  const userEditedRef = useRef(false);
+  const focusedKeyRef = useRef<string | null>(null);
+  mapRef.current = map;
 
   useEffect(() => {
+    userEditedRef.current = false;
+    focusedKeyRef.current = null;
+    setMap({});
+    mapRef.current = {};
+  }, [resetSeq]);
+
+  useEffect(() => {
+    // Don't clobber in-progress typing with poll / optimistic write echoes
+    if (!isTeacher && (userEditedRef.current || focusedKeyRef.current)) {
+      return;
+    }
     try {
       const raw = answers[String(data?.id)]?.answer;
       if (!raw) {
-        setMap({});
+        if (Object.keys(mapRef.current).length > 0 && isTeacher) {
+          setMap({});
+          mapRef.current = {};
+        }
         return;
       }
       const parsedRaw = JSON.parse(raw);
@@ -105,10 +123,11 @@ export function FillGapsNewExView({data}: Props) {
         }
       });
       setMap(parsed);
+      mapRef.current = parsed;
     } catch {
       // ignore
     }
-  }, [answers, data?.id]);
+  }, [answers, data?.id, isTeacher]);
 
   useEffect(() => {
     return () => {
@@ -148,7 +167,9 @@ export function FillGapsNewExView({data}: Props) {
   };
 
   const setAnswer = (answerKey: string, value: string, status: AnswerStatus) => {
-    const next = {...map, [answerKey]: {value, status}};
+    userEditedRef.current = true;
+    const next = {...mapRef.current, [answerKey]: {value, status}};
+    mapRef.current = next;
     setMap(next);
     persist(next);
   };
@@ -195,15 +216,30 @@ export function FillGapsNewExView({data}: Props) {
           key={answerKey}
           value={value}
           autoComplete="off"
-          onChangeText={text => setAnswer(answerKey, text, 'neutral')}
+          autoCorrect={false}
+          autoCapitalize="none"
+          onFocus={() => {
+            focusedKeyRef.current = answerKey;
+          }}
+          onChangeText={text => {
+            const nextStatus = !text.trim()
+              ? 'neutral'
+              : isCorrectForGap(gap, text)
+                ? 'correct'
+                : 'incorrect';
+            setAnswer(answerKey, text, nextStatus);
+          }}
           onBlur={() => {
-            if (!value.trim()) {
+            focusedKeyRef.current = null;
+            const latest = mapRef.current[answerKey]?.value || '';
+            if (!latest.trim()) {
+              setAnswer(answerKey, '', 'neutral');
               return;
             }
             setAnswer(
               answerKey,
-              value,
-              isCorrectForGap(gap, value) ? 'correct' : 'incorrect',
+              latest,
+              isCorrectForGap(gap, latest) ? 'correct' : 'incorrect',
             );
           }}
           style={[

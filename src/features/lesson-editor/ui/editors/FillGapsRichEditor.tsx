@@ -223,10 +223,12 @@ function buildFillGapsHtml(initialHtml: string, makeGapLabel: string) {
   function serialize() {
     var paras = [];
     var gapIds = [];
+    var seenGapIds = {};
+    var clones = [];
     var blocks = Array.from(editor.childNodes);
     if (!blocks.length) {
       paras.push({ type: 'paragraph', children: [{ text: '' }] });
-      return { content: paras, gapIds: gapIds };
+      return { content: paras, gapIds: gapIds, clones: clones };
     }
     blocks.forEach(function(node) {
       if (node.nodeType === 3) {
@@ -258,6 +260,14 @@ function buildFillGapsHtml(initialHtml: string, makeGapLabel: string) {
         var e = n;
         if (e.classList && e.classList.contains('gap')) {
           var gid = e.getAttribute('data-gap-id') || uuid();
+          // Same word pasted twice must not share gapId / options
+          if (seenGapIds[gid]) {
+            var fromId = gid;
+            gid = uuid();
+            e.setAttribute('data-gap-id', gid);
+            clones.push({ fromId: fromId, gapId: gid });
+          }
+          seenGapIds[gid] = true;
           gapIds.push(gid);
           children.push({ type: 'gap', gapId: gid, children: [{ text: '' }] });
           return;
@@ -278,7 +288,7 @@ function buildFillGapsHtml(initialHtml: string, makeGapLabel: string) {
       if (!children.length) children.push({ text: '' });
       paras.push({ type: 'paragraph', children: children });
     });
-    return { content: paras, gapIds: gapIds };
+    return { content: paras, gapIds: gapIds, clones: clones };
   }
 
   var emitTimer = null;
@@ -822,14 +832,46 @@ export function FillGapsRichEditor({
   );
 
   const applyChangeFromWeb = useCallback(
-    (payload: {content: SlateParagraph[]; gapIds: string[]}) => {
+    (payload: {
+      content: SlateParagraph[];
+      gapIds: string[];
+      clones?: Array<{fromId: string; gapId: string}>;
+    }) => {
       const nextContent =
         payload.content?.length > 0 ? payload.content : defaultContent();
-      const ids = new Set(payload.gapIds || []);
-      let nextGaps = gapsRef.current.filter(g => ids.has(g.id));
-      nextGaps = (payload.gapIds || [])
-        .map(id => nextGaps.find(g => g.id === id) || gapsRef.current.find(g => g.id === id))
-        .filter(Boolean) as FillGapsGap[];
+      const cloneFrom = new Map(
+        (payload.clones || []).map(c => [String(c.gapId), String(c.fromId)]),
+      );
+      const seen = new Set<string>();
+      const nextGaps: FillGapsGap[] = [];
+      (payload.gapIds || []).forEach(rawId => {
+        const id = String(rawId);
+        if (seen.has(id)) {
+          return;
+        }
+        seen.add(id);
+        const existing = gapsRef.current.find(g => g.id === id);
+        if (existing) {
+          nextGaps.push({
+            ...existing,
+            options: (existing.options || []).map(o => ({...o})),
+          });
+          return;
+        }
+        const fromId = cloneFrom.get(id);
+        const source = fromId
+          ? gapsRef.current.find(g => g.id === fromId) ||
+            nextGaps.find(g => g.id === fromId)
+          : undefined;
+        nextGaps.push({
+          id,
+          originalText: source?.originalText || '',
+          options: (source?.options || []).map(o => ({
+            ...o,
+            id: newId(),
+          })),
+        });
+      });
       contentRef.current = nextContent;
       gapsRef.current = nextGaps;
       onChange({content: nextContent, gaps: nextGaps});

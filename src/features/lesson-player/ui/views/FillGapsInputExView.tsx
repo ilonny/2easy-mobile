@@ -1,4 +1,4 @@
-import {useEffect, useMemo, useState} from 'react';
+import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {StyleSheet, Text, TextInput, View} from 'react-native';
 
 import {colors, radii} from '../../../../shared/config/theme';
@@ -17,7 +17,7 @@ type Props = {data: any};
 
 export function FillGapsInputExView({data}: Props) {
   const {lessonId, studentId, activeStudentId, isTeacher} = useLessonPlayer();
-  const {writeAnswer, answers} = useExAnswer({
+  const {writeAnswer, answers, resetSeq} = useExAnswer({
     lessonId,
     exId: Number(data?.id),
     studentId,
@@ -34,14 +34,59 @@ export function FillGapsInputExView({data}: Props) {
 
   const parts = useMemo(() => splitDataText(data?.dataText), [data?.dataText]);
   const [local, setLocal] = useState<Record<string, string>>({});
+  const localRef = useRef(local);
+  localRef.current = local;
+  const focusedIdRef = useRef<string | null>(null);
+  const dirtyRef = useRef(false);
+  const hydratedSigRef = useRef('');
 
+  const answersSig = useMemo(() => {
+    return fields
+      .map(f => `${f.id}:${answers[String(f.id)]?.answer ?? ''}`)
+      .join('|');
+  }, [answers, fields]);
+
+  // Hydrate from server only when not editing locally
   useEffect(() => {
+    if (focusedIdRef.current || dirtyRef.current) {
+      return;
+    }
+    if (hydratedSigRef.current === `${resetSeq}:${answersSig}`) {
+      return;
+    }
+    hydratedSigRef.current = `${resetSeq}:${answersSig}`;
     const next: Record<string, string> = {};
     fields.forEach(f => {
       next[String(f.id)] = answers[String(f.id)]?.answer || '';
     });
     setLocal(next);
-  }, [answers, fields]);
+  }, [answers, answersSig, fields, resetSeq]);
+
+  useEffect(() => {
+    dirtyRef.current = false;
+    focusedIdRef.current = null;
+    hydratedSigRef.current = '';
+    setLocal({});
+  }, [resetSeq]);
+
+  const onChangeGap = useCallback((id: string, v: string) => {
+    dirtyRef.current = true;
+    setLocal(prev => {
+      const next = {...prev, [id]: v};
+      localRef.current = next;
+      return next;
+    });
+  }, []);
+
+  const onBlurGap = useCallback(
+    (id: string) => {
+      focusedIdRef.current = null;
+      const value = localRef.current[id] ?? '';
+      void writeAnswer(id, value);
+      dirtyRef.current = false;
+    },
+    [writeAnswer],
+  );
 
   const bgImages = data?.images?.length ? [data.images[0]] : [];
 
@@ -71,7 +116,8 @@ export function FillGapsInputExView({data}: Props) {
               );
             }
             const field = fieldsById.get(String(part.id));
-            const val = local[String(part.id)] ?? '';
+            const id = String(part.id);
+            const val = local[id] ?? '';
             const ok = isCorrectOption(field, val);
             return (
               <TextInput
@@ -82,23 +128,27 @@ export function FillGapsInputExView({data}: Props) {
                   !!val && !ok && styles.inputBad,
                 ]}
                 value={val}
-                onChangeText={v =>
-                  setLocal(prev => ({...prev, [String(part.id)]: v}))
-                }
-                onBlur={() => writeAnswer(part.id, local[String(part.id)] ?? '')}
+                onFocus={() => {
+                  focusedIdRef.current = id;
+                }}
+                onChangeText={v => onChangeGap(id, v)}
+                onBlur={() => onBlurGap(id)}
                 placeholder="..."
                 placeholderTextColor={colors.muted}
+                autoCorrect={false}
+                autoCapitalize="none"
               />
             );
           })}
         </View>
         {!parts.some(p => p.type === 'gap') &&
           fields.map(field => {
-            const val = local[String(field.id)] ?? '';
+            const id = String(field.id);
+            const val = local[id] ?? '';
             const ok = isCorrectOption(field, val);
             return (
               <TextInput
-                key={String(field.id)}
+                key={id}
                 style={[
                   styles.input,
                   styles.inputBlock,
@@ -106,12 +156,15 @@ export function FillGapsInputExView({data}: Props) {
                   !!val && !ok && styles.inputBad,
                 ]}
                 value={val}
-                onChangeText={v =>
-                  setLocal(prev => ({...prev, [String(field.id)]: v}))
-                }
-                onBlur={() => writeAnswer(field.id, local[String(field.id)] ?? '')}
+                onFocus={() => {
+                  focusedIdRef.current = id;
+                }}
+                onChangeText={v => onChangeGap(id, v)}
+                onBlur={() => onBlurGap(id)}
                 placeholder={field.originalWord || '...'}
                 placeholderTextColor={colors.muted}
+                autoCorrect={false}
+                autoCapitalize="none"
               />
             );
           })}
