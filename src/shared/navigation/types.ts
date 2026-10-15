@@ -16,6 +16,7 @@ export type LessonsStackParamList = {
   SpeakingGames: undefined;
   DiscussionCards: undefined;
   Grammar: undefined;
+  Schedule: undefined;
   Subscription: undefined;
   Tutorial: undefined;
   ContentPlayer: {slug: ContentSlug};
@@ -52,6 +53,7 @@ export type AppRootRoute =
   | 'SpeakingGames'
   | 'DiscussionCards'
   | 'Grammar'
+  | 'Schedule'
   | 'Subscription'
   | 'Tutorial';
 

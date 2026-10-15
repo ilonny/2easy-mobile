@@ -1,4 +1,5 @@
 import {useCallback, useEffect, useRef, useState} from 'react';
+import {AppState, type AppStateStatus} from 'react-native';
 
 import {fetchAnswers, writeAnswerApi} from '../api/lessonApi';
 
@@ -35,8 +36,8 @@ export type ExAnswersResetDetail = {
 export const ANSWER_SYNC_Q_ID = '__sync__';
 
 /** Teachers need live sync; students need timely reset detection. */
-export const DEFAULT_TEACHER_POLL_MS = 2500;
-export const DEFAULT_STUDENT_POLL_MS = 3500;
+export const DEFAULT_TEACHER_POLL_MS = 5000;
+export const DEFAULT_STUDENT_POLL_MS = 7000;
 
 type ResetListener = (detail: ExAnswersResetDetail) => void;
 const resetListeners = new Set<ResetListener>();
@@ -104,6 +105,171 @@ function answersSignature(answersMap: Record<string, AnswerRow>, sync_v: number)
     .map(k => `${k}:${answersMap[k]?.answer ?? ''}`)
     .join('|');
   return `v${sync_v}|${body}`;
+}
+
+type SharedPollListener = {
+  id: number;
+  isTeacher: boolean;
+  syncRemoteToStudent: boolean;
+  intervalMs: number;
+  onTick: (
+    answersMap: Record<string, AnswerRow>,
+    targetStudentId: number,
+    sync_v: number,
+  ) => void;
+};
+
+type SharedPoller = {
+  key: string;
+  lessonId: number;
+  exId: number;
+  targetStudentId: number;
+  listeners: Map<number, SharedPollListener>;
+  cancelled: boolean;
+  gen: number;
+  appActive: boolean;
+};
+
+const sharedPollers = new Map<string, SharedPoller>();
+const inflightFetches = new Map<
+  string,
+  Promise<{answersMap: Record<string, AnswerRow>; sync_v: number}>
+>();
+let listenerIdSeq = 0;
+let appStateActive = AppState.currentState === 'active';
+let appStateSubscribed = false;
+
+function ensureAppStateBridge() {
+  if (appStateSubscribed) {
+    return;
+  }
+  appStateSubscribed = true;
+  AppState.addEventListener('change', (next: AppStateStatus) => {
+    appStateActive = next === 'active';
+    sharedPollers.forEach(poller => {
+      poller.appActive = appStateActive;
+    });
+  });
+}
+
+function pollerKey(lessonId: number, exId: number, targetStudentId: number) {
+  return `${lessonId}:${exId}:${targetStudentId}`;
+}
+
+async function fetchAnswersMapShared(
+  lessonId: number,
+  exId: number,
+  targetStudentId: number,
+) {
+  const key = pollerKey(lessonId, exId, targetStudentId);
+  const existing = inflightFetches.get(key);
+  if (existing) {
+    return existing;
+  }
+  const promise = (async () => {
+    const rows = await fetchAnswers(lessonId, exId, targetStudentId);
+    return splitAnswerRows(rows);
+  })().finally(() => {
+    inflightFetches.delete(key);
+  });
+  inflightFetches.set(key, promise);
+  return promise;
+}
+
+function minListenerInterval(poller: SharedPoller) {
+  let min = Number.POSITIVE_INFINITY;
+  poller.listeners.forEach(l => {
+    if (l.intervalMs < min) {
+      min = l.intervalMs;
+    }
+  });
+  return Number.isFinite(min) ? min : DEFAULT_STUDENT_POLL_MS;
+}
+
+function ensurePollLoop(poller: SharedPoller) {
+  const myGen = ++poller.gen;
+  const loop = async () => {
+    while (!poller.cancelled && poller.gen === myGen) {
+      if (poller.appActive && poller.listeners.size > 0) {
+        try {
+          const {answersMap, sync_v} = await fetchAnswersMapShared(
+            poller.lessonId,
+            poller.exId,
+            poller.targetStudentId,
+          );
+          if (poller.cancelled || poller.gen !== myGen) {
+            return;
+          }
+          poller.listeners.forEach(listener => {
+            try {
+              listener.onTick(answersMap, poller.targetStudentId, sync_v);
+            } catch {
+              // ignore listener errors
+            }
+          });
+        } catch {
+          // ignore poll errors
+        }
+      }
+      const delay = Math.max(1000, minListenerInterval(poller));
+      await new Promise(r => setTimeout(r, delay));
+    }
+  };
+  void loop();
+}
+
+function subscribeSharedPoller(params: {
+  lessonId: number;
+  exId: number;
+  targetStudentId: number;
+  isTeacher: boolean;
+  syncRemoteToStudent: boolean;
+  intervalMs: number;
+  onTick: SharedPollListener['onTick'];
+}) {
+  ensureAppStateBridge();
+  const key = pollerKey(
+    params.lessonId,
+    params.exId,
+    params.targetStudentId,
+  );
+  let poller = sharedPollers.get(key);
+  if (!poller) {
+    poller = {
+      key,
+      lessonId: params.lessonId,
+      exId: params.exId,
+      targetStudentId: params.targetStudentId,
+      listeners: new Map(),
+      cancelled: false,
+      gen: 0,
+      appActive: appStateActive,
+    };
+    sharedPollers.set(key, poller);
+    ensurePollLoop(poller);
+  }
+
+  const id = ++listenerIdSeq;
+  poller.listeners.set(id, {
+    id,
+    isTeacher: params.isTeacher,
+    syncRemoteToStudent: params.syncRemoteToStudent,
+    intervalMs: params.intervalMs,
+    onTick: params.onTick,
+  });
+
+  return () => {
+    const current = sharedPollers.get(key);
+    if (!current) {
+      return;
+    }
+    current.listeners.delete(id);
+    if (current.listeners.size === 0) {
+      current.cancelled = true;
+      current.gen += 1;
+      sharedPollers.delete(key);
+    }
+  };
 }
 
 export function useExAnswer({
@@ -215,8 +381,11 @@ export function useExAnswer({
     if (!canFetch) {
       return {answersMap: {} as Record<string, AnswerRow>, sid: 0, sync_v: 0};
     }
-    const rows = await fetchAnswers(lessonId, exId, targetStudentId);
-    const {answersMap, sync_v} = splitAnswerRows(rows);
+    const {answersMap, sync_v} = await fetchAnswersMapShared(
+      lessonId,
+      exId,
+      targetStudentId,
+    );
     return {answersMap, sid: targetStudentId, sync_v};
   }, [canFetch, lessonId, exId, targetStudentId]);
 
@@ -303,13 +472,7 @@ export function useExAnswer({
         return {ok: false as const, stale: false};
       }
     },
-    [
-      canFetch,
-      lessonId,
-      exId,
-      targetStudentId,
-      bumpWriteGen,
-    ],
+    [canFetch, lessonId, exId, targetStudentId, bumpWriteGen],
   );
 
   useEffect(() => {
@@ -380,33 +543,34 @@ export function useExAnswer({
       }
     })();
 
-    const timer = setInterval(() => {
-      void (async () => {
-        try {
-          const {answersMap, sid, sync_v} = await fetchAnswersMap();
-          if (cancelled || !mountedRef.current) {
-            return;
-          }
-          if (isTeacher) {
-            applyAnswers(answersMap, sid, sync_v, {
-              updateState: true,
-              detectReset: true,
-            });
-          } else {
-            applyAnswers(answersMap, sid, sync_v, {
-              updateState: syncRemoteToStudent,
-              detectReset: true,
-            });
-          }
-        } catch {
-          // ignore poll errors
+    const unsubscribe = subscribeSharedPoller({
+      lessonId,
+      exId,
+      targetStudentId,
+      isTeacher: !!isTeacher,
+      syncRemoteToStudent,
+      intervalMs,
+      onTick: (answersMap, sid, sync_v) => {
+        if (cancelled || !mountedRef.current) {
+          return;
         }
-      })();
-    }, intervalMs);
+        if (isTeacher) {
+          applyAnswers(answersMap, sid, sync_v, {
+            updateState: true,
+            detectReset: true,
+          });
+        } else {
+          applyAnswers(answersMap, sid, sync_v, {
+            updateState: syncRemoteToStudent,
+            detectReset: true,
+          });
+        }
+      },
+    });
 
     return () => {
       cancelled = true;
-      clearInterval(timer);
+      unsubscribe();
     };
   }, [
     canFetch,
@@ -415,6 +579,8 @@ export function useExAnswer({
     syncRemoteToStudent,
     intervalMs,
     targetStudentId,
+    lessonId,
+    exId,
     fetchAnswersMap,
     applyAnswers,
     getAnswers,

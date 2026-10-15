@@ -235,11 +235,7 @@ export function LandingContent() {
         })}
       </ScrollView>
 
-      {loading ? (
-        <View style={styles.loading}>
-          <ActivityIndicator color={landing.violet} />
-        </View>
-      ) : error && cards.length === 0 ? (
+      {error && !loading && cards.length === 0 ? (
         <Text style={styles.error}>{t('landing.content.loadError')}</Text>
       ) : (
         <Animated.View
@@ -256,8 +252,12 @@ export function LandingContent() {
               },
             ],
           }}>
-          {isTablet ? (
-            <View style={[styles.cardsRow, styles.cardsGrid]}>
+          {loading && cards.length === 0 ? (
+            <View style={styles.loading}>
+              <ActivityIndicator color={landing.violet} />
+            </View>
+          ) : isTablet ? (
+            <View key={tab} style={[styles.cardsRow, styles.cardsGrid]}>
               {cards.map(card => (
                 <LandingGameCard
                   key={card.id}
@@ -278,6 +278,7 @@ export function LandingContent() {
             </View>
           ) : (
             <ScrollView
+              key={tab}
               horizontal
               nestedScrollEnabled
               directionalLockEnabled
@@ -372,11 +373,12 @@ const styles = StyleSheet.create({
     paddingVertical: 40,
   },
   cardsRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     gap: 20,
     paddingBottom: 4,
   },
   cardsGrid: {
-    flexDirection: 'row',
     flexWrap: 'wrap',
     rowGap: 30,
     columnGap: 16,

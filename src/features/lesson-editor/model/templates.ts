@@ -81,6 +81,13 @@ export const templates: TTemplate[] = [
     descriptionDefault: 'Put shuffled sentence fragments into the correct order',
   },
   {
+    type: 'TRUE_FALSE',
+    titleKey: 'templates.trueFalse',
+    titleDefault: 'TRUE / FALSE',
+    descriptionKey: 'templates.trueFalseDesc',
+    descriptionDefault: 'Read the sentence and choose True or False',
+  },
+  {
     type: 'match_words',
     titleKey: 'templates.match',
     titleDefault: 'Match',
@@ -153,6 +160,10 @@ const TYPE_META: Record<string, {titleKey: string; titleDefault: string}> = {
   UNSCRAMBLE_WORDS: {
     titleKey: 'templates.unscrambleWords',
     titleDefault: 'UNSCRAMBLE WORDS',
+  },
+  TRUE_FALSE: {
+    titleKey: 'templates.trueFalse',
+    titleDefault: 'TRUE / FALSE',
   },
   'fill-gaps-drag': {
     titleKey: 'templates.fillGapsDrag',

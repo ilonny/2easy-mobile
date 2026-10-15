@@ -166,6 +166,9 @@ export function LessonVideoCallWindow({
     screenRef.current = {w: screenW, h: screenH, top: insets.top};
   }, [screenW, screenH, insets.top]);
 
+  // Open/close only: request permissions and place the window once per session.
+  // Do not remount the WebView when screen metrics or bottomOffset change
+  // (e.g. leaving the lesson) — that would hang up the call.
   useEffect(() => {
     if (!visible) {
       setMediaReady(false);
@@ -191,7 +194,23 @@ export function LessonVideoCallWindow({
     return () => {
       cancelled = true;
     };
-  }, [visible, screenW, screenH, insets.top, bottomOffset, isTablet]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- open transition only
+  }, [visible]);
+
+  // Keep the floating window on-screen if rotation / insets change mid-call.
+  useEffect(() => {
+    if (!visible) {
+      return;
+    }
+    setPosition(prev => ({
+      x: clamp(prev.x, 0, Math.max(0, screenW - size.w)),
+      y: clamp(
+        prev.y,
+        insets.top,
+        Math.max(insets.top, screenH - size.h - HEADER_H),
+      ),
+    }));
+  }, [visible, screenW, screenH, insets.top, size.w, size.h]);
 
   const teacherUserId = resolveTeacherUserId(profile, lessonOwnerId);
   const roomName = useMemo(() => {
@@ -206,12 +225,21 @@ export function LessonVideoCallWindow({
     profile?.login ||
     t('profile.participant');
 
-  const uri = useMemo(() => {
-    if (!roomName) {
-      return '';
+  // Freeze the join URL for this open session so profile/i18n updates
+  // do not reload the WebView mid-call.
+  const [sessionUri, setSessionUri] = useState('');
+  useEffect(() => {
+    if (!visible) {
+      setSessionUri('');
+      return;
     }
-    return buildRoomUrl(roomName, displayName);
-  }, [roomName, displayName]);
+    if (!roomName) {
+      return;
+    }
+    setSessionUri(prev => prev || buildRoomUrl(roomName, displayName));
+  }, [visible, roomName, displayName]);
+
+  const uri = sessionUri;
 
   const maxX = Math.max(0, screenW - size.w);
   const maxY = Math.max(0, screenH - size.h - HEADER_H);

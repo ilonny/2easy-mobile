@@ -18,6 +18,7 @@ import {Text2ColExView} from './Text2ColExView';
 import {TextChecklistExView} from './TextChecklistExView';
 import {TextDefaultExView} from './TextDefaultExView';
 import {TextStickerExView} from './TextStickerExView';
+import {TrueFalseExView} from './TrueFalseExView';
 import {UnscrambleWordsExView} from './UnscrambleWordsExView';
 import {VideoExView} from './VideoExView';
 
@@ -66,6 +67,8 @@ export function ExViewRouter({type, data}: Props) {
       return <FillGapsNewExView data={data} />;
     case 'UNSCRAMBLE_WORDS':
       return <UnscrambleWordsExView data={data} />;
+    case 'TRUE_FALSE':
+      return <TrueFalseExView data={data} />;
     default:
       return (
         <View style={styles.fallback}>

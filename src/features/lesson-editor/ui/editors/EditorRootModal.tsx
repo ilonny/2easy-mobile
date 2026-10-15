@@ -13,6 +13,7 @@ import {Text2ColEditor} from './Text2ColEditor';
 import {TextChecklistEditor} from './TextChecklistEditor';
 import {TextDefaultEditor} from './TextDefaultEditor';
 import {TextStickerEditor} from './TextStickerEditor';
+import {TrueFalseEditor} from './TrueFalseEditor';
 import {UnscrambleWordsEditor} from './UnscrambleWordsEditor';
 import {VideoEditor} from './VideoEditor';
 
@@ -87,6 +88,8 @@ export function EditorRootModal({
       return <FillGapsNewEditor {...common} />;
     case 'UNSCRAMBLE_WORDS':
       return <UnscrambleWordsEditor {...common} />;
+    case 'TRUE_FALSE':
+      return <TrueFalseEditor {...common} />;
     default:
       return null;
   }

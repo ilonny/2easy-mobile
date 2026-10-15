@@ -66,7 +66,7 @@ import {getImageUrl} from '../lib/getImageUrl';
 import {LessonChatModal} from './LessonChatModal';
 import {LessonParticipantsSheet} from './LessonParticipantsSheet';
 import {LessonToolsBar, LESSON_TOOLS_BAR_HEIGHT} from './LessonToolsBar';
-import {LessonVideoCallWindow} from './LessonVideoCallWindow';
+import {useVideoCall} from '../../video-call';
 
 type Props = {
   lessonId: number;
@@ -113,7 +113,7 @@ export function LessonViewerScreen({
 
   const [participantsOpen, setParticipantsOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
-  const [videoOpen, setVideoOpen] = useState(false);
+  const {open: openVideoCall} = useVideoCall();
   const [dictionaryStudentId, setDictionaryStudentId] = useState<number | null>(
     null,
   );
@@ -654,7 +654,9 @@ export function LessonViewerScreen({
               }
               setChatOpen(true);
             }}
-            onVideo={() => setVideoOpen(true)}
+            onVideo={() =>
+              openVideoCall({lessonOwnerId: lesson?.user_id})
+            }
             onDictionary={
               selfStudentId
                 ? () => setDictionaryStudentId(selfStudentId)
@@ -686,15 +688,6 @@ export function LessonViewerScreen({
           }
           sessionId={lessonSessionId}
           onClose={() => setChatOpen(false)}
-        />
-
-        <LessonVideoCallWindow
-          visible={videoOpen}
-          lessonOwnerId={lesson?.user_id}
-          bottomOffset={
-            LESSON_TOOLS_BAR_HEIGHT + Math.max(insets.bottom, 10) + 16
-          }
-          onClose={() => setVideoOpen(false)}
         />
 
         <DictionaryModal

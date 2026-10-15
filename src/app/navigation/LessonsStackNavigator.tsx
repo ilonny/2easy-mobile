@@ -5,6 +5,7 @@ import {CoursePage} from '../../pages/course/ui/CoursePage';
 import {SpeakingGamesPage} from '../../pages/speaking-games/ui/SpeakingGamesPage';
 import {DiscussionCardsPage} from '../../pages/discussion-cards/ui/DiscussionCardsPage';
 import {GrammarPage} from '../../pages/grammar/ui/GrammarPage';
+import {SchedulePage} from '../../pages/schedule/ui/SchedulePage';
 import {SubscriptionPage} from '../../pages/subscription/ui/SubscriptionPage';
 import {TutorialPage} from '../../pages/tutorial/ui/TutorialPage';
 import {ContentPlayerPage} from '../../pages/content-player/ui/ContentPlayerPage';
@@ -40,6 +41,7 @@ export function LessonsStackNavigator() {
       <Stack.Screen name="SpeakingGames" component={SpeakingGamesPage} />
       <Stack.Screen name="DiscussionCards" component={DiscussionCardsPage} />
       <Stack.Screen name="Grammar" component={GrammarPage} />
+      <Stack.Screen name="Schedule" component={SchedulePage} />
       <Stack.Screen name="Subscription" component={SubscriptionPage} />
       <Stack.Screen name="Tutorial" component={TutorialPage} />
       <Stack.Screen name="ContentPlayer" component={ContentPlayerPage} />

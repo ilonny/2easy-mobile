@@ -5,6 +5,7 @@ export type AppNavItem = {
     | 'header.speakingGames'
     | 'header.discussionCards'
     | 'header.grammar'
+    | 'header.schedule'
     | 'header.subscription'
     | 'header.tutorial';
   route:
@@ -12,6 +13,7 @@ export type AppNavItem = {
     | 'SpeakingGames'
     | 'DiscussionCards'
     | 'Grammar'
+    | 'Schedule'
     | 'Subscription'
     | 'Tutorial';
 };
@@ -36,6 +38,11 @@ export const APP_NAV_ITEMS: AppNavItem[] = [
     id: 'grammar',
     labelKey: 'header.grammar',
     route: 'Grammar',
+  },
+  {
+    id: 'schedule',
+    labelKey: 'header.schedule',
+    route: 'Schedule',
   },
   {
     id: 'subscription',

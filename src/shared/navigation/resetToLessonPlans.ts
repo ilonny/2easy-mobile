@@ -94,6 +94,7 @@ function sectionScreen(
     route === 'SpeakingGames' ||
     route === 'DiscussionCards' ||
     route === 'Grammar' ||
+    route === 'Schedule' ||
     route === 'Subscription' ||
     route === 'Tutorial'
   ) {

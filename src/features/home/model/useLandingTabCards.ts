@@ -68,6 +68,10 @@ function parseLessonIds(raw?: string | number[]): number {
   }
 }
 
+function isDeletedFlag(value: unknown): boolean {
+  return value === 1 || value === true || value === '1';
+}
+
 export function useLandingAccess(): LandingAccess {
   const {isAuthorized, profile} = useAuth();
   const {hasSubscription, loading} = useSubscription();
@@ -103,7 +107,9 @@ export function useLandingTabCards(tab: ContentTab) {
       setCards(speakingLandingCards);
       setLoading(false);
       setError(false);
-      return;
+      return () => {
+        mounted = false;
+      };
     }
 
     if (tab === 'discussion') {
@@ -126,11 +132,28 @@ export function useLandingTabCards(tab: ContentTab) {
       );
       setLoading(false);
       setError(false);
-      return;
+      return () => {
+        mounted = false;
+      };
+    }
+
+    // Match site: wait until auth/subscription access is known for secured tabs.
+    if (
+      (tab === 'courses' || tab === 'grammar') &&
+      access === 'loading'
+    ) {
+      setLoading(true);
+      setError(false);
+      return () => {
+        mounted = false;
+      };
     }
 
     setLoading(true);
     setError(false);
+    // Drop previous tab cards so the carousel remounts from offset 0 with a loader
+    // instead of keeping a stale horizontal scroll position over empty space.
+    setCards([]);
 
     (async () => {
       try {
@@ -139,9 +162,14 @@ export function useLandingTabCards(tab: ContentTab) {
           if (!mounted) {
             return;
           }
-          setCards(
-            (res.lessons ?? []).slice(0, limit).map(toLessonCard),
-          );
+          if (res.success === false) {
+            setCards([]);
+            setError(true);
+            return;
+          }
+          const lessons = Array.isArray(res.lessons) ? res.lessons : [];
+          setCards(lessons.slice(0, limit).map(toLessonCard));
+          setError(false);
           return;
         }
 
@@ -152,10 +180,17 @@ export function useLandingTabCards(tab: ContentTab) {
           }
           setCards(
             courses
-              .filter(course => Number(course.user_id) === 1)
+              .filter(
+                course =>
+                  Number(course.user_id) === 1 &&
+                  !isDeletedFlag(
+                    (course as Course & {is_deleted?: unknown}).is_deleted,
+                  ),
+              )
               .slice(0, limit)
               .map(toCourseCard),
           );
+          setError(false);
           return;
         }
 
@@ -165,14 +200,21 @@ export function useLandingTabCards(tab: ContentTab) {
           const path = isTeacher
             ? '/lessons/grammar'
             : `/lessons/course?course_id=${GRAMMAR_COURSE_ID}`;
-          const res = await getJson<{lessons?: Lesson[]}>({
+          const res = await getJson<{lessons?: Lesson[]; success?: boolean}>({
             path,
             isSecure: true,
           });
           if (!mounted) {
             return;
           }
-          setCards((res.lessons ?? []).slice(0, limit).map(toLessonCard));
+          if (res.success === false) {
+            setCards([]);
+            setError(true);
+            return;
+          }
+          const lessons = Array.isArray(res.lessons) ? res.lessons : [];
+          setCards(lessons.slice(0, limit).map(toLessonCard));
+          setError(false);
         }
       } catch {
         if (mounted) {
@@ -189,7 +231,7 @@ export function useLandingTabCards(tab: ContentTab) {
     return () => {
       mounted = false;
     };
-  }, [tab, access, limit]);
+  }, [tab, access, limit, isFreeTariff]);
 
   function toLessonCard(lesson: Lesson): LandingCard {
     const {level, topic} = parseTags(lesson.tags);

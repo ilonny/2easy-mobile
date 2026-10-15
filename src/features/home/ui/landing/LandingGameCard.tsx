@@ -2,7 +2,6 @@ import {Image, Pressable, StyleSheet, Text, View} from 'react-native';
 
 import {useI18n} from '../../../../shared/i18n';
 import {useLayout} from '../../../../shared/lib/layout';
-import {SmartImage} from '../../../../shared/ui';
 import type {LandingCard} from '../../model/landingData';
 import {LandingTag, LevelDot} from './LandingTag';
 import {interpolate, landing} from './landingTheme';
@@ -35,11 +34,7 @@ export function LandingGameCard({card, width, onPress}: Props) {
       style={({pressed}) => [styles.card, {width}, pressed && styles.pressed]}>
       <View style={[styles.cover, {borderRadius: isTablet ? 30 : 20}]}>
         {card.image ? (
-          typeof card.image === 'object' && 'uri' in card.image ? (
-            <SmartImage source={card.image} style={styles.image} resizeMode="cover" />
-          ) : (
-            <Image source={card.image} style={styles.image} resizeMode="cover" />
-          )
+          <Image source={card.image} style={styles.image} resizeMode="cover" />
         ) : null}
       </View>
       <View style={styles.meta}>
