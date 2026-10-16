@@ -477,6 +477,7 @@ export const ru = {
     lessonCopyFailed: 'Не удалось скопировать урок',
     createHomework: 'Создать homework',
     homeworkLabel: 'Homework',
+    toLesson: 'К уроку',
     createFromScratch: 'Создать с нуля',
     createPersonalHomework: 'Создать личную Homework для ученика',
     checkHomework: 'Проверить homework',

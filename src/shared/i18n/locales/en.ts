@@ -471,6 +471,7 @@ export const en: TranslationTree = {
     lessonCopyFailed: 'Failed to copy lesson',
     createHomework: 'Create homework',
     homeworkLabel: 'Homework',
+    toLesson: 'To lesson',
     createFromScratch: 'Create from scratch',
     createPersonalHomework: 'Create personal Homework for student',
     checkHomework: 'Check homework',

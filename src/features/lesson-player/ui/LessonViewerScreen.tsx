@@ -126,6 +126,7 @@ export function LessonViewerScreen({
   const [addWordSource, setAddWordSource] = useState('');
   const [notice, setNotice] = useState('');
   const [homeworkOpening, setHomeworkOpening] = useState(false);
+  const [parentLessonOpening, setParentLessonOpening] = useState(false);
   const [answersEpoch, setAnswersEpoch] = useState(0);
 
   const answerStudentId = isTeacher
@@ -366,6 +367,45 @@ export function LessonViewerScreen({
         ),
       );
       setNotice(t('editor.saveFailed'));
+    }
+  };
+
+  const openParentLesson = async () => {
+    const parentLessonId = positiveId(lesson?.lesson_id_homework);
+    if (!parentLessonId) {
+      return;
+    }
+    setParentLessonOpening(true);
+    try {
+      if (isStudent) {
+        if (selfStudentId) {
+          await saveStartLessonSelectedIds([selfStudentId]);
+        }
+        navigation.navigate('LessonViewer', {lessonId: parentLessonId, from});
+        return;
+      }
+
+      const studentIds = studentIdProp
+        ? [Number(studentIdProp)]
+        : participants.map(p => Number(p.student_id)).filter(Boolean);
+      let sessionId: number | undefined;
+      if (studentIds.length) {
+        await saveStartLessonSelectedIds(studentIds);
+        try {
+          const response = await startLessonSession(parentLessonId, studentIds);
+          sessionId = positiveId(response?.session?.id);
+        } catch {
+          sessionId = undefined;
+        }
+      }
+      navigation.navigate('LessonViewer', {
+        lessonId: parentLessonId,
+        from,
+        ...(studentIds.length === 1 ? {studentId: studentIds[0]} : {}),
+        ...(sessionId ? {sessionId} : {}),
+      });
+    } finally {
+      setParentLessonOpening(false);
     }
   };
 
@@ -628,6 +668,18 @@ export function LessonViewerScreen({
                             setHomeworkOpening(false);
                           }
                         })();
+                      }}
+                    />
+                  </View>
+                ) : null}
+
+                {!!lesson && isHomeworkLesson(lesson) ? (
+                  <View style={styles.homeworkWrap}>
+                    <Button
+                      title={t('lessons.toLesson')}
+                      loading={parentLessonOpening}
+                      onPress={() => {
+                        void openParentLesson();
                       }}
                     />
                   </View>

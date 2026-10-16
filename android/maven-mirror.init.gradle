@@ -1,0 +1,54 @@
+/**
+ * Force every Maven repository URL through the local HTTP proxy
+ * (android/local-maven-proxy.py on :8765) to avoid Gradle TLS failures.
+ */
+def LOCAL = URI.create('http://127.0.0.1:8765/')
+
+def rewriteHandler = { RepositoryHandler handler ->
+  handler.configureEach { repo ->
+    if (repo instanceof MavenArtifactRepository) {
+      def u = repo.url?.toString() ?: ''
+      if (u.startsWith('https://') || u.startsWith('http://repo.') || u.contains('maven.apache.org') || u.contains('plugins.gradle.org') || u.contains('dl.google.com') || u.contains('maven.google.com') || u.contains('repo1.maven.org')) {
+        if (!u.startsWith('http://127.0.0.1:8765')) {
+          repo.setUrl(LOCAL)
+        }
+      }
+    }
+  }
+  // Always ensure local is first
+  handler.maven {
+    name = 'localMavenProxy'
+    url = LOCAL
+  }
+}
+
+settingsEvaluated { settings ->
+  rewriteHandler(settings.pluginManagement.repositories)
+  try {
+    def drm = settings.dependencyResolutionManagement
+    rewriteHandler(drm.repositories)
+  } catch (Throwable ignored) {
+  }
+}
+
+gradle.beforeProject { project ->
+  rewriteHandler(project.buildscript.repositories)
+  rewriteHandler(project.repositories)
+}
+
+allprojects {
+  buildscript {
+    repositories {
+      maven {
+        name = 'localMavenProxy'
+        url = LOCAL
+      }
+    }
+  }
+  repositories {
+    maven {
+      name = 'localMavenProxy'
+      url = LOCAL
+    }
+  }
+}
