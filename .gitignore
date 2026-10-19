@@ -77,3 +77,8 @@ yarn-error.log
 
 # Local tooling (e.g. portable cmake)
 .tools/
+
+# Local Android release artifacts (too large for GitHub)
+*.apk
+*.aab
+branding/generated/android-release/
