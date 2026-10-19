@@ -39,10 +39,10 @@
 	<string>The camera is needed for video communication during the lesson</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>A microphone is needed for video communication and chat during the lesson</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Access to the photo library is needed to choose images and videos for lessons</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Access to save images to the photo library when creating lesson materials</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Access to the photo library is needed to choose images and videos for lessons</string>
 	<key>RCTNewArchEnabled</key>
 	<true/>
 	<key>UIAppFonts</key>
