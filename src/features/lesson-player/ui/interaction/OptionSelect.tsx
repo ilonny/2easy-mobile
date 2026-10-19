@@ -10,6 +10,7 @@ import {
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
 import {colors, radii} from '../../../../shared/config/theme';
+import {hapticLight, hapticSelection} from '../../../../shared/lib/haptics';
 import {answerFeedback} from './answerFeedback';
 
 type Option = {
@@ -27,6 +28,8 @@ type Props = {
   disabled?: boolean;
   /** Teacher mode: tint correct options in the sheet (like site). */
   highlightCorrect?: boolean;
+  /** Site-parity empty select width. */
+  minWidth?: number;
 };
 
 /**
@@ -41,6 +44,7 @@ export function OptionSelect({
   status = 'neutral',
   disabled,
   highlightCorrect,
+  minWidth,
 }: Props) {
   const insets = useSafeAreaInsets();
   const [open, setOpen] = useState(false);
@@ -53,9 +57,13 @@ export function OptionSelect({
     <>
       <Pressable
         disabled={disabled}
-        onPress={() => setOpen(true)}
+        onPress={() => {
+          hapticLight();
+          setOpen(true);
+        }}
         style={[
           styles.trigger,
+          minWidth != null && {minWidth, minHeight: 44},
           status === 'ok' && answerFeedback.ok,
           status === 'bad' && answerFeedback.bad,
         ]}>
@@ -91,6 +99,7 @@ export function OptionSelect({
                     key={opt.id}
                     style={[styles.option, correct && styles.optionCorrect]}
                     onPress={() => {
+                      hapticSelection();
                       onChange(opt);
                       setOpen(false);
                     }}>
@@ -121,15 +130,16 @@ const styles = StyleSheet.create({
   trigger: {
     flexGrow: 0,
     flexShrink: 1,
-    minWidth: 72,
+    minWidth: 96,
     maxWidth: '100%',
+    minHeight: 40,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     backgroundColor: colors.primarySoft,
     borderRadius: radii.sm,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     borderWidth: 1,
     borderColor: '#DDD6FE',
   },

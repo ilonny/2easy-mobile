@@ -2,6 +2,7 @@ import {Pressable, StyleSheet, Text, View} from 'react-native';
 
 import {colors, radii} from '../config/theme';
 import {useI18n, type AppLanguage} from '../i18n';
+import {hapticLight} from '../lib/haptics';
 
 const LANGUAGES: {code: AppLanguage; label: string}[] = [
   {code: 'ru', label: 'RU'},
@@ -20,7 +21,10 @@ export function LanguageSwitcher() {
             key={code}
             accessibilityRole="button"
             accessibilityState={{selected: active}}
-            onPress={() => setLanguage(code)}
+            onPress={() => {
+              hapticLight();
+              setLanguage(code);
+            }}
             style={[styles.button, active && styles.buttonActive]}>
             <Text style={[styles.label, active && styles.labelActive]}>
               {label}

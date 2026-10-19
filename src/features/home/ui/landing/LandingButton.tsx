@@ -1,6 +1,7 @@
 import type {ReactNode} from 'react';
 import {Pressable, StyleSheet, Text, View} from 'react-native';
 
+import {hapticLight} from '../../../../shared/lib/haptics';
 import {landing} from './landingTheme';
 
 type Props = {
@@ -23,7 +24,13 @@ export function LandingButton({
       <Pressable
         accessibilityRole="button"
         disabled={disabled}
-        onPress={onPress}
+        onPress={() => {
+          if (disabled) {
+            return;
+          }
+          hapticLight();
+          onPress();
+        }}
         style={({pressed}) => [
           styles.button,
           pressed && !disabled && styles.pressed,

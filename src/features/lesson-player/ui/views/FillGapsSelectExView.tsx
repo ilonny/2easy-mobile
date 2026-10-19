@@ -6,7 +6,9 @@ import {useLessonPlayer} from '../../model/LessonPlayerContext';
 import {useExAnswer} from '../../model/useExAnswer';
 import {ExHeader} from '../ExHeader';
 import {ImageGallery} from '../ImageGallery';
+import {useGapSizes} from '../interaction/gapSizes';
 import {OptionSelect} from '../interaction/OptionSelect';
+import {TeacherAnswerHint} from '../interaction/TeacherAnswerHint';
 import {GapField, gapHtmlToPlainText, splitDataText} from './fillGapsLegacy';
 
 type Props = {data: any};
@@ -17,8 +19,23 @@ type LocalAnswer = {
   isCorrect: boolean;
 };
 
+function fieldHint(field?: GapField): string {
+  if (!field) {
+    return '';
+  }
+  const marked = (field.options || [])
+    .filter(o => o.isCorrect)
+    .map(o => (o.value || '').trim())
+    .filter(Boolean);
+  if (marked.length) {
+    return Array.from(new Set(marked)).join(', ');
+  }
+  return (field.value || field.originalWord || '').trim();
+}
+
 export function FillGapsSelectExView({data}: Props) {
   const {lessonId, studentId, activeStudentId, isTeacher} = useLessonPlayer();
+  const gapSizes = useGapSizes();
   const {writeAnswer, answers} = useExAnswer({
     lessonId,
     exId: Number(data?.id),
@@ -69,6 +86,7 @@ export function FillGapsSelectExView({data}: Props) {
       return null;
     }
     const sel = selectedFor(String(field.id));
+    const hint = fieldHint(field);
     const options = (field.options || []).map((o, i) => ({
       id: `${field.id}-${i}-${o.value}`,
       label: o.value,
@@ -76,15 +94,18 @@ export function FillGapsSelectExView({data}: Props) {
     }));
     return (
       <View key={key} style={styles.gapWrap}>
-        <OptionSelect
-          value={sel?.word}
-          options={options}
-          highlightCorrect={isTeacher}
-          status={
-            sel ? (sel.isCorrect ? 'ok' : 'bad') : 'neutral'
-          }
-          onChange={opt => pick(field, opt.label)}
-        />
+        <TeacherAnswerHint enabled={!!isTeacher && !!hint} hint={hint}>
+          <OptionSelect
+            value={sel?.word}
+            options={options}
+            highlightCorrect={isTeacher}
+            minWidth={gapSizes.selectMinWidth}
+            status={
+              sel ? (sel.isCorrect ? 'ok' : 'bad') : 'neutral'
+            }
+            onChange={opt => pick(field, opt.label)}
+          />
+        </TeacherAnswerHint>
       </View>
     );
   };

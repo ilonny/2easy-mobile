@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 
 import {colors, radii} from '../config/theme';
+import {hapticLight} from '../lib/haptics';
 
 type Props = {
   title: string;
@@ -33,7 +34,10 @@ export function Button({
     <Pressable
       accessibilityRole="button"
       disabled={isDisabled}
-      onPress={onPress}
+      onPress={() => {
+        hapticLight();
+        onPress();
+      }}
       style={({pressed}) => [
         styles.button,
         isSecondary ? styles.secondary : styles.primary,

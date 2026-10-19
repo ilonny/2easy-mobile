@@ -11,14 +11,34 @@ import {
   DropZone,
   useDropTargetRegistry,
 } from '../interaction/DraggableChip';
+import {useGapSizes} from '../interaction/gapSizes';
 import {StickyChipPool} from '../interaction/StickyChipPool';
+import {TeacherAnswerHint} from '../interaction/TeacherAnswerHint';
 import {answerFeedback} from '../interaction/answerFeedback';
 import {GapField, gapHtmlToPlainText, splitDataText} from './fillGapsLegacy';
 
 type Props = {data: any};
 
+function fieldHint(field?: GapField): string {
+  if (!field) {
+    return '';
+  }
+  if ((field.value || '').trim()) {
+    return field.value!.trim();
+  }
+  const fromOpt = (field.options || [])
+    .filter(o => o.isCorrect !== false)
+    .map(o => (o.value || '').trim())
+    .filter(Boolean);
+  if (fromOpt.length) {
+    return Array.from(new Set(fromOpt)).join(', ');
+  }
+  return (field.originalWord || '').trim();
+}
+
 export function FillGapsDragExView({data}: Props) {
   const {lessonId, studentId, activeStudentId, isTeacher} = useLessonPlayer();
+  const gapSizes = useGapSizes();
   const {writeAnswer, answers} = useExAnswer({
     lessonId,
     exId: Number(data?.id),
@@ -114,35 +134,47 @@ export function FillGapsDragExView({data}: Props) {
     const done = correctIds.map(String).includes(String(field.id));
     const wrong = incorrectIdsMap[String(field.id)];
     const showWrong = !done && !!wrong;
+    const hint = fieldHint(field);
+    const teacherHintsOn = !!isTeacher && !!hint;
+
     return (
-      <DropZone
+      <TeacherAnswerHint
         key={key}
-        id={String(field.id)}
-        registerRef={registerRef}
-        highlight={selectedId != null && !done}
-        style={[
-          styles.gap,
-          answerFeedback.slot,
-          done && answerFeedback.ok,
-          (flashBad === String(field.id) || showWrong) && answerFeedback.bad,
-        ]}>
-        <Text
-          onPress={() => {
-            if (done) {
-              return;
-            }
-            if (selectedId != null) {
-              tryPlace(field.id, selectedId);
-            }
-          }}
+        enabled={teacherHintsOn}
+        hint={hint}>
+        <DropZone
+          id={String(field.id)}
+          registerRef={registerRef}
+          highlight={selectedId != null && !done}
           style={[
-            styles.gapText,
-            done && answerFeedback.okText,
-            showWrong && answerFeedback.badText,
+            styles.gap,
+            {
+              minWidth: gapSizes.dropMinWidth,
+              minHeight: gapSizes.gapMinHeight,
+            },
+            answerFeedback.slot,
+            !done && !showWrong && styles.gapEmpty,
+            done && answerFeedback.ok,
+            (flashBad === String(field.id) || showWrong) && answerFeedback.bad,
           ]}>
-          {done ? chipValue(field) : wrong || '····'}
-        </Text>
-      </DropZone>
+          <Text
+            onPress={() => {
+              if (done) {
+                return;
+              }
+              if (selectedId != null) {
+                tryPlace(field.id, selectedId);
+              }
+            }}
+            style={[
+              styles.gapText,
+              done && answerFeedback.okText,
+              showWrong && answerFeedback.badText,
+            ]}>
+            {done ? chipValue(field) : wrong || '····'}
+          </Text>
+        </DropZone>
+      </TeacherAnswerHint>
     );
   };
 
@@ -211,22 +243,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
-    columnGap: 4,
-    rowGap: 6,
+    columnGap: 6,
+    rowGap: 8,
   },
   textWrap: {flexGrow: 0, flexShrink: 1, maxWidth: '100%'},
   text: {fontSize: 16, color: colors.text, lineHeight: 24},
   gap: {
     flexGrow: 0,
     flexShrink: 1,
-    minWidth: 56,
     maxWidth: '100%',
-    minHeight: 36,
     borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: colors.primarySoft,
+  },
+  gapEmpty: {
+    borderWidth: 1,
+    borderColor: colors.primary,
+    borderStyle: 'dashed',
   },
   gapText: {color: colors.primary, fontWeight: '700', flexShrink: 1},
 });

@@ -6,5 +6,10 @@ import {LessonEditorScreen} from '../../../features/lesson-editor';
 type Props = NativeStackScreenProps<LessonsStackParamList, 'LessonEditor'>;
 
 export function LessonEditorPage({route}: Props) {
-  return <LessonEditorScreen lessonId={route.params.lessonId} />;
+  return (
+    <LessonEditorScreen
+      lessonId={route.params.lessonId}
+      studentId={route.params.studentId}
+    />
+  );
 }

@@ -26,7 +26,7 @@ export type LessonsStackParamList = {
     studentId?: number;
     sessionId?: number;
   };
-  LessonEditor: {lessonId: number};
+  LessonEditor: {lessonId: number; studentId?: number};
   BoardViewer: {boardId: number; catalog?: boolean};
   LegalDocument: {docId: LegalDocId};
 };

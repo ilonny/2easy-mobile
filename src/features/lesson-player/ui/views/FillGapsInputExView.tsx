@@ -6,6 +6,8 @@ import {useLessonPlayer} from '../../model/LessonPlayerContext';
 import {useExAnswer} from '../../model/useExAnswer';
 import {ExHeader} from '../ExHeader';
 import {ImageGallery} from '../ImageGallery';
+import {useGapSizes} from '../interaction/gapSizes';
+import {TeacherAnswerHint} from '../interaction/TeacherAnswerHint';
 import {
   GapField,
   gapHtmlToPlainText,
@@ -15,8 +17,23 @@ import {
 
 type Props = {data: any};
 
+function fieldHint(field?: GapField): string {
+  if (!field) {
+    return '';
+  }
+  const marked = (field.options || [])
+    .filter(o => o.isCorrect)
+    .map(o => (o.value || '').trim())
+    .filter(Boolean);
+  if (marked.length) {
+    return Array.from(new Set(marked)).join(', ');
+  }
+  return (field.value || field.originalWord || '').trim();
+}
+
 export function FillGapsInputExView({data}: Props) {
   const {lessonId, studentId, activeStudentId, isTeacher} = useLessonPlayer();
+  const gapSizes = useGapSizes();
   const {writeAnswer, answers, resetSeq} = useExAnswer({
     lessonId,
     exId: Number(data?.id),
@@ -90,6 +107,38 @@ export function FillGapsInputExView({data}: Props) {
 
   const bgImages = data?.images?.length ? [data.images[0]] : [];
 
+  const renderInput = (field: GapField | undefined, id: string, key: string) => {
+    const val = local[id] ?? '';
+    const ok = isCorrectOption(field, val);
+    const hint = fieldHint(field);
+    const teacherHintsOn = !!isTeacher && !!hint;
+    return (
+      <TeacherAnswerHint key={key} enabled={teacherHintsOn} hint={hint}>
+        <TextInput
+          style={[
+            styles.input,
+            {
+              minWidth: gapSizes.inputMinWidth,
+              minHeight: gapSizes.gapMinHeight,
+            },
+            ok && styles.inputOk,
+            !!val && !ok && styles.inputBad,
+          ]}
+          value={val}
+          onFocus={() => {
+            focusedIdRef.current = id;
+          }}
+          onChangeText={v => onChangeGap(id, v)}
+          onBlur={() => onBlurGap(id)}
+          placeholder="..."
+          placeholderTextColor={colors.muted}
+          autoCorrect={false}
+          autoCapitalize="none"
+        />
+      </TeacherAnswerHint>
+    );
+  };
+
   return (
     <View style={styles.root}>
       <ExHeader
@@ -117,56 +166,13 @@ export function FillGapsInputExView({data}: Props) {
             }
             const field = fieldsById.get(String(part.id));
             const id = String(part.id);
-            const val = local[id] ?? '';
-            const ok = isCorrectOption(field, val);
-            return (
-              <TextInput
-                key={`g-${part.id}-${idx}`}
-                style={[
-                  styles.input,
-                  ok && styles.inputOk,
-                  !!val && !ok && styles.inputBad,
-                ]}
-                value={val}
-                onFocus={() => {
-                  focusedIdRef.current = id;
-                }}
-                onChangeText={v => onChangeGap(id, v)}
-                onBlur={() => onBlurGap(id)}
-                placeholder="..."
-                placeholderTextColor={colors.muted}
-                autoCorrect={false}
-                autoCapitalize="none"
-              />
-            );
+            return renderInput(field, id, `g-${part.id}-${idx}`);
           })}
         </View>
         {!parts.some(p => p.type === 'gap') &&
           fields.map(field => {
             const id = String(field.id);
-            const val = local[id] ?? '';
-            const ok = isCorrectOption(field, val);
-            return (
-              <TextInput
-                key={id}
-                style={[
-                  styles.input,
-                  styles.inputBlock,
-                  ok && styles.inputOk,
-                  !!val && !ok && styles.inputBad,
-                ]}
-                value={val}
-                onFocus={() => {
-                  focusedIdRef.current = id;
-                }}
-                onChangeText={v => onChangeGap(id, v)}
-                onBlur={() => onBlurGap(id)}
-                placeholder={field.originalWord || '...'}
-                placeholderTextColor={colors.muted}
-                autoCorrect={false}
-                autoCapitalize="none"
-              />
-            );
+            return renderInput(field, id, id);
           })}
       </View>
     </View>
@@ -185,24 +191,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
-    columnGap: 4,
-    rowGap: 6,
+    columnGap: 6,
+    rowGap: 8,
   },
   textWrap: {flexGrow: 0, flexShrink: 1, maxWidth: '100%'},
   text: {fontSize: 16, color: colors.text, lineHeight: 24},
   input: {
     flexGrow: 0,
     flexShrink: 1,
-    minWidth: 64,
     maxWidth: '100%',
     borderRadius: radii.sm,
     backgroundColor: colors.primarySoft,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     color: colors.text,
     fontSize: 16,
   },
-  inputBlock: {width: '100%', marginTop: 4},
   inputOk: {backgroundColor: '#EBFFEE'},
   inputBad: {backgroundColor: '#FFE5E5'},
 });

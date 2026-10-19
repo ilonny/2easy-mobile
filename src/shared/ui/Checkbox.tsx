@@ -2,6 +2,7 @@ import type {ReactNode} from 'react';
 import {Pressable, StyleSheet, Text, View} from 'react-native';
 
 import {colors, radii} from '../config/theme';
+import {hapticLight} from '../lib/haptics';
 
 type Props = {
   checked: boolean;
@@ -16,7 +17,10 @@ export function Checkbox({checked, onChange, label, error}: Props) {
       <Pressable
         accessibilityRole="checkbox"
         accessibilityState={{checked}}
-        onPress={() => onChange(!checked)}
+        onPress={() => {
+          hapticLight();
+          onChange(!checked);
+        }}
         style={styles.row}>
         <View style={[styles.box, checked && styles.boxChecked]}>
           {checked ? <Text style={styles.mark}>✓</Text> : null}

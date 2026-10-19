@@ -16,8 +16,10 @@ import {
   DropZone,
   useDropTargetRegistry,
 } from '../interaction/DraggableChip';
+import {useGapSizes} from '../interaction/gapSizes';
 import {OptionSelect} from '../interaction/OptionSelect';
 import {StickyChipPool} from '../interaction/StickyChipPool';
+import {TeacherAnswerHint} from '../interaction/TeacherAnswerHint';
 import {answerFeedback} from '../interaction/answerFeedback';
 
 type Props = {data: any};
@@ -49,6 +51,18 @@ function hasCorrect(gap?: Gap) {
   );
 }
 
+/** Site gapTooltipText: correct non-empty options, unique, joined. */
+function gapHintText(gap?: Gap): string {
+  if (!hasCorrect(gap)) {
+    return '';
+  }
+  const marked = (gap!.options || [])
+    .filter(o => o.isCorrect)
+    .map(o => (o.value || '').trim())
+    .filter(Boolean);
+  return Array.from(new Set(marked)).join(', ');
+}
+
 function gapAnswerKey(gapId: string, occurrence: number) {
   return occurrence > 0 ? `${gapId}#${occurrence}` : String(gapId);
 }
@@ -63,6 +77,7 @@ function parseGapAnswerKey(key: string): {gapId: string} {
 
 export function FillGapsNewExView({data}: Props) {
   const {lessonId, studentId, activeStudentId, isTeacher} = useLessonPlayer();
+  const gapSizes = useGapSizes();
   const {writeAnswer, answers, resetSeq} = useExAnswer({
     lessonId,
     exId: Number(data?.id),
@@ -209,9 +224,11 @@ export function FillGapsNewExView({data}: Props) {
     const ans = map[answerKey];
     const status = ans?.status || 'neutral';
     const value = ans?.value || '';
+    const hint = gapHintText(gap);
+    const teacherHintsOn = !!isTeacher && !!hint;
 
     if (mode === 'input') {
-      return (
+      const input = (
         <TextInput
           key={answerKey}
           value={value}
@@ -244,6 +261,10 @@ export function FillGapsNewExView({data}: Props) {
           }}
           style={[
             styles.gapInput,
+            {
+              minWidth: gapSizes.inputMinWidth,
+              minHeight: gapSizes.gapMinHeight,
+            },
             answerFeedback.slot,
             status === 'correct' && answerFeedback.ok,
             status === 'incorrect' && answerFeedback.bad,
@@ -254,6 +275,14 @@ export function FillGapsNewExView({data}: Props) {
           placeholderTextColor={colors.muted}
         />
       );
+      return (
+        <TeacherAnswerHint
+          key={answerKey}
+          enabled={teacherHintsOn}
+          hint={hint}>
+          {input}
+        </TeacherAnswerHint>
+      );
     }
 
     if (mode === 'select') {
@@ -263,57 +292,75 @@ export function FillGapsNewExView({data}: Props) {
         isCorrect: !!o.isCorrect,
       }));
       return (
-        <OptionSelect
+        <TeacherAnswerHint
           key={answerKey}
-          value={value}
-          options={options}
-          highlightCorrect={isTeacher}
-          status={
-            status === 'correct' ? 'ok' : status === 'incorrect' ? 'bad' : 'neutral'
-          }
-          onChange={opt => {
-            const ok = isCorrectForGap(gap, opt.label);
-            setAnswer(answerKey, opt.label, ok ? 'correct' : 'incorrect');
-          }}
-        />
+          enabled={teacherHintsOn}
+          hint={hint}>
+          <OptionSelect
+            value={value}
+            options={options}
+            highlightCorrect={isTeacher}
+            minWidth={gapSizes.selectMinWidth}
+            status={
+              status === 'correct'
+                ? 'ok'
+                : status === 'incorrect'
+                  ? 'bad'
+                  : 'neutral'
+            }
+            onChange={opt => {
+              const ok = isCorrectForGap(gap, opt.label);
+              setAnswer(answerKey, opt.label, ok ? 'correct' : 'incorrect');
+            }}
+          />
+        </TeacherAnswerHint>
       );
     }
 
     // drag mode drop zone — filled slots are green; wrong attempts stay red
     return (
-      <DropZone
+      <TeacherAnswerHint
         key={answerKey}
-        id={answerKey}
-        registerRef={registerRef}
-        highlight={!!selectedPoolId && status !== 'correct'}
-        style={[
-          styles.gapSelect,
-          answerFeedback.slot,
-          status === 'incorrect' && answerFeedback.bad,
-          status === 'correct' && answerFeedback.ok,
-          status === 'neutral' && !!value && answerFeedback.ok,
-        ]}>
-        <Text
-          onPress={() => {
-            if (status === 'correct') {
-              return;
-            }
-            if (selectedPoolId) {
-              const item = pool.find(p => p.id === selectedPoolId);
-              if (item) {
-                placeOnGap(answerKey, item.value);
-              }
-            }
-          }}
+        enabled={teacherHintsOn}
+        hint={hint}>
+        <DropZone
+          id={answerKey}
+          registerRef={registerRef}
+          highlight={!!selectedPoolId && status !== 'correct'}
           style={[
-            styles.gapText,
-            status === 'incorrect' && answerFeedback.badText,
-            (status === 'correct' || (!!value && status !== 'incorrect')) &&
-              answerFeedback.okText,
+            styles.gapSelect,
+            {
+              minWidth: gapSizes.dropMinWidth,
+              minHeight: gapSizes.gapMinHeight,
+            },
+            answerFeedback.slot,
+            !value && status === 'neutral' && styles.gapSelectEmpty,
+            status === 'incorrect' && answerFeedback.bad,
+            status === 'correct' && answerFeedback.ok,
+            status === 'neutral' && !!value && answerFeedback.ok,
           ]}>
-          {value || (selectedPoolId ? '⬇' : '····')}
-        </Text>
-      </DropZone>
+          <Text
+            onPress={() => {
+              if (status === 'correct') {
+                return;
+              }
+              if (selectedPoolId) {
+                const item = pool.find(p => p.id === selectedPoolId);
+                if (item) {
+                  placeOnGap(answerKey, item.value);
+                }
+              }
+            }}
+            style={[
+              styles.gapText,
+              status === 'incorrect' && answerFeedback.badText,
+              (status === 'correct' || (!!value && status !== 'incorrect')) &&
+                answerFeedback.okText,
+            ]}>
+            {value || (selectedPoolId ? '⬇' : '····')}
+          </Text>
+        </DropZone>
+      </TeacherAnswerHint>
     );
   };
 
@@ -420,8 +467,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
-    columnGap: 4,
-    rowGap: 6,
+    columnGap: 6,
+    rowGap: 8,
     overflow: 'visible',
     zIndex: 1,
   },
@@ -430,26 +477,29 @@ const styles = StyleSheet.create({
   gapInput: {
     flexGrow: 0,
     flexShrink: 1,
-    minWidth: 64,
     maxWidth: '100%',
     borderRadius: radii.sm,
     backgroundColor: colors.primarySoft,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     color: colors.text,
     fontSize: 16,
   },
   gapSelect: {
     flexGrow: 0,
     flexShrink: 1,
-    minWidth: 56,
     maxWidth: '100%',
-    minHeight: 36,
     borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: colors.primarySoft,
+  },
+  gapSelectEmpty: {
+    borderWidth: 1,
+    borderColor: colors.primary,
+    borderStyle: 'dashed',
   },
   gapText: {color: colors.primary, fontWeight: '700', flexShrink: 1},
 });

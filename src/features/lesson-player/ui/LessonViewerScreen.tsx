@@ -33,6 +33,7 @@ import {useSubscription} from '../../home/model/useSubscription';
 import {
   getOrCreateHomeworkForStudent,
   isHomeworkLesson,
+  LessonModeBanner,
   openStudentHomework,
   positiveId,
   startHomeworkSessionForStudent,
@@ -47,6 +48,7 @@ import {
   changeExVisible,
   resetAnswers,
   resolveLessonSession,
+  startLessonSession,
 } from '../api/lessonApi';
 import {notifyLocalAnswersReset} from '../model/useExAnswer';
 import {
@@ -527,6 +529,39 @@ export function LessonViewerScreen({
                   {maxWidth: pageContentMaxWidth, width: '100%'},
                 ]}>
                 <Breadcrumbs items={crumbs} />
+                {canEdit && lesson && isHomeworkLesson(lesson) ? (
+                  (() => {
+                    const hwStudent =
+                      participants.find(
+                        s =>
+                          Number(s.student_id) ===
+                          Number(activeStudentId || studentIdProp),
+                      ) || participants[0];
+                    const sid = Number(
+                      activeStudentId ||
+                        studentIdProp ||
+                        hwStudent?.student_id ||
+                        0,
+                    );
+                    return (
+                      <LessonModeBanner
+                        mode="homework-check"
+                        studentName={
+                          hwStudent?.['student.name'] || hwStudent?.name
+                        }
+                        studentEmail={
+                          hwStudent?.['student.email'] || hwStudent?.email
+                        }
+                        onEditHomework={() => {
+                          navigation.navigate('LessonEditor', {
+                            lessonId,
+                            ...(sid > 0 ? {studentId: sid} : {}),
+                          });
+                        }}
+                      />
+                    );
+                  })()
+                ) : null}
                 <Text style={[styles.title, isTablet && styles.titleTablet]}>
                   {lesson?.title || ''}
                 </Text>
@@ -536,7 +571,7 @@ export function LessonViewerScreen({
                   </Text>
                 )}
 
-                {canEdit ? (
+                {canEdit && !(lesson && isHomeworkLesson(lesson)) ? (
                   <Button
                     title={t('lessons.backToEdit')}
                     onPress={() =>

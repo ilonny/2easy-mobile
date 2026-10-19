@@ -57,7 +57,23 @@ function buildEditorHtml(initialHtml: string, placeholder: string) {
     content: ${ph};
     color: #9ca3af;
   }
-  #editor ul, #editor ol { padding-left: 22px; }
+  #editor ul, #editor ol {
+    padding-left: 1.5em;
+    margin: 0.35em 0;
+    list-style-position: outside;
+  }
+  #editor ul { list-style-type: disc; }
+  #editor ol { list-style-type: decimal; }
+  #editor li {
+    display: list-item;
+    margin: 0.15em 0;
+  }
+  /* Keep marker and text on one line even if a <p>/<div> sneaks into <li> */
+  #editor li > p,
+  #editor li > div {
+    display: inline;
+    margin: 0;
+  }
   #editor a { color: #3F28C6; }
 </style>
 </head>

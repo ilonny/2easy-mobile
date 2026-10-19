@@ -166,9 +166,9 @@ const defaultTagsStyles: Record<string, MixedStyleDeclaration> = {
   h1: {fontSize: 22, fontWeight: '800', marginBottom: 8, color: colors.text},
   h2: {fontSize: 20, fontWeight: '700', marginBottom: 8, color: colors.text},
   h3: {fontSize: 18, fontWeight: '700', marginBottom: 6, color: colors.text},
-  ul: {marginBottom: 8, paddingLeft: 18},
-  ol: {marginBottom: 8, paddingLeft: 18},
-  li: {marginBottom: 4},
+  ul: {marginBottom: 8, paddingLeft: 22, listStyleType: 'disc'},
+  ol: {marginBottom: 8, paddingLeft: 22, listStyleType: 'decimal'},
+  li: {marginBottom: 4, paddingLeft: 4},
   strong: {fontWeight: '700'},
   b: {fontWeight: '700'},
   em: {fontStyle: 'italic'},
@@ -246,7 +246,15 @@ function buildSelectableDocument(bodyHtml: string, fontSize: number) {
   a { color: ${colors.primary}; }
   p { margin: 0 0 8px; }
   h1,h2,h3 { margin: 0 0 8px; }
-  ul,ol { padding-left: 18px; }
+  ul, ol {
+    padding-left: 1.5em;
+    margin: 0.35em 0;
+    list-style-position: outside;
+  }
+  ul { list-style-type: disc; }
+  ol { list-style-type: decimal; }
+  li { margin: 0.15em 0; }
+  li > p, li > div { display: inline; margin: 0; }
 </style>
 </head>
 <body>${bodyHtml}</body>

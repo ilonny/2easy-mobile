@@ -30,5 +30,18 @@ target 'TwoEasy' do
       :mac_catalyst_enabled => false,
       # :ccache_enabled => true
     )
+
+    # Xcode 26+ only supports Simulator deployment targets >= 15.0.
+    # Some pod resource bundles still ship with 9.0 / 13.4.
+    min_ios = '15.1'
+    installer.pods_project.targets.each do |target|
+      target.build_configurations.each do |build_config|
+        current = build_config.build_settings['IPHONEOS_DEPLOYMENT_TARGET']
+        next if current.nil? || current == ''
+        if Gem::Version.new(current) < Gem::Version.new(min_ios)
+          build_config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = min_ios
+        end
+      end
+    end
   end
 end

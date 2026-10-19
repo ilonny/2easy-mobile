@@ -30,6 +30,11 @@ export const en: TranslationTree = {
     homeworkLoadingTasks: 'Loading tasks...',
     homeworkIndividualHint:
       'Select tasks from the lesson or create Homework from scratch.',
+    addTasksFromLessonTitle: 'Add tasks from the lesson',
+    addTasksFromLessonHint:
+      'Select tasks from the lesson — they will be copied into this homework (including a student’s personal homework).',
+    addTasksFromLessonEmpty: 'No tasks to copy from the lesson.',
+    addTasksFromLessonSubmit: 'Add selected',
     newCourse: 'New course',
     selectLessonsForCourse:
       'Select lessons you want to add to course «{{title}}»',
@@ -223,6 +228,16 @@ export const en: TranslationTree = {
     chooseTemplate: 'Choose a template',
     addExercise: 'Add exercise',
     addExerciseHint: 'Text, images, tests, match and more',
+    addTasksFromLesson: 'Add tasks from the lesson',
+    modeEditingLesson: 'Editing lesson',
+    modeEditingHomework: 'Editing homework',
+    modeEditingHomeworkShared: 'Shared homework (template)',
+    homeworkPersonalHint:
+      'This student’s personal homework. Add tasks from the lesson with the button below — only this student will see the changes.',
+    homeworkSharedHint:
+      'This is a template. Students who already have homework open won’t see these changes. For a personal copy — student cabinet → Homework.',
+    homeworkEditHint:
+      'This is a separate homework lesson. To add tasks from the lesson for a specific student, use “Add tasks from the lesson” below — don’t edit the shared Homework from the catalog.',
     pasteExercise: 'Paste exercise',
     deleteExerciseConfirm: 'Delete this exercise?',
     viewLesson: 'Open lesson',
@@ -465,6 +480,12 @@ export const en: TranslationTree = {
     chatEmpty: 'No messages yet',
     needSubscriptionToStart: 'An active subscription is required to start a lesson',
     backToEdit: 'Back to editing',
+    editHomework: 'Edit homework',
+    modeBadgeHomework: 'Homework',
+    modeBadgeLesson: 'Lesson',
+    modeHomeworkCheck: 'Checking homework',
+    homeworkCheckHint:
+      'This is the student’s homework. Edits via the button below go only to them, not to the shared template.',
     addToMyLessons: 'Add to My lessons',
     copyLesson: 'Copy lesson',
     lessonCopied: 'Lesson added to My lessons',

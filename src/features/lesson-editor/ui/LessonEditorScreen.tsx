@@ -26,12 +26,15 @@ import {AppDialog, Breadcrumbs, Button} from '../../../shared/ui';
 import {AppHeader} from '../../app-shell';
 import {useLayout} from '../../../shared/lib/layout';
 import {
+  AddExercisesFromLessonModal,
   CreateHomeworkModal,
   isHomeworkLesson,
+  LessonModeBanner,
   positiveId,
   resolveHomeworkForStudent,
   startHomeworkSessionForStudent,
 } from '../../homework';
+import {fetchStudentInfo} from '../../students/api/studentsApi';
 import {useSubscription} from '../../home/model/useSubscription';
 import {
   changeExSortIndex,
@@ -61,6 +64,7 @@ const TWO_EASY_USER_ID = 1;
 
 type Props = {
   lessonId: number;
+  studentId?: number;
 };
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -72,7 +76,7 @@ type EditorState = {
   currentSortIndexToShift?: number;
 } | null;
 
-export function LessonEditorScreen({lessonId}: Props) {
+export function LessonEditorScreen({lessonId, studentId: studentIdProp}: Props) {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<Nav>();
   const {isAuthorized, profile} = useAuth();
@@ -88,6 +92,12 @@ export function LessonEditorScreen({lessonId}: Props) {
   const [templateOpen, setTemplateOpen] = useState(false);
   const [startStudentsOpen, setStartStudentsOpen] = useState(false);
   const [homeworkModalOpen, setHomeworkModalOpen] = useState(false);
+  const [addFromLessonOpen, setAddFromLessonOpen] = useState(false);
+  const [contextStudent, setContextStudent] = useState<{
+    name?: string;
+    email?: string;
+  } | null>(null);
+  const contextStudentId = Number(studentIdProp || 0) || 0;
   const [insertAt, setInsertAt] = useState<number | undefined>();
   const [editor, setEditor] = useState<EditorState>(null);
   const [deleteId, setDeleteId] = useState<number | null>(null);
@@ -128,6 +138,31 @@ export function LessonEditorScreen({lessonId}: Props) {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (!contextStudentId) {
+      setContextStudent(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const info = await fetchStudentInfo(contextStudentId);
+        if (!cancelled) {
+          setContextStudent(
+            info ? {name: info.name, email: info.email} : null,
+          );
+        }
+      } catch {
+        if (!cancelled) {
+          setContextStudent(null);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [contextStudentId]);
 
   const isLockedOnTrial = isTeacherLessonAccessBlocked(lesson, {
     isStudent: !!profile?.isStudent,
@@ -519,6 +554,20 @@ export function LessonEditorScreen({lessonId}: Props) {
                       onPress={startLesson}
                     />
                   ) : null}
+                  {lessonIsHomework && positiveId(lesson?.lesson_id_homework) ? (
+                    <Button
+                      title={t('lessons.toLesson')}
+                      onPress={() => {
+                        const parentId = positiveId(lesson?.lesson_id_homework);
+                        if (parentId) {
+                          navigation.navigate('LessonEditor', {
+                            lessonId: parentId,
+                          });
+                        }
+                      }}
+                      variant="secondary"
+                    />
+                  ) : null}
                   {canEditContent ? (
                     <Button
                       title={t('editor.editLesson')}
@@ -557,6 +606,14 @@ export function LessonEditorScreen({lessonId}: Props) {
                   {maxWidth: pageContentMaxWidth, width: '100%'},
                 ]}>
                 <Breadcrumbs items={crumbs} />
+                {isOwner ? (
+                  <LessonModeBanner
+                    mode={lessonIsHomework ? 'homework-edit' : 'lesson-edit'}
+                    studentName={contextStudent?.name}
+                    studentEmail={contextStudent?.email}
+                    isPersonalHomework={lessonIsHomework && !!contextStudentId}
+                  />
+                ) : null}
                 <Text style={[styles.title, isTablet && styles.titleTablet]}>
                   {lesson?.title || ''}
                 </Text>
@@ -591,6 +648,16 @@ export function LessonEditorScreen({lessonId}: Props) {
                       : undefined
                   }
                 />
+
+                {isOwner && lessonIsHomework ? (
+                  <View style={styles.homeworkWrap}>
+                    <Button
+                      title={t('editor.addTasksFromLesson')}
+                      variant="secondary"
+                      onPress={() => setAddFromLessonOpen(true)}
+                    />
+                  </View>
+                ) : null}
 
                 {isOwner && !lessonIsHomework ? (
                   <View style={styles.homeworkWrap}>
@@ -707,6 +774,27 @@ export function LessonEditorScreen({lessonId}: Props) {
             }}
           />
         )}
+
+        {(() => {
+          const parentLessonId = positiveId(lesson?.lesson_id_homework);
+          if (!lessonIsHomework || !parentLessonId) {
+            return null;
+          }
+          return (
+            <AddExercisesFromLessonModal
+              visible={addFromLessonOpen}
+              homeworkLessonId={lessonId}
+              parentLessonId={parentLessonId}
+              lastSortIndex={Number(
+                exercises[exercises.length - 1]?.sortIndex || 0,
+              )}
+              onClose={() => setAddFromLessonOpen(false)}
+              onSuccess={() => {
+                void load();
+              }}
+            />
+          );
+        })()}
 
         <AppDialog
           visible={!!notice}

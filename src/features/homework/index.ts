@@ -13,8 +13,10 @@ export type {
   HomeworkCreateResult,
   HomeworkResolveResult,
 } from './api/homeworkApi';
+export {AddExercisesFromLessonModal} from './ui/AddExercisesFromLessonModal';
 export {CreateHomeworkModal} from './ui/CreateHomeworkModal';
 export {CreateIndividualHomeworkModal} from './ui/CreateIndividualHomeworkModal';
+export {LessonModeBanner} from './ui/LessonModeBanner';
 export {
   isHomeworkLesson,
   lessonHasHomeworkLink,

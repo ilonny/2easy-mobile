@@ -9,6 +9,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import {colors} from '../../../../shared/config/theme';
+import {hapticLight, hapticSelection} from '../../../../shared/lib/haptics';
 import {useLayout} from '../../../../shared/lib/layout';
 import {useChipDrag} from './ChipDragContext';
 
@@ -86,6 +87,11 @@ export function DraggableChip({
       hitTestDropTarget(pageX, pageY, targetId => {
         if (targetId && onDropOnTarget) {
           const consumed = !!onDropOnTarget(targetId, id, label);
+          if (consumed) {
+            hapticSelection();
+          } else {
+            hapticLight();
+          }
           resetHome(consumed);
           return;
         }
@@ -133,17 +139,20 @@ export function DraggableChip({
     [beginDrag, disabled, finishDrop, resetHome],
   );
 
+  const onTapSelect = useCallback(() => {
+    hapticLight();
+    onSelect?.();
+  }, [onSelect]);
+
   const tap = useMemo(
     () =>
       Gesture.Tap()
         .enabled(!disabled)
         .maxDistance(8)
         .onEnd(() => {
-          if (onSelect) {
-            runOnJS(onSelect)();
-          }
+          runOnJS(onTapSelect)();
         }),
-    [disabled, onSelect],
+    [disabled, onTapSelect],
   );
 
   const gesture = useMemo(() => Gesture.Exclusive(pan, tap), [pan, tap]);

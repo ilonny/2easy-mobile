@@ -28,6 +28,11 @@ export const ru = {
     homeworkLoadingTasks: 'Загрузка заданий...',
     homeworkIndividualHint:
       'Выберите задания из урока или создайте Homework с нуля.',
+    addTasksFromLessonTitle: 'Добавить задания из урока',
+    addTasksFromLessonHint:
+      'Выберите задания из урока — они будут скопированы в эту домашку (в том числе в личную домашку ученика).',
+    addTasksFromLessonEmpty: 'В уроке нет заданий для копирования.',
+    addTasksFromLessonSubmit: 'Добавить выбранные',
     newCourse: 'Новый курс',
     selectLessonsForCourse:
       'Выберите уроки, которые хотите добавить в курс «{{title}}»',
@@ -221,6 +226,16 @@ export const ru = {
     chooseTemplate: 'Выберите шаблон',
     addExercise: 'Добавить упражнение',
     addExerciseHint: 'Текст, картинки, тесты, сопоставление и другие блоки',
+    addTasksFromLesson: 'Добавить задания из урока',
+    modeEditingLesson: 'Редактирование урока',
+    modeEditingHomework: 'Редактирование homework',
+    modeEditingHomeworkShared: 'Общая homework (шаблон)',
+    homeworkPersonalHint:
+      'Личная домашка ученика. Добавляйте задания из урока кнопкой ниже — изменения увидит только этот ученик.',
+    homeworkSharedHint:
+      'Это шаблон. Ученики с уже открытой домашкой не увидят эти изменения. Для личного — кабинет ученика → Homework.',
+    homeworkEditHint:
+      'Это отдельная домашка. Чтобы дополнить её заданиями из урока для конкретного ученика, нажмите «Добавить задания из урока» ниже — не редактируйте общую Homework из каталога.',
     pasteExercise: 'Вставить упражнение',
     deleteExerciseConfirm: 'Удалить это упражнение?',
     viewLesson: 'Открыть урок',
@@ -471,6 +486,12 @@ export const ru = {
     chatEmpty: 'Сообщений пока нет',
     needSubscriptionToStart: 'Чтобы начать урок, нужна активная подписка',
     backToEdit: 'Вернуться к редактированию',
+    editHomework: 'Отредактировать homework',
+    modeBadgeHomework: 'Homework',
+    modeBadgeLesson: 'Урок',
+    modeHomeworkCheck: 'Проверка homework',
+    homeworkCheckHint:
+      'Это домашка ученика. Правки через кнопку ниже — только для него, не для общего шаблона.',
     addToMyLessons: 'Добавить в «Мои уроки»',
     copyLesson: 'Копировать урок',
     lessonCopied: 'Урок добавлен в «Мои уроки»',
