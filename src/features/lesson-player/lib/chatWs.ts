@@ -18,6 +18,15 @@ export type ChatReaction = {
   reacted_by_me: boolean;
 };
 
+export type ChatAttachment = {
+  id?: number;
+  path: string;
+  name: string;
+  mime: string;
+  size?: number;
+  kind: 'image' | 'audio' | 'video' | 'pdf' | 'file';
+};
+
 export type ChatMessage = {
   id: number;
   message: string;
@@ -28,6 +37,7 @@ export type ChatMessage = {
   edited_at?: string | null;
   reply_to?: ChatReply | null;
   reactions?: ChatReaction[];
+  attachments?: ChatAttachment[];
 };
 
 export type ChatRealtimeCallbacks = {

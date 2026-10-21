@@ -27,6 +27,8 @@ import {
   type EventFormValues,
   type ScheduleEvent,
 } from '../model/types';
+import {packageProgressLabel} from '../lib/eventUi';
+import {DEFAULT_PAYMENT_CURRENCY} from '../lib/currencies';
 
 type StudentOption = {id: number; name?: string; email?: string};
 type LessonOption = {id: number; title?: string; user_id?: number};
@@ -299,7 +301,7 @@ export function EventFormModal({
                 <Text style={styles.bold}>
                   {formatMoney(
                     Number(event?.amount || 0),
-                    event?.currency || 'RUB',
+                    event?.currency || DEFAULT_PAYMENT_CURRENCY,
                   )}
                 </Text>
               </Text>
@@ -364,6 +366,11 @@ export function EventFormModal({
                       );
                     })}
                   </View>
+                  {event && packageProgressLabel(event) ? (
+                    <Text style={[styles.row, styles.packageBadge, {marginBottom: 12}]}>
+                      {t('schedule.planPackage')}: {packageProgressLabel(event)}
+                    </Text>
+                  ) : null}
                   <TextField
                     label={t('schedule.titleOptional')}
                     value={form.title}
@@ -587,6 +594,12 @@ export function EventFormModal({
                         event?.student_name ||
                         t('schedule.defaultLessonTitle')}
                     </Text>
+                    {event && packageProgressLabel(event) ? (
+                      <Text style={styles.packageBadge}>
+                        {' '}
+                        {packageProgressLabel(event)}
+                      </Text>
+                    ) : null}
                   </Text>
                   <Text style={styles.row}>
                     {t('schedule.date')}:{' '}
@@ -869,6 +882,10 @@ const styles = StyleSheet.create({
   segmentTextActive: {color: colors.white},
   row: {fontSize: 15, color: colors.text, lineHeight: 22},
   bold: {fontWeight: '700'},
+  packageBadge: {
+    fontWeight: '700',
+    color: colors.primary,
+  },
   overdueBanner: {
     backgroundColor: 'rgba(255,59,48,0.1)',
     borderRadius: radii.md,

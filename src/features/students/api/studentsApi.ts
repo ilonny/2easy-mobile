@@ -7,6 +7,7 @@ export type Student = {
   tag?: string;
   avatar?: string | null;
   user_id?: number | string;
+  is_archived?: number;
 };
 
 export type StudentInfo = Student & {
@@ -14,12 +15,25 @@ export type StudentInfo = Student & {
   message?: string;
 };
 
-export async function fetchStudents(): Promise<Student[]> {
+export async function fetchStudents(options?: {
+  archived?: boolean;
+}): Promise<Student[]> {
   const res = await getJson<Student[] | {message?: string}>({
-    path: '/student',
+    path: options?.archived ? '/student?archived=1' : '/student',
     isSecure: true,
   });
   return Array.isArray(res) ? res : [];
+}
+
+export async function setStudentArchived(
+  id: number,
+  is_archived: boolean,
+) {
+  return postJson<{success?: boolean; message?: string} & Partial<Student>>({
+    path: '/student/archive',
+    isSecure: true,
+    data: {id, is_archived: is_archived ? 1 : 0},
+  });
 }
 
 export async function fetchStudentInfo(id: number): Promise<StudentInfo | null> {

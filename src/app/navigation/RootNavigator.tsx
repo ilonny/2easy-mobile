@@ -8,6 +8,7 @@ import {
 } from '../../features/video-call';
 import {colors} from '../../shared/config/theme';
 import {AppNavigator} from './AppNavigator';
+import {navigationRef} from './navigationRef';
 
 export function RootNavigator() {
   const {authIsLoading} = useAuth();
@@ -23,7 +24,7 @@ export function RootNavigator() {
   return (
     <VideoCallProvider>
       <View style={styles.root}>
-        <NavigationContainer>
+        <NavigationContainer ref={navigationRef}>
           <AppNavigator />
         </NavigationContainer>
         <GlobalVideoCallOverlay />

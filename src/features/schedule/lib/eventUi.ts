@@ -59,6 +59,25 @@ const isGenericTitle = (title: string, defaultTitle: string) => {
   );
 };
 
+/** e.g. "2/8" or "2/8 · 1/10" for multi-student packages */
+export const packageProgressLabel = (event: ScheduleEvent) => {
+  const rows = event.package_progress;
+  if (!Array.isArray(rows) || !rows.length) {
+    return '';
+  }
+  return rows
+    .map(row => {
+      const index = Number(row.index);
+      const total = Number(row.total);
+      if (!Number.isFinite(index) || !Number.isFinite(total) || total < 1) {
+        return '';
+      }
+      return `${index}/${total}`;
+    })
+    .filter(Boolean)
+    .join(' · ');
+};
+
 export const eventChipText = (
   event: ScheduleEvent,
   opts: {
@@ -101,15 +120,20 @@ export const eventChipText = (
       ? ''
       : rawTitle;
   const place = eventPlaceLabel(event);
+  const packageLabel = packageProgressLabel(event);
   const nameOrTitle =
     students || customTitle || opts.defaultLessonTitle;
 
   if (!opts.detailed) {
-    const primary = [time, nameOrTitle].filter(Boolean).join(' ');
+    const primary = [time, nameOrTitle, packageLabel]
+      .filter(Boolean)
+      .join(' ');
     return {primary, secondary: ''};
   }
 
-  const primary = [time, nameOrTitle].filter(Boolean).join(' ');
+  const primary = [time, nameOrTitle, packageLabel]
+    .filter(Boolean)
+    .join(' ');
   const secondary = [students ? customTitle : '', place]
     .filter(Boolean)
     .join(' · ');

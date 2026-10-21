@@ -19,9 +19,17 @@ import {
   addMonths,
   formatDisplayDate,
   formatMoney,
+  formatMoneyList,
   formatYmd,
+  resolveStatsMoney,
   startOfMonth,
 } from '../lib/date';
+import {
+  DEFAULT_PAYMENT_CURRENCY,
+  PAYMENT_CURRENCIES,
+  PAYMENT_CURRENCY_LABELS,
+  type PaymentCurrency,
+} from '../lib/currencies';
 import type {
   PaymentPlan,
   PaymentStats,
@@ -35,6 +43,7 @@ type PlanForm = {
   student_id: number | '';
   plan_type: 'recurring' | 'package';
   amount: string;
+  currency: PaymentCurrency;
   frequency: 'weekly' | 'biweekly' | 'monthly';
   next_payment_date: string;
   lessons_total: string;
@@ -60,6 +69,7 @@ const emptyPlanForm = (): PlanForm => ({
   student_id: '',
   plan_type: 'recurring',
   amount: '',
+  currency: DEFAULT_PAYMENT_CURRENCY,
   frequency: 'monthly',
   next_payment_date: formatYmd(addDays(new Date(), 7)),
   lessons_total: '8',
@@ -67,10 +77,20 @@ const emptyPlanForm = (): PlanForm => ({
   notes: '',
 });
 
+const resolveCurrency = (value: unknown): PaymentCurrency => {
+  const raw = String(value || DEFAULT_PAYMENT_CURRENCY)
+    .trim()
+    .toUpperCase();
+  return PAYMENT_CURRENCIES.includes(raw as PaymentCurrency)
+    ? (raw as PaymentCurrency)
+    : DEFAULT_PAYMENT_CURRENCY;
+};
+
 const formFromPlan = (plan: PaymentPlan): PlanForm => ({
   student_id: plan.student_id,
   plan_type: plan.plan_type,
   amount: String(plan.amount ?? ''),
+  currency: resolveCurrency(plan.currency),
   frequency: (plan.frequency as PlanForm['frequency']) || 'monthly',
   next_payment_date: plan.next_payment_date
     ? formatYmd(new Date(plan.next_payment_date))
@@ -81,6 +101,27 @@ const formFromPlan = (plan: PaymentPlan): PlanForm => ({
   ),
   notes: plan.notes || '',
 });
+
+const formatStudentAmounts = (
+  amounts:
+    | Array<{currency: string; actual: number; projected: number}>
+    | undefined,
+  actual: number,
+  projected: number,
+  earnedLabel: string,
+  projectedLabel: string,
+) => {
+  if (amounts?.length) {
+    const earned = amounts
+      .map(a => formatMoney(a.actual, a.currency))
+      .join(' · ');
+    const projectedText = amounts
+      .map(a => formatMoney(a.projected, a.currency))
+      .join(' · ');
+    return `${earnedLabel}: ${earned} · ${projectedLabel}: ${projectedText}`;
+  }
+  return `${earnedLabel}: ${formatMoney(actual)} · ${projectedLabel}: ${formatMoney(projected)}`;
+};
 
 const defaultRange = (granularity: PaymentStatsGranularity) => {
   const now = new Date();
@@ -209,7 +250,7 @@ export function PaymentsTab({
         student_id: Number(form.student_id),
         plan_type: form.plan_type,
         amount: Number(form.amount),
-        currency: 'RUB',
+        currency: form.currency,
         notes: form.notes || null,
       };
       if (form.plan_type === 'recurring') {
@@ -228,6 +269,7 @@ export function PaymentsTab({
       }
       setOpen(false);
       await onRefreshPlans();
+      await onLoadStats({from, to, granularity});
     } catch (e) {
       Alert.alert(
         '',
@@ -253,19 +295,41 @@ export function PaymentsTab({
       <View style={styles.statsGrid}>
         <StatCard
           label={t('schedule.earnedPast')}
-          value={formatMoney(stats?.actual_past ?? stats?.actual_total ?? 0)}
+          value={formatMoneyList(
+            resolveStatsMoney(
+              stats?.by_currency?.actual_past ??
+                stats?.by_currency?.actual_total,
+              stats?.actual_past ?? stats?.actual_total ?? 0,
+            ),
+          )}
         />
         <StatCard
           label={t('schedule.earnedToday')}
-          value={formatMoney(stats?.actual_today ?? 0)}
+          value={formatMoneyList(
+            resolveStatsMoney(
+              stats?.by_currency?.actual_today,
+              stats?.actual_today ?? 0,
+            ),
+          )}
         />
         <StatCard
           label={t('schedule.projected')}
-          value={formatMoney(stats?.projected_total ?? 0)}
+          value={formatMoneyList(
+            resolveStatsMoney(
+              stats?.by_currency?.projected_total,
+              stats?.projected_total ?? 0,
+            ),
+          )}
         />
         <StatCard
           label={t('schedule.expectedTotal')}
-          value={formatMoney(stats?.expected_total ?? 0)}
+          value={formatMoneyList(
+            resolveStatsMoney(
+              stats?.by_currency?.expected_total,
+              stats?.expected_total ??
+                (stats?.actual_total || 0) + (stats?.projected_total || 0),
+            ),
+          )}
         />
       </View>
 
@@ -357,8 +421,13 @@ export function PaymentsTab({
                   {row.student_name || `#${row.student_id}`}
                 </Text>
                 <Text style={styles.listMeta}>
-                  {t('schedule.earned')}: {formatMoney(row.actual)} ·{' '}
-                  {t('schedule.projected')}: {formatMoney(row.projected)}
+                  {formatStudentAmounts(
+                    row.amounts,
+                    row.actual,
+                    row.projected,
+                    t('schedule.earned'),
+                    t('schedule.projected'),
+                  )}
                 </Text>
               </View>
             ))
@@ -375,7 +444,12 @@ export function PaymentsTab({
                     {u.student_name || `#${u.student_id}`}
                   </Text>
                   <Text style={styles.listMeta}>
-                    {formatDisplayDate(u.date)} · {formatMoney(u.amount)} ·{' '}
+                    {formatDisplayDate(u.date)} ·{' '}
+                    {formatMoney(
+                      u.amount,
+                      u.currency || DEFAULT_PAYMENT_CURRENCY,
+                    )}{' '}
+                    ·{' '}
                     {u.plan_type === 'package'
                       ? t('schedule.planPackage')
                       : t('schedule.planRecurring')}
@@ -420,7 +494,11 @@ export function PaymentsTab({
                 {plan.plan_type === 'package'
                   ? t('schedule.planPackage')
                   : t('schedule.planRecurring')}{' '}
-                · {formatMoney(plan.amount, plan.currency)}
+                ·{' '}
+                {formatMoney(
+                  plan.amount,
+                  plan.currency || DEFAULT_PAYMENT_CURRENCY,
+                )}
                 {plan.plan_type === 'recurring'
                   ? ` · ${frequencyLabel(plan.frequency, t)}`
                   : ` · ${plan.lessons_remaining ?? 0}/${plan.lessons_total ?? 0}`}
@@ -443,6 +521,7 @@ export function PaymentsTab({
                     try {
                       await onRecord(plan.id);
                       await onRefreshPlans();
+                      await onLoadStats({from, to, granularity});
                     } catch (e) {
                       Alert.alert(
                         '',
@@ -459,6 +538,7 @@ export function PaymentsTab({
                     try {
                       await onDeactivate(plan.id);
                       await onRefreshPlans();
+                      await onLoadStats({from, to, granularity});
                     } catch (e) {
                       Alert.alert(
                         '',
@@ -542,6 +622,23 @@ export function PaymentsTab({
               onChangeText={v => setForm(f => ({...f, amount: v}))}
               keyboardType="numeric"
             />
+            <Text style={styles.sectionLabel}>{t('schedule.currency')}</Text>
+            <View style={styles.chips}>
+              {PAYMENT_CURRENCIES.map(code => {
+                const active = form.currency === code;
+                return (
+                  <Pressable
+                    key={code}
+                    style={[styles.chip, active && styles.chipOn]}
+                    onPress={() => setForm(f => ({...f, currency: code}))}>
+                    <Text
+                      style={[styles.chipText, active && styles.chipTextOn]}>
+                      {PAYMENT_CURRENCY_LABELS[code]}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
             {form.plan_type === 'recurring' ? (
               <View style={styles.chips}>
                 {(['weekly', 'biweekly', 'monthly'] as const).map(key => {
@@ -661,7 +758,12 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   statLabel: {fontSize: 12, color: colors.textSecondary, marginBottom: 4},
-  statValue: {fontSize: 16, fontWeight: '700', color: colors.text},
+  statValue: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.text,
+    lineHeight: 20,
+  },
   segment: {flexDirection: 'row', gap: 8, marginBottom: 12},
   segmentBtn: {
     flex: 1,

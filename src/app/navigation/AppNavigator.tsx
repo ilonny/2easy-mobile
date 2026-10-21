@@ -12,18 +12,19 @@ import type {AppStackParamList} from './types';
 const Stack = createNativeStackNavigator<AppStackParamList>();
 
 /**
- * Remounts the whole stack on auth change so modal auth screens
- * are discarded and we land on MainTabs (in) or Home (out).
- *
  * Catalog screens live under MainTabs → Lessons stack so the tab bar
  * stays visible on speaking games, grammar, subscription, etc.
+ *
+ * Auth landing: Login/Registration call scheduleResetAfterAuth (via
+ * navigationRef) after setSession — do NOT remount this navigator with
+ * key={isAuthorized}; that raced with modal teardown on Android 16 and
+ * also left users stuck on Login when remount alone was used.
  */
 export function AppNavigator() {
   const {isAuthorized} = useAuth();
 
   return (
     <Stack.Navigator
-      key={isAuthorized ? 'authorized' : 'guest'}
       initialRouteName={isAuthorized ? 'MainTabs' : 'Home'}
       screenOptions={{
         headerShown: false,

@@ -242,15 +242,67 @@ export function formatTitle(
 }
 
 export function formatMoney(amount: number, currency = 'RUB'): string {
+  const n = typeof amount === 'number' ? amount : Number(amount);
+  const safe = Number.isFinite(n) ? n : 0;
   try {
     return new Intl.NumberFormat('ru-RU', {
       style: 'currency',
-      currency,
+      currency: String(currency || 'RUB'),
       maximumFractionDigits: 0,
-    }).format(amount || 0);
+    }).format(safe);
   } catch {
-    return `${amount || 0} ${currency}`;
+    return `${safe} ${currency || 'RUB'}`;
   }
+}
+
+export type MoneyByCurrency = {currency: string; amount: number};
+
+export function asMoneyList(
+  value: number | MoneyByCurrency[] | null | undefined,
+  fallbackCurrency = 'RUB',
+): MoneyByCurrency[] {
+  if (Array.isArray(value)) {
+    return value
+      .map(row => ({
+        currency: String(row?.currency || fallbackCurrency).toUpperCase(),
+        amount: Number(row?.amount) || 0,
+      }))
+      .filter(row => row.amount !== 0);
+  }
+  if (typeof value === 'number' && Number.isFinite(value) && value !== 0) {
+    return [{currency: fallbackCurrency, amount: value}];
+  }
+  return [];
+}
+
+/**
+ * Prefer multi-currency breakdown; fall back to legacy numeric total.
+ * Accepts both shapes so old/new backends and intermediate deploys stay safe.
+ */
+export function resolveStatsMoney(
+  byCurrency: MoneyByCurrency[] | null | undefined,
+  legacy: number | MoneyByCurrency[] | null | undefined,
+  fallbackCurrency = 'RUB',
+): MoneyByCurrency[] {
+  if (Array.isArray(byCurrency) && byCurrency.length) {
+    return asMoneyList(byCurrency, fallbackCurrency);
+  }
+  // Some interim API versions put the array on the legacy fields
+  if (Array.isArray(legacy)) {
+    return asMoneyList(legacy, fallbackCurrency);
+  }
+  return asMoneyList(legacy ?? 0, fallbackCurrency);
+}
+
+export function formatMoneyList(
+  value: number | MoneyByCurrency[] | null | undefined,
+  fallbackCurrency = 'RUB',
+): string {
+  const list = asMoneyList(value, fallbackCurrency);
+  if (!list.length) {
+    return formatMoney(0, fallbackCurrency);
+  }
+  return list.map(row => formatMoney(row.amount, row.currency)).join(' · ');
 }
 
 export function formatDisplayDate(isoOrYmd: string): string {

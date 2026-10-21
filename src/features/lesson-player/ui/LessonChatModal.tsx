@@ -1,6 +1,8 @@
 import {useEffect, useRef, useState} from 'react';
 import {
   FlatList,
+  Image,
+  Linking,
   Modal,
   Pressable,
   StyleSheet,
@@ -10,12 +12,23 @@ import {
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
+import {API_BASE_URL} from '../../../shared/config';
 import {useI18n} from '../../../shared/i18n';
 import {colors, radii} from '../../../shared/config/theme';
 import {useKeyboardBottomOffset} from '../../../shared/lib/useKeyboardBottomOffset';
 import {CHAT_ALLOWED_EMOJIS} from '../lib/chatReactions';
-import type {ChatMessage, ChatReaction} from '../lib/chatWs';
+import type {ChatAttachment, ChatMessage, ChatReaction} from '../lib/chatWs';
 import {useLessonChat} from '../model/useLessonChat';
+
+const resolveChatMediaUrl = (path?: string) => {
+  if (!path) {
+    return '';
+  }
+  if (/^https?:\/\//i.test(path)) {
+    return path;
+  }
+  return `${API_BASE_URL}/${path.replace(/^\/+/, '')}`;
+};
 
 type Props = {
   visible: boolean;
@@ -182,9 +195,55 @@ export function LessonChatModal({
                       </Text>
                     </View>
                   ) : null}
-                  <Text style={[styles.body, mine && styles.bodyMine]}>
-                    {item.message}
-                  </Text>
+                  {!!item.attachments?.length && (
+                    <View style={styles.attachments}>
+                      {item.attachments.map(
+                        (att: ChatAttachment, index: number) => {
+                          const url = resolveChatMediaUrl(att.path);
+                          const key = `${att.id || att.path}-${index}`;
+                          if (att.kind === 'image') {
+                            return (
+                              <Pressable
+                                key={key}
+                                onPress={() => {
+                                  if (url) {
+                                    void Linking.openURL(url);
+                                  }
+                                }}>
+                                <Image
+                                  source={{uri: url}}
+                                  style={styles.attachmentImage}
+                                  resizeMode="cover"
+                                />
+                              </Pressable>
+                            );
+                          }
+                          return (
+                            <Pressable
+                              key={key}
+                              onPress={() => {
+                                if (url) {
+                                  void Linking.openURL(url);
+                                }
+                              }}>
+                              <Text
+                                style={[
+                                  styles.attachmentLink,
+                                  mine && styles.attachmentLinkMine,
+                                ]}>
+                                {att.name || att.kind}
+                              </Text>
+                            </Pressable>
+                          );
+                        },
+                      )}
+                    </View>
+                  )}
+                  {item.message ? (
+                    <Text style={[styles.body, mine && styles.bodyMine]}>
+                      {item.message}
+                    </Text>
+                  ) : null}
                   {item.edited_at ? (
                     <Text style={[styles.edited, mine && styles.editedMine]}>
                       {t('lessons.chatEdited')}
@@ -379,6 +438,20 @@ const styles = StyleSheet.create({
   replyTextMine: {color: 'rgba(255,255,255,0.85)'},
   body: {fontSize: 15, lineHeight: 20, color: colors.text},
   bodyMine: {color: colors.white},
+  attachments: {gap: 8},
+  attachmentImage: {
+    width: 180,
+    height: 140,
+    borderRadius: 8,
+    backgroundColor: 'rgba(15,23,42,0.08)',
+  },
+  attachmentLink: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.primary,
+    textDecorationLine: 'underline',
+  },
+  attachmentLinkMine: {color: 'rgba(255,255,255,0.95)'},
   edited: {fontSize: 11, color: colors.muted},
   editedMine: {color: 'rgba(255,255,255,0.75)'},
   reactions: {flexDirection: 'row', flexWrap: 'wrap', gap: 6},

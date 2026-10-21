@@ -29,6 +29,13 @@ export type ScheduleEvent = {
   due_date?: string | null;
   is_overdue?: boolean;
   is_payment_reminder?: boolean;
+  /** Package lesson ordinals for calendar chips, e.g. 2/8 */
+  package_progress?: Array<{
+    student_id: number;
+    plan_id: number;
+    index: number;
+    total: number;
+  }>;
 };
 
 export type EventFormValues = {
@@ -66,15 +73,32 @@ export type PaymentPlan = {
 
 export type PaymentStatsGranularity = 'day' | 'week' | 'month';
 
+export type MoneyByCurrency = {
+  currency: string;
+  amount: number;
+};
+
+export type PaymentStatsMoneyGroup = {
+  actual_total?: MoneyByCurrency[];
+  actual_past?: MoneyByCurrency[];
+  actual_today?: MoneyByCurrency[];
+  projected_total?: MoneyByCurrency[];
+  expected_total?: MoneyByCurrency[];
+};
+
 export type PaymentStats = {
   granularity?: PaymentStatsGranularity;
   from?: string;
   to?: string;
+  currencies?: string[];
+  /** Legacy numeric totals (always numbers for old clients). */
   actual_total: number;
   actual_past?: number;
   actual_today?: number;
   projected_total: number;
   expected_total?: number;
+  /** Multi-currency breakdown (new clients). */
+  by_currency?: PaymentStatsMoneyGroup;
   chart: Array<{
     period?: string;
     label?: string;
@@ -82,6 +106,10 @@ export type PaymentStats = {
     actual: number;
     projected: number;
     total?: number;
+    by_currency?: Record<
+      string,
+      {actual: number; projected: number; total?: number}
+    >;
   }>;
   by_student: Array<{
     student_id: number;
@@ -89,10 +117,16 @@ export type PaymentStats = {
     student_email?: string | null;
     actual: number;
     projected: number;
+    amounts?: Array<{
+      currency: string;
+      actual: number;
+      projected: number;
+    }>;
   }>;
   upcoming?: Array<{
     date: string;
     amount: number;
+    currency?: string;
     student_id: number;
     student_name?: string | null;
     student_email?: string | null;

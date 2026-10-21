@@ -1,5 +1,12 @@
 import {useEffect, useMemo, useRef, useState} from 'react';
-import {Pressable, StyleSheet, Text, TextInput, View} from 'react-native';
+import {
+  Keyboard,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 
@@ -11,7 +18,7 @@ import {useLayout} from '../../../shared/lib/layout';
 import {colors, radii} from '../../../shared/config/theme';
 import {AppDialog, Button, PasswordField, TextField} from '../../../shared/ui';
 import type {RootStackParamList} from '../../../shared/navigation/types';
-import {resetAfterAuth} from '../../../shared/navigation/resetToLessonPlans';
+import {scheduleResetAfterAuth} from '../../../app/navigation/navigationRef';
 import {
   loginRequest,
   studentForgotPasswordRequest,
@@ -104,8 +111,13 @@ export function LoginForm() {
       });
 
       if (res.token) {
+        // Blur first so Autofill is not mid-save; then persist session and
+        // reset root via navigationRef (deferred) — avoids Android 16 crash
+        // from resetting the Login modal stack directly.
+        emailInputRef.current?.blur();
+        Keyboard.dismiss();
         await setSession(res);
-        resetAfterAuth(navigation, res);
+        scheduleResetAfterAuth(res);
         return;
       }
 

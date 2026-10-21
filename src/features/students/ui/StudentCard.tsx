@@ -12,6 +12,9 @@ type Props = {
   onOpenCabinet: (student: Student) => void;
   onEdit: (student: Student) => void;
   onDelete: (student: Student) => void;
+  onArchiveToggle?: (student: Student) => void;
+  /** When true, show restore instead of archive. */
+  isArchivedList?: boolean;
   /** Hide “open cabinet” (already inside cabinet). */
   hideCabinetAction?: boolean;
   /** Show password reveal (teacher student list). */
@@ -23,6 +26,8 @@ export function StudentCard({
   onOpenCabinet,
   onEdit,
   onDelete,
+  onArchiveToggle,
+  isArchivedList = false,
   hideCabinetAction,
   showPassword = true,
 }: Props) {
@@ -40,10 +45,24 @@ export function StudentCard({
           },
         ]
       : []),
-    {
-      label: t('common.edit'),
-      onPress: () => onEdit(student),
-    },
+    ...(!isArchivedList
+      ? [
+          {
+            label: t('common.edit'),
+            onPress: () => onEdit(student),
+          },
+        ]
+      : []),
+    ...(onArchiveToggle
+      ? [
+          {
+            label: isArchivedList
+              ? t('students.unarchive')
+              : t('students.archive'),
+            onPress: () => onArchiveToggle(student),
+          },
+        ]
+      : []),
     {
       label: t('common.delete'),
       onPress: () => onDelete(student),

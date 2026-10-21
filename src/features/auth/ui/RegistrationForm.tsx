@@ -1,5 +1,5 @@
 import {useState} from 'react';
-import {Pressable, StyleSheet, Text, View} from 'react-native';
+import {Keyboard, Pressable, StyleSheet, Text, View} from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 
@@ -10,8 +10,8 @@ import {isOutlookEmail, isValidEmail} from '../../../shared/lib/validation';
 import {autofill} from '../../../shared/lib/autofill';
 import {colors} from '../../../shared/config/theme';
 import {Button, Checkbox, PasswordField, TextField} from '../../../shared/ui';
+import {scheduleResetAfterAuth} from '../../../app/navigation/navigationRef';
 import {loginRequest, registerRequest} from '../api/authApi';
-import {resetAfterAuth} from '../../../shared/navigation/resetToLessonPlans';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -126,9 +126,10 @@ export function RegistrationForm() {
       });
 
       if (res.token) {
+        Keyboard.dismiss();
         await setSession(res);
         await markRegistrationCompleted();
-        resetAfterAuth(navigation, res);
+        scheduleResetAfterAuth(res);
         return;
       }
 

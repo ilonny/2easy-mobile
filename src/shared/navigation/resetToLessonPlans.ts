@@ -15,7 +15,7 @@ type AnyNav = {
   navigate?: (...args: never[]) => void;
 };
 
-type AuthProfileLike = {
+export type AuthProfileLike = {
   isStudent?: boolean;
   studentId?: number | string | null;
 } | null | undefined;

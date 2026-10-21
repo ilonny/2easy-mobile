@@ -24,6 +24,7 @@ import {useSubscription} from '../../home/model/useSubscription';
 import {
   deleteStudent,
   fetchStudents,
+  setStudentArchived,
   type Student,
 } from '../api/studentsApi';
 import {CreateStudentModal} from './CreateStudentModal';
@@ -44,17 +45,20 @@ export function StudentsScreen() {
   const {t} = useI18n();
   const {pageGutter, pageContentMaxWidth} = useLayout();
   const [students, setStudents] = useState<Student[]>([]);
+  const [showArchived, setShowArchived] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Student | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Student | null>(null);
+  const [pendingArchive, setPendingArchive] = useState<Student | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [archiving, setArchiving] = useState(false);
   const [notice, setNotice] = useState<NoticeState>(null);
 
   const load = useCallback(async () => {
     try {
-      const list = await fetchStudents();
+      const list = await fetchStudents({archived: showArchived});
       setStudents(list);
     } catch {
       setStudents([]);
@@ -62,9 +66,10 @@ export function StudentsScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [showArchived]);
 
   useEffect(() => {
+    setLoading(true);
     void load();
   }, [load]);
 
@@ -118,6 +123,25 @@ export function StudentsScreen() {
     }
   };
 
+  const onConfirmArchive = async () => {
+    if (!pendingArchive) {
+      return;
+    }
+    setArchiving(true);
+    try {
+      const res = await setStudentArchived(pendingArchive.id, !showArchived);
+      if (res.success === false) {
+        setPendingArchive(null);
+        setNotice({message: res.message || 'Error'});
+        return;
+      }
+      setPendingArchive(null);
+      void load();
+    } finally {
+      setArchiving(false);
+    }
+  };
+
   return (
     <View style={styles.root}>
       <View style={[styles.header, {paddingTop: insets.top + 8}]}>
@@ -164,19 +188,56 @@ export function StudentsScreen() {
                 ]}
               />
               <Text style={styles.title}>{t('profile.myStudents')}</Text>
+              <View style={styles.tabs}>
+                <Pressable
+                  onPress={() => setShowArchived(false)}
+                  style={[styles.tab, !showArchived && styles.tabActive]}>
+                  <Text
+                    style={[
+                      styles.tabText,
+                      !showArchived && styles.tabTextActive,
+                    ]}>
+                    {t('students.activeTab')}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => setShowArchived(true)}
+                  style={[styles.tab, showArchived && styles.tabActive]}>
+                  <Text
+                    style={[
+                      styles.tabText,
+                      showArchived && styles.tabTextActive,
+                    ]}>
+                    {t('students.archivedTab')}
+                  </Text>
+                </Pressable>
+              </View>
             </View>
           }
           ListEmptyComponent={
             <View style={styles.empty}>
-              <Text style={styles.emptyTitle}>{t('students.noStudents')}</Text>
-              <Button title={t('students.add')} onPress={openCreate} />
+              <Text style={styles.emptyTitle}>
+                {showArchived
+                  ? t('students.noArchivedStudents')
+                  : t('students.noStudents')}
+              </Text>
+              {!showArchived ? (
+                <Button title={t('students.add')} onPress={openCreate} />
+              ) : null}
             </View>
           }
           renderItem={({item}) => (
             <StudentCard
               student={item}
+              isArchivedList={showArchived}
               onOpenCabinet={openCabinet}
               onEdit={openEdit}
+              onArchiveToggle={student => {
+                if (!requireSubscription()) {
+                  return;
+                }
+                setPendingArchive(student);
+              }}
               onDelete={student => {
                 if (!requireSubscription()) {
                   return;
@@ -186,7 +247,7 @@ export function StudentsScreen() {
             />
           )}
           ListFooterComponent={
-            students.length ? (
+            students.length && !showArchived ? (
               <Pressable style={styles.addMore} onPress={openCreate}>
                 <Text style={styles.addMoreText}>
                   {t('students.addNewStudent')}
@@ -236,6 +297,36 @@ export function StudentsScreen() {
       />
 
       <AppDialog
+        visible={!!pendingArchive}
+        title={
+          showArchived ? t('students.unarchive') : t('students.archive')
+        }
+        message={(showArchived
+          ? t('students.unarchiveStudentConfirm')
+          : t('students.archiveStudentConfirm')
+        ).replace('{{name}}', pendingArchive?.name || '')}
+        onClose={() => (!archiving ? setPendingArchive(null) : undefined)}
+        closeOnBackdrop={!archiving}
+        actions={[
+          {
+            label: showArchived
+              ? t('students.unarchive')
+              : t('students.archive'),
+            variant: 'primary',
+            loading: archiving,
+            onPress: () => {
+              void onConfirmArchive();
+            },
+          },
+          {
+            label: t('common.cancel'),
+            variant: 'ghost',
+            onPress: () => setPendingArchive(null),
+          },
+        ]}
+      />
+
+      <AppDialog
         visible={!!notice}
         message={notice?.message}
         title={notice?.title}
@@ -278,8 +369,33 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: colors.primary,
     textAlign: 'center',
-    marginBottom: 20,
+    marginBottom: 8,
     textTransform: 'uppercase',
+  },
+  tabs: {
+    flexDirection: 'row',
+    gap: 8,
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  tab: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    backgroundColor: 'transparent',
+  },
+  tabActive: {
+    backgroundColor: colors.primary,
+  },
+  tabText: {
+    color: colors.primary,
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  tabTextActive: {
+    color: '#fff',
   },
   empty: {
     marginTop: 40,

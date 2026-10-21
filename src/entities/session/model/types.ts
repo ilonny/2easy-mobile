@@ -15,5 +15,5 @@ export type SessionProfile = {
 };
 
 export function isSessionAuthorized(profile?: SessionProfile | null): boolean {
-  return !!(profile?.login || profile?.studentId);
+  return !!(profile?.login || profile?.studentId || profile?.token);
 }
