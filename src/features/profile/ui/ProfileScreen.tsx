@@ -125,7 +125,7 @@ export function ProfileScreen() {
           items={[
             {
               label: t('editor.home'),
-              onPress: () => goHome(navigation, isAuthorized),
+              onPress: () => goHome(navigation, isAuthorized, profile),
             },
             {label: t('profile.profileLabel')},
           ]}

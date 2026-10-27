@@ -1,0 +1,226 @@
+import {useEffect, useMemo, useState} from 'react';
+import {
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
+
+import {useI18n} from '../../../shared/i18n';
+import {colors} from '../../../shared/config/theme';
+import {useLayout} from '../../../shared/lib/layout';
+import type {CalendarHours} from '../model/useCalendarHours';
+
+type Props = {
+  visible: boolean;
+  hours: CalendarHours;
+  onClose: () => void;
+  onApply: (hours: CalendarHours) => void;
+};
+
+const START_OPTIONS = Array.from({length: 23}, (_, i) => i); // 0–22
+const END_OPTIONS = Array.from({length: 24}, (_, i) => i + 1); // 1–24
+
+function padHour(h: number) {
+  return `${String(h).padStart(2, '0')}:00`;
+}
+
+export function VisibleHoursModal({
+  visible,
+  hours,
+  onClose,
+  onApply,
+}: Props) {
+  const insets = useSafeAreaInsets();
+  const {t} = useI18n();
+  const {isTablet, pageGutter} = useLayout();
+  const [draftStart, setDraftStart] = useState(hours.start);
+  const [draftEnd, setDraftEnd] = useState(hours.end);
+
+  useEffect(() => {
+    if (visible) {
+      setDraftStart(hours.start);
+      setDraftEnd(hours.end);
+    }
+  }, [visible, hours.start, hours.end]);
+
+  const valid = useMemo(
+    () =>
+      Number.isFinite(draftStart) &&
+      Number.isFinite(draftEnd) &&
+      draftStart >= 0 &&
+      draftEnd <= 24 &&
+      draftEnd > draftStart,
+    [draftStart, draftEnd],
+  );
+
+  return (
+    <Modal
+      visible={visible}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={onClose}>
+      <View
+        style={[
+          styles.root,
+          {
+            paddingTop: insets.top + 8,
+            paddingBottom: insets.bottom + 16,
+            paddingHorizontal: pageGutter,
+          },
+        ]}>
+        <View style={styles.header}>
+          <Text style={styles.title}>{t('schedule.visibleHoursTitle')}</Text>
+          <Pressable onPress={onClose} hitSlop={12}>
+            <Text style={styles.close}>{t('schedule.close')}</Text>
+          </Pressable>
+        </View>
+
+        <View
+          style={[
+            styles.columns,
+            isTablet && styles.columnsTablet,
+            {maxWidth: isTablet ? 520 : undefined, alignSelf: 'center'},
+          ]}>
+          <HourColumn
+            label={t('schedule.start')}
+            value={draftStart}
+            options={START_OPTIONS.filter(h => h < draftEnd)}
+            onChange={setDraftStart}
+          />
+          <HourColumn
+            label={t('schedule.end')}
+            value={draftEnd}
+            options={END_OPTIONS.filter(h => h > draftStart)}
+            onChange={setDraftEnd}
+          />
+        </View>
+
+        <Pressable
+          style={[styles.applyBtn, !valid && styles.applyBtnDisabled]}
+          disabled={!valid}
+          onPress={() => {
+            onApply({start: draftStart, end: draftEnd});
+            onClose();
+          }}>
+          <Text style={styles.applyBtnText}>
+            {t('schedule.applyVisibleHours')}
+          </Text>
+        </Pressable>
+      </View>
+    </Modal>
+  );
+}
+
+function HourColumn({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  options: number[];
+  onChange: (hour: number) => void;
+}) {
+  return (
+    <View style={styles.column}>
+      <Text style={styles.columnLabel}>{label}</Text>
+      <ScrollView
+        style={styles.columnScroll}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.columnScrollContent}>
+        {options.map(hour => {
+          const on = hour === value;
+          return (
+            <Pressable
+              key={hour}
+              style={[styles.hourChip, on && styles.hourChipOn]}
+              onPress={() => onChange(hour)}>
+              <Text style={[styles.hourChipText, on && styles.hourChipTextOn]}>
+                {padHour(hour)}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: '#F9F9F9',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: colors.text,
+  },
+  close: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  columns: {
+    flex: 1,
+    flexDirection: 'row',
+    gap: 12,
+    minHeight: 280,
+  },
+  columnsTablet: {
+    width: '100%',
+  },
+  column: {
+    flex: 1,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 12,
+    overflow: 'hidden',
+  },
+  columnLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.textSecondary,
+    marginBottom: 8,
+  },
+  columnScroll: {flex: 1},
+  columnScrollContent: {gap: 6, paddingBottom: 8},
+  hourChip: {
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: '#f1f1f4',
+    alignItems: 'center',
+  },
+  hourChipOn: {backgroundColor: colors.primary},
+  hourChipText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  hourChipTextOn: {color: '#fff'},
+  applyBtn: {
+    marginTop: 16,
+    backgroundColor: colors.primary,
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  applyBtnDisabled: {opacity: 0.45},
+  applyBtnText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 15,
+  },
+});

@@ -211,7 +211,11 @@ export function openSectionRoute(
   resetToRoute(navigation, route);
 }
 
-/** Breadcrumb "Home" / logo: Lessons (teacher), cabinet (student), or guest Home. */
+/**
+ * Breadcrumb "Home" / logo: Lessons (teacher), cabinet (student), or guest Home.
+ * Always pass `profile` when authorized — without it students are sent to LessonPlans
+ * and can loop with the cabinet (RN 7 pushes instead of popping).
+ */
 export function goHome(
   navigation: NativeStackNavigationProp<RootStackParamList> | AnyNav,
   isAuthorized: boolean,

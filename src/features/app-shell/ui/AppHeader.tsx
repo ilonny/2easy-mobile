@@ -28,10 +28,20 @@ type Props = {
 const MAIN_ROUTE_NAMES = new Set([
   'LessonPlans',
   'StudentsList',
+  'StudentCabinet',
   'Profile',
   'Home',
   'MainTabs',
   'Lessons',
+  'Students',
+]);
+
+/** Student home is cabinet — LessonPlans is not a root for them. */
+const STUDENT_MAIN_ROUTE_NAMES = new Set([
+  'StudentCabinet',
+  'Profile',
+  'Home',
+  'MainTabs',
   'Students',
 ]);
 
@@ -91,8 +101,11 @@ export function AppHeader({style}: Props) {
     if (!focusedRoute) {
       return true;
     }
+    if (isStudent) {
+      return STUDENT_MAIN_ROUTE_NAMES.has(focusedRoute);
+    }
     return MAIN_ROUTE_NAMES.has(focusedRoute);
-  }, [focusedRoute]);
+  }, [focusedRoute, isStudent]);
 
   const onBack = () => {
     if (isStudent) {

@@ -2,15 +2,22 @@ import type {ScheduleEvent, ScheduleView} from '../model/types';
 
 const pad2 = (n: number) => String(n).padStart(2, '0');
 
-/** Full day hour labels 00:00–23:00 (site calendar). */
-export const HOURS = Array.from({length: 24}, (_, i) => i);
+/** Default visible window 07:00–23:00 (matches site `useCalendarHours`). */
+export const DEFAULT_VISIBLE_HOURS = Array.from({length: 16}, (_, i) => i + 7);
+
+/** @deprecated Prefer passing `visibleHours` from `useCalendarHours`. */
+export const HOURS = DEFAULT_VISIBLE_HOURS;
 
 /** Pixel offset of "now" within the hour grid; clamped to grid bounds. */
-export function nowScrollTop(hourHeight: number, pad = 48) {
+export function nowScrollTop(
+  hourHeight: number,
+  pad = 48,
+  hours: number[] = DEFAULT_VISIBLE_HOURS,
+) {
   const now = new Date();
   const h = now.getHours() + now.getMinutes() / 60;
-  const start = HOURS[0];
-  const end = HOURS[HOURS.length - 1] + 1;
+  const start = hours[0] ?? 7;
+  const end = (hours[hours.length - 1] ?? 22) + 1;
   const clamped = Math.min(Math.max(h, start), end);
   return Math.max(0, (clamped - start) * hourHeight - pad);
 }

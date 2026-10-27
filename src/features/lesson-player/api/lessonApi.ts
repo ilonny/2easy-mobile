@@ -97,6 +97,42 @@ export async function fetchLesson(lessonId: number, studentId?: number) {
   });
 }
 
+export type LessonFocusTimerPayload = {
+  command_id?: number;
+  status?: string;
+  duration_sec?: number;
+  ends_at_ms?: number | null;
+  remaining_ms?: number | null;
+  updated_at_ms?: number;
+};
+
+export type LessonFocusMediaPayload = {
+  command_id?: number;
+  ex_id?: number;
+  kind?: string;
+  media_index?: number;
+  position_sec?: number;
+  server_time_ms?: number;
+  action?: string;
+  scroll?: boolean;
+};
+
+/** Current synced lesson timer + media (survives reload while the lesson session lives). */
+export async function fetchLessonFocusTimer(lessonId: number) {
+  return getJson<{
+    success?: boolean;
+    server_now_ms?: number;
+    focus?: {
+      ex_id?: number;
+      timer?: LessonFocusTimerPayload | null;
+      media?: LessonFocusMediaPayload | null;
+    } | null;
+  }>({
+    path: `/lesson-focus?lesson_id=${lessonId}`,
+    isSecure: true,
+  });
+}
+
 export async function fetchExList(
   lessonId: number,
   options?: {hash?: string; filterHidden?: boolean},

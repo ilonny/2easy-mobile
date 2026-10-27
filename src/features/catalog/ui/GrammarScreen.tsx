@@ -84,7 +84,7 @@ export function GrammarScreen() {
         items={[
           {
             label: t('editor.home'),
-            onPress: () => goHome(navigation, isAuthorized),
+            onPress: () => goHome(navigation, isAuthorized, profile),
           },
           {label: t('grammarPage.breadcrumb')},
         ]}

@@ -55,7 +55,8 @@ export function ProfileMenuButton({onLogin, onRegister}: Props) {
 
   const openProfile = () => {
     close();
-    navigation.navigate('MainTabs', {screen: 'Profile'});
+    // reset — bare navigate('MainTabs') pushes another MainTabs on RN 7+
+    resetToRoute(navigation, 'Profile');
   };
 
   return (

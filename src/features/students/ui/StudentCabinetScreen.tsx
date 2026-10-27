@@ -47,6 +47,7 @@ import {fetchCourses, type Course} from '../../lesson-plans/api/coursesApi';
 import {LessonCard} from '../../lesson-plans/ui/LessonCard';
 import {startLessonSession} from '../../lesson-player/api/lessonApi';
 import {saveStartLessonSelectedIds} from '../../lesson-player/lib/startLessonSelection';
+import {sortByStudentAttachDateDesc} from '../lib/sortByStudentAttachDate';
 import {
   deleteCourseRelation,
   deleteLessonRelation,
@@ -142,11 +143,13 @@ export function StudentCabinetScreen({studentId}: Props) {
       ]);
       setStudent(info);
       const nextLessons = lessonsRes.lessons ?? [];
-      const visibleLessons = profile?.isStudent
-        ? nextLessons.filter(
-            lesson => lesson['lesson_relations.status'] !== 'close',
-          )
-        : nextLessons;
+      const visibleLessons = sortByStudentAttachDateDesc(
+        profile?.isStudent
+          ? nextLessons.filter(
+              lesson => lesson['lesson_relations.status'] !== 'close',
+            )
+          : nextLessons,
+      );
       setLessons(visibleLessons);
       setCourses(
         profile?.isStudent

@@ -1,4 +1,3 @@
-import {useState} from 'react';
 import {StyleSheet, View} from 'react-native';
 
 import {colors, radii} from '../../../../shared/config/theme';
@@ -18,16 +17,8 @@ function Col({
   html?: string;
   image?: {dataURL?: string};
 }) {
-  const [colW, setColW] = useState(0);
   return (
-    <View
-      style={styles.col}
-      onLayout={e => {
-        const w = Math.floor(e.nativeEvent.layout.width);
-        if (w > 0 && w !== colW) {
-          setColW(w);
-        }
-      }}>
+    <View style={styles.col}>
       {!!image?.dataURL && (
         <SmartImage
           source={{uri: resolveMediaUri(image.dataURL)}}
@@ -35,7 +26,9 @@ function Col({
           resizeMode="contain"
         />
       )}
-      <HtmlContent html={html} contentWidth={colW > 0 ? colW : undefined} />
+      {/* Let HtmlContent measure its own width inside padding — passing the
+          column layout width counted padding twice and clipped trailing chars. */}
+      <HtmlContent html={html} />
     </View>
   );
 }
@@ -77,6 +70,8 @@ const styles = StyleSheet.create({
     padding: 14,
     flex: 1,
     minWidth: 0,
+    width: '100%',
+    maxWidth: '100%',
     overflow: 'hidden',
   },
   editorImg: {

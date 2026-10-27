@@ -1,4 +1,4 @@
-import {useMemo, useState} from 'react';
+import {useCallback, useMemo, useRef, useState} from 'react';
 import {
   ActivityIndicator,
   Linking,
@@ -9,10 +9,17 @@ import {
   Text,
   View,
 } from 'react-native';
-import Video from 'react-native-video';
+import Video, {type OnProgressData, type VideoRef} from 'react-native-video';
 
 import {useI18n} from '../../../../shared/i18n';
 import {colors, radii} from '../../../../shared/config/theme';
+import {
+  SyncWithStudentsButton,
+  useSyncedMediaPlayer,
+  useTeacherMediaSync,
+  type SyncedMediaControls,
+} from '../../mediaSync';
+import {useLessonPlayer} from '../../model/LessonPlayerContext';
 import {getImageUrl} from '../../lib/getImageUrl';
 import {ExHeader} from '../ExHeader';
 import {HtmlContent} from '../HtmlContent';
@@ -46,9 +53,14 @@ function ensureAudioFilename(name: string) {
 
 export function AudioExView({data}: Props) {
   const {t} = useI18n();
+  const {lessonId, isTeacher} = useLessonPlayer();
+  const exId = Number(data?.id || 0);
   const [showScript, setShowScript] = useState(false);
   const [paused, setPaused] = useState(true);
   const [downloading, setDownloading] = useState(false);
+  const videoRef = useRef<VideoRef>(null);
+  const positionRef = useRef(0);
+  const pausedRef = useRef(true);
   const bgImages = data?.images?.length ? [data.images[0]] : [];
   const attachment = data?.editorImages?.[0];
 
@@ -69,6 +81,57 @@ export function AudioExView({data}: Props) {
       'audio',
   );
 
+  const getControls = useCallback((): SyncedMediaControls | null => {
+    if (!audioSrc) {
+      return null;
+    }
+    return {
+      seek: (sec: number) => {
+        videoRef.current?.seek(Math.max(0, sec));
+        positionRef.current = Math.max(0, sec);
+      },
+      play: () => {
+        pausedRef.current = false;
+        setPaused(false);
+      },
+      pause: () => {
+        pausedRef.current = true;
+        setPaused(true);
+      },
+      getPositionSec: () => positionRef.current,
+      isPaused: () => pausedRef.current,
+    };
+  }, [audioSrc]);
+
+  useSyncedMediaPlayer({
+    enabled: !isTeacher && !!exId && !!audioSrc,
+    exId,
+    kind: 'audio',
+    mediaIndex: 0,
+    getControls,
+  });
+
+  const {active: syncOn, toggleSync, notifyPlaybackChange} =
+    useTeacherMediaSync({
+      enabled: !!isTeacher && !!lessonId && !!exId && !!audioSrc,
+      lessonId,
+      exId,
+      kind: 'audio',
+      mediaIndex: 0,
+      getControls,
+    });
+
+  const onProgress = (meta: OnProgressData) => {
+    positionRef.current = meta.currentTime || 0;
+  };
+
+  const togglePlay = () => {
+    const next = !paused;
+    pausedRef.current = next;
+    setPaused(next);
+    notifyPlaybackChange(next, positionRef.current);
+  };
+
   const onDownload = async () => {
     if (!audioSrc || downloading) {
       return;
@@ -82,7 +145,6 @@ export function AudioExView({data}: Props) {
         });
         return;
       }
-      // Android: open the file URL so the system can download / open it.
       const canOpen = await Linking.canOpenURL(audioSrc);
       if (canOpen) {
         await Linking.openURL(audioSrc);
@@ -138,20 +200,36 @@ export function AudioExView({data}: Props) {
             </Pressable>
           </View>
           <Video
+            ref={videoRef}
             source={{uri: audioSrc}}
             paused={paused}
             controls={false}
             style={styles.hiddenVideo}
-            onEnd={() => setPaused(true)}
+            onProgress={onProgress}
+            progressUpdateInterval={250}
+            onEnd={() => {
+              pausedRef.current = true;
+              setPaused(true);
+              notifyPlaybackChange(true, positionRef.current);
+            }}
             ignoreSilentSwitch="ignore"
+            playInBackground={false}
           />
-          <Pressable
-            style={styles.playBtn}
-            onPress={() => setPaused(p => !p)}>
-            <Text style={styles.playText}>
-              {paused ? `▶ ${t('common.play')}` : `⏸ ${t('common.pause')}`}
-            </Text>
-          </Pressable>
+          <View style={styles.controlsRow}>
+            <Pressable style={styles.playBtn} onPress={togglePlay}>
+              <Text style={styles.playText}>
+                {paused ? `▶ ${t('common.play')}` : `⏸ ${t('common.pause')}`}
+              </Text>
+            </Pressable>
+            {isTeacher ? (
+              <SyncWithStudentsButton
+                active={syncOn}
+                onPress={() => {
+                  void toggleSync();
+                }}
+              />
+            ) : null}
+          </View>
           {!!data?.audioDescription && (
             <>
               <Pressable onPress={() => setShowScript(s => !s)}>
@@ -212,7 +290,13 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   hiddenVideo: {width: 0, height: 0},
+  controlsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
   playBtn: {
+    flex: 1,
     backgroundColor: colors.primarySoft,
     borderRadius: radii.md,
     paddingVertical: 14,

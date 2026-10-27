@@ -3,9 +3,9 @@ import {Pressable, ScrollView, StyleSheet, Text, View} from 'react-native';
 
 import {useI18n} from '../../../../shared/i18n';
 import {
+  DEFAULT_VISIBLE_HOURS,
   eventsOnDay,
   formatHm,
-  HOURS,
   isSameDay,
   nowScrollTop,
   weekDays,
@@ -22,11 +22,11 @@ const APPLE_BLUE = '#007AFF';
 const HOUR_HEIGHT = 52;
 const LABEL_W = 52;
 const DAY_MIN_W = 88;
-const GRID_HEIGHT = HOURS.length * HOUR_HEIGHT;
 
 type Props = {
   cursor: Date;
   events: ScheduleEvent[];
+  visibleHours?: number[];
   detailed?: boolean;
   nameById?: Map<number, string>;
   onSlotClick: (day: Date, hour: number) => void;
@@ -36,6 +36,7 @@ type Props = {
 export function WeekView({
   cursor,
   events,
+  visibleHours = DEFAULT_VISIBLE_HOURS,
   detailed,
   nameById,
   onSlotClick,
@@ -44,6 +45,10 @@ export function WeekView({
   const {t, language} = useI18n();
   const scrollRef = useRef<ScrollView>(null);
   const days = weekDays(cursor);
+  const hours = visibleHours.length ? visibleHours : DEFAULT_VISIBLE_HOURS;
+  const windowStart = hours[0] ?? 7;
+  const windowEnd = (hours[hours.length - 1] ?? 22) + 1;
+  const gridHeight = hours.length * HOUR_HEIGHT;
   const today = useMemo(() => {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
@@ -52,6 +57,7 @@ export function WeekView({
   const showNowLine = days.some(d => isSameDay(d, today));
   const [now, setNow] = useState(() => new Date());
   const gridWidth = LABEL_W + days.length * DAY_MIN_W;
+  const periodKey = `${cursor.getFullYear()}-${cursor.getMonth()}-${cursor.getDate()}-${windowStart}-${windowEnd}`;
 
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 60_000);
@@ -61,23 +67,23 @@ export function WeekView({
   useEffect(() => {
     const timer = setTimeout(() => {
       scrollRef.current?.scrollTo({
-        y: nowScrollTop(HOUR_HEIGHT),
+        y: nowScrollTop(HOUR_HEIGHT, 48, hours),
         animated: false,
       });
     }, 50);
     return () => clearTimeout(timer);
-  }, [cursor]);
+  }, [periodKey, hours]);
 
   const nowTop = useMemo(() => {
     if (!showNowLine) {
       return null;
     }
     const h = now.getHours() + now.getMinutes() / 60;
-    if (h < HOURS[0] || h > HOURS[HOURS.length - 1] + 1) {
+    if (h < windowStart || h > windowEnd) {
       return null;
     }
-    return (h - HOURS[0]) * HOUR_HEIGHT;
-  }, [now, showNowLine]);
+    return (h - windowStart) * HOUR_HEIGHT;
+  }, [now, showNowLine, windowStart, windowEnd]);
 
   const chipOpts = {
     nameById,
@@ -123,16 +129,16 @@ export function WeekView({
             ref={scrollRef}
             style={styles.vScroll}
             showsVerticalScrollIndicator={false}>
-            <View style={{height: GRID_HEIGHT + 20, width: '100%'}}>
+            <View style={{height: gridHeight + 20, width: '100%'}}>
               <View style={styles.gridRow}>
-                <View style={[styles.timeCol, {height: GRID_HEIGHT}]}>
-                  {HOURS.map(hour => (
+                <View style={[styles.timeCol, {height: gridHeight}]}>
+                  {hours.map(hour => (
                     <View
                       key={hour}
                       style={[
                         styles.timeCell,
                         {
-                          top: (hour - HOURS[0]) * HOUR_HEIGHT,
+                          top: (hour - windowStart) * HOUR_HEIGHT,
                           height: HOUR_HEIGHT,
                         },
                       ]}>
@@ -141,19 +147,26 @@ export function WeekView({
                       </Text>
                     </View>
                   ))}
+                  <View
+                    style={[styles.timeCell, {top: gridHeight}]}
+                    pointerEvents="none">
+                    <Text style={styles.timeText}>
+                      {`${String(windowEnd).padStart(2, '0')}:00`}
+                    </Text>
+                  </View>
                 </View>
 
                 {days.map(day => (
                   <View
                     key={day.toISOString()}
-                    style={[styles.dayCol, {height: GRID_HEIGHT}]}>
-                    {HOURS.map(hour => (
+                    style={[styles.dayCol, {height: gridHeight}]}>
+                    {hours.map(hour => (
                       <Pressable
                         key={`${day.toISOString()}-${hour}`}
                         style={[
                           styles.slot,
                           {
-                            top: (hour - HOURS[0]) * HOUR_HEIGHT,
+                            top: (hour - windowStart) * HOUR_HEIGHT,
                             height: HOUR_HEIGHT,
                           },
                         ]}
@@ -169,12 +182,12 @@ export function WeekView({
                         (end.getTime() - start.getTime()) / 3_600_000,
                         event.type === 'payment' ? 1 : 0.4,
                       );
-                      const top = (startHour - HOURS[0]) * HOUR_HEIGHT;
+                      const top = (startHour - windowStart) * HOUR_HEIGHT;
                       const height = Math.min(
                         durationHours * HOUR_HEIGHT,
-                        GRID_HEIGHT - top,
+                        gridHeight - top,
                       );
-                      if (top >= GRID_HEIGHT || height <= 0) {
+                      if (top >= gridHeight || height <= 0) {
                         return null;
                       }
                       const chip = eventChipText(event, {

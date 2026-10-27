@@ -44,7 +44,7 @@ export function ContentPlayerScreen({slug}: Props) {
   const {isTablet, pageGutter, pageContentMaxWidth} = useLayout();
   const navigation = useNavigation<Nav>();
   const {t} = useI18n();
-  const {isAuthorized} = useAuth();
+  const {isAuthorized, profile} = useAuth();
   const {hasSubscription, loading: subLoading} = useSubscription();
   const pack = CONTENT_PACKS[slug];
   const parentSection = parentSectionForSlug(slug);
@@ -56,7 +56,7 @@ export function ContentPlayerScreen({slug}: Props) {
   const crumbs = [
     {
       label: t('editor.home'),
-      onPress: () => goHome(navigation, isAuthorized),
+      onPress: () => goHome(navigation, isAuthorized, profile),
     },
     {
       label: parentLabel,

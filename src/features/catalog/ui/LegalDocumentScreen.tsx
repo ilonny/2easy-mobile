@@ -37,7 +37,7 @@ const DOCS: Record<LegalDocId, {titleKey: string; bodyKey: string}> = {
 export function LegalDocumentScreen({docId}: Props) {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<Nav>();
-  const {isAuthorized} = useAuth();
+  const {isAuthorized, profile} = useAuth();
   const {t} = useI18n();
   const doc = DOCS[docId];
 
@@ -55,7 +55,7 @@ export function LegalDocumentScreen({docId}: Props) {
           items={[
             {
               label: t('editor.home'),
-              onPress: () => goHome(navigation, isAuthorized),
+              onPress: () => goHome(navigation, isAuthorized, profile),
             },
             {label: t(doc.titleKey)},
           ]}

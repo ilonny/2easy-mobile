@@ -34,14 +34,14 @@ export function CatalogPageLayout({
 }: Props) {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<Nav>();
-  const {isAuthorized} = useAuth();
+  const {isAuthorized, profile} = useAuth();
   const {t} = useI18n();
   const {pageGutter, pageContentMaxWidth} = useLayout();
 
   const crumbs: BreadcrumbCrumb[] = breadcrumbs ?? [
     {
       label: t('editor.home'),
-      onPress: () => goHome(navigation, isAuthorized),
+      onPress: () => goHome(navigation, isAuthorized, profile),
     },
     {label: sectionLabel},
   ];

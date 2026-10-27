@@ -40,7 +40,7 @@ type NoticeState = {
 export function StudentsScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<Nav>();
-  const {isAuthorized} = useAuth();
+  const {isAuthorized, profile} = useAuth();
   const {hasSubscription, loading: subLoading} = useSubscription();
   const {t} = useI18n();
   const {pageGutter, pageContentMaxWidth} = useLayout();
@@ -182,7 +182,8 @@ export function StudentsScreen() {
                 items={[
                   {
                     label: t('editor.home'),
-                    onPress: () => goHome(navigation as never, isAuthorized),
+                    onPress: () =>
+                      goHome(navigation as never, isAuthorized, profile),
                   },
                   {label: t('profile.myStudents')},
                 ]}

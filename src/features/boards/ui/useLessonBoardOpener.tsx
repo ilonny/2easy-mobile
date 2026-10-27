@@ -1,4 +1,4 @@
-import {useCallback, useState} from 'react';
+import {useCallback, useState, type ReactNode} from 'react';
 import {ActivityIndicator, Modal, StyleSheet, Text, View} from 'react-native';
 
 import {useI18n} from '../../../shared/i18n';
@@ -17,11 +17,14 @@ export function useLessonBoardOpener({
   isTeacher,
   studentIdForBoard,
   lessonSessionId,
+  boardOverlay,
 }: {
   lessonId: number;
   isTeacher: boolean;
   studentIdForBoard?: number;
   lessonSessionId?: number;
+  /** Native overlay rendered above the board WebView (e.g. synced lesson timer). */
+  boardOverlay?: ReactNode;
 }) {
   const {t} = useI18n();
   const {hasSubscription, loading: subLoading} = useSubscription();
@@ -93,11 +96,14 @@ export function useLessonBoardOpener({
         animationType="slide"
         onRequestClose={() => setOpen(false)}>
         {boardId ? (
-          <BoardWebView
-            boardId={boardId}
-            catalog={false}
-            onClose={() => setOpen(false)}
-          />
+          <View style={styles.boardRoot}>
+            <BoardWebView
+              boardId={boardId}
+              catalog={false}
+              onClose={() => setOpen(false)}
+            />
+            {boardOverlay}
+          </View>
         ) : (
           <View style={styles.centered}>
             <ActivityIndicator color={colors.primary} />
@@ -130,6 +136,7 @@ export function useLessonBoardOpener({
 }
 
 const styles = StyleSheet.create({
+  boardRoot: {flex: 1},
   centered: {
     flex: 1,
     alignItems: 'center',

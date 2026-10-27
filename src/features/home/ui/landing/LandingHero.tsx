@@ -15,6 +15,10 @@ import {useAuth} from '../../../../entities/session';
 import {useI18n} from '../../../../shared/i18n';
 import {useLayout} from '../../../../shared/lib/layout';
 import type {RootStackParamList} from '../../../../shared/navigation/types';
+import {
+  goHome,
+  resetToRoute,
+} from '../../../../shared/navigation/resetToLessonPlans';
 import {heroCards} from '../../model/landingData';
 import {useLandingAccess} from '../../model/useLandingTabCards';
 import {LandingButton} from './LandingButton';
@@ -94,27 +98,14 @@ export function LandingHero({onChooseTariff}: Props) {
       return (
         <LandingButton
           title={t('landing.hero.goToLessons')}
-          onPress={() =>
-            navigation.navigate('MainTabs', {
-              screen: 'Students',
-              params: {
-                screen: 'StudentCabinet',
-                params: {studentId: Number(profile?.studentId)},
-              },
-            } as never)
-          }
+          onPress={() => goHome(navigation, true, profile)}
         />
       );
     }
     return (
       <LandingButton
         title={t('landing.hero.goToLessons')}
-        onPress={() =>
-          navigation.navigate('MainTabs', {
-            screen: 'Lessons',
-            params: {screen: 'LessonPlans'},
-          } as never)
-        }
+        onPress={() => resetToRoute(navigation, 'Lessons')}
       />
     );
   };

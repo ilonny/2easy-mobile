@@ -54,11 +54,13 @@ import {
   type ScheduleEvent,
   type ScheduleView,
 } from '../model/types';
+import {useCalendarHours} from '../model/useCalendarHours';
 import {DayView} from './calendar/DayView';
 import {MonthView} from './calendar/MonthView';
 import {WeekView} from './calendar/WeekView';
 import {EventFormModal} from './EventFormModal';
 import {PaymentsTab} from './PaymentsTab';
+import {VisibleHoursModal} from './VisibleHoursModal';
 
 type LessonOption = {id: number; title?: string; user_id?: number};
 
@@ -77,7 +79,9 @@ export function ScheduleScreen() {
   const [tab, setTab] = useState<'calendar' | 'payments'>('calendar');
   const [view, setView] = useState<ScheduleView>('day');
   const [viewMenuOpen, setViewMenuOpen] = useState(false);
+  const [hoursModalOpen, setHoursModalOpen] = useState(false);
   const [cursor, setCursor] = useState(() => startOfDay(new Date()));
+  const {hours, setHours, visibleHours} = useCalendarHours();
   const [events, setEvents] = useState<ScheduleEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [students, setStudents] = useState<Student[]>([]);
@@ -176,7 +180,11 @@ export function ScheduleScreen() {
     if (!isTeacher) {
       return;
     }
-    const startHour = hour ?? Math.max(new Date().getHours(), 9);
+    const preferred = hour ?? Math.max(new Date().getHours(), 9);
+    const startHour = Math.min(
+      Math.max(preferred, hours.start),
+      Math.max(hours.start, hours.end - 1),
+    );
     setSelectedEvent(null);
     setDefaults({
       date: formatYmd(day),
@@ -203,6 +211,10 @@ export function ScheduleScreen() {
       : view === 'week'
         ? t('schedule.viewWeek')
         : t('schedule.viewMonth');
+
+  const hoursLabel = t('schedule.visibleHours')
+    .replace('{{start}}', `${String(hours.start).padStart(2, '0')}:00`)
+    .replace('{{end}}', `${String(hours.end).padStart(2, '0')}:00`);
 
   const shift = (dir: -1 | 1) => {
     if (view === 'month') {
@@ -446,6 +458,23 @@ export function ScheduleScreen() {
                     {t('schedule.localTimezoneHint').replace('{{tz}}', tzLabel)}
                   </Text>
                 </View>
+                <Pressable
+                  style={({pressed}) => [
+                    styles.hoursBtn,
+                    pressed && styles.hoursBtnPressed,
+                  ]}
+                  onPress={() => setHoursModalOpen(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('schedule.visibleHoursTitle')}>
+                  <Text style={styles.hoursBtnIcon}>◷</Text>
+                  <View style={styles.hoursBtnCopy}>
+                    <Text style={styles.hoursBtnCaption}>
+                      {t('schedule.visibleHoursTitle')}
+                    </Text>
+                    <Text style={styles.hoursBtnText}>{hoursLabel}</Text>
+                  </View>
+                  <Text style={styles.hoursBtnChevron}>›</Text>
+                </Pressable>
                 {viewMenuOpen && (
                   <View style={styles.viewMenuRow}>
                     {(['day', 'week', 'month'] as const).map(v => {
@@ -507,6 +536,7 @@ export function ScheduleScreen() {
                   <WeekView
                     cursor={cursor}
                     events={visibleEvents}
+                    visibleHours={visibleHours}
                     detailed={isTeacher}
                     nameById={studentNameById}
                     onSlotClick={openCreate}
@@ -516,6 +546,7 @@ export function ScheduleScreen() {
                   <DayView
                     cursor={cursor}
                     events={visibleEvents}
+                    visibleHours={visibleHours}
                     nameById={studentNameById}
                     onSlotClick={openCreate}
                     onEventClick={openEvent}
@@ -555,6 +586,15 @@ export function ScheduleScreen() {
           await recordPayment(planId);
           await refreshRange();
           await loadPlans();
+        }}
+      />
+
+      <VisibleHoursModal
+        visible={hoursModalOpen}
+        hours={hours}
+        onClose={() => setHoursModalOpen(false)}
+        onApply={next => {
+          void setHours(next);
         }}
       />
     </View>
@@ -701,6 +741,51 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#86868b',
     fontWeight: '700',
+  },
+  hoursBtn: {
+    alignSelf: 'stretch',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    minHeight: 44,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: colors.primarySoft,
+    borderWidth: 1,
+    borderColor: 'rgba(63,40,198,0.22)',
+  },
+  hoursBtnPressed: {
+    backgroundColor: '#e4dffc',
+  },
+  hoursBtnIcon: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.primary,
+    lineHeight: 20,
+  },
+  hoursBtnCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  hoursBtnCaption: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.primary,
+    opacity: 0.75,
+  },
+  hoursBtnText: {
+    marginTop: 1,
+    fontSize: 14,
+    fontWeight: '800',
+    color: colors.primary,
+  },
+  hoursBtnChevron: {
+    fontSize: 22,
+    fontWeight: '500',
+    color: colors.primary,
+    lineHeight: 22,
+    opacity: 0.7,
   },
   viewMenuRow: {
     flexDirection: 'row',

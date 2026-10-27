@@ -264,7 +264,7 @@ export function LessonEditorScreen({lessonId, studentId: studentIdProp}: Props) 
   const crumbs = [
     {
       label: t('editor.home'),
-      onPress: () => goHome(navigation, isAuthorized),
+      onPress: () => goHome(navigation, isAuthorized, profile),
     },
     {
       label: t('header.lessonPlans'),

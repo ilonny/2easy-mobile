@@ -1,9 +1,11 @@
+import type {ReactNode} from 'react';
 import {Pressable, StyleSheet, Text, View} from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
 import {useI18n} from '../../../shared/i18n';
 import {colors, radii} from '../../../shared/config/theme';
 import {useLayout} from '../../../shared/lib/layout';
+import {TimerRing} from './TimerRing';
 
 export const LESSON_TOOLS_BAR_HEIGHT = 72;
 
@@ -11,9 +13,14 @@ type Props = {
   showParticipants?: boolean;
   showDictionary?: boolean;
   showBoard?: boolean;
+  showTimer?: boolean;
   participantsCount?: number;
+  timerLabel?: string;
+  timerActive?: boolean;
+  timerPulse?: boolean;
   onParticipants?: () => void;
   onChat: () => void;
+  onTimer?: () => void;
   onVideo: () => void;
   onDictionary?: () => void;
   onBoard?: () => void;
@@ -25,11 +32,13 @@ function ToolButton({
   emoji,
   onPress,
   badge,
+  customIcon,
 }: {
   label: string;
-  emoji: string;
+  emoji?: string;
   onPress: () => void;
   badge?: number;
+  customIcon?: ReactNode;
 }) {
   return (
     <Pressable
@@ -37,8 +46,8 @@ function ToolButton({
       style={({pressed}) => [styles.btn, pressed && styles.btnPressed]}
       accessibilityRole="button"
       accessibilityLabel={label}>
-      <View style={styles.iconWrap}>
-        <Text style={styles.emoji}>{emoji}</Text>
+      <View style={[styles.iconWrap, customIcon ? styles.iconWrapPlain : null]}>
+        {customIcon ?? <Text style={styles.emoji}>{emoji}</Text>}
         {badge != null && badge > 0 ? (
           <View style={styles.badge}>
             <Text style={styles.badgeText}>{badge > 9 ? '9+' : badge}</Text>
@@ -56,9 +65,14 @@ export function LessonToolsBar({
   showParticipants,
   showDictionary,
   showBoard,
+  showTimer,
   participantsCount,
+  timerLabel,
+  timerActive,
+  timerPulse,
   onParticipants,
   onChat,
+  onTimer,
   onVideo,
   onDictionary,
   onBoard,
@@ -91,6 +105,28 @@ export function LessonToolsBar({
           label={t('lessons.chatShort')}
           onPress={onChat}
         />
+        {showTimer && onTimer ? (
+          <ToolButton
+            label={
+              timerActive || timerPulse
+                ? timerLabel || t('lessons.timer.short')
+                : t('lessons.timer.short')
+            }
+            emoji="⏱"
+            onPress={onTimer}
+            customIcon={
+              timerActive || timerPulse ? (
+                <TimerRing
+                  progress={1}
+                  label={timerLabel || '00:00'}
+                  size={36}
+                  active={!!timerActive}
+                  pulse={!!timerPulse}
+                />
+              ) : undefined
+            }
+          />
+        ) : null}
         <ToolButton
           emoji="📹"
           label={t('videoCall.short')}
@@ -147,6 +183,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primarySoft,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  iconWrapPlain: {
+    backgroundColor: 'transparent',
   },
   emoji: {fontSize: 18},
   badge: {

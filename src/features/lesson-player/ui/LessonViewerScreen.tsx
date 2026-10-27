@@ -67,7 +67,10 @@ import {LessonCover} from './LessonCover';
 import {getImageUrl} from '../lib/getImageUrl';
 import {LessonChatModal} from './LessonChatModal';
 import {LessonParticipantsSheet} from './LessonParticipantsSheet';
+import {BoardLessonTimerOverlay} from './BoardLessonTimerOverlay';
+import {LessonTimerSheet} from './LessonTimerSheet';
 import {LessonToolsBar, LESSON_TOOLS_BAR_HEIGHT} from './LessonToolsBar';
+import {useLessonTimer} from '../model/useLessonTimer';
 import {useVideoCall} from '../../video-call';
 
 type Props = {
@@ -115,6 +118,12 @@ export function LessonViewerScreen({
 
   const [participantsOpen, setParticipantsOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  const [timerOpen, setTimerOpen] = useState(false);
+  const lessonTimer = useLessonTimer({
+    lessonId,
+    enabled: isAuthorized && !!lessonId && (!!isTeacher || !!isStudent),
+    isTeacher: !!isTeacher,
+  });
   const {open: openVideoCall} = useVideoCall();
   const [dictionaryStudentId, setDictionaryStudentId] = useState<number | null>(
     null,
@@ -147,6 +156,7 @@ export function LessonViewerScreen({
       ? answerStudentId
       : selfStudentId ?? studentIdProp,
     lessonSessionId,
+    boardOverlay: <BoardLessonTimerOverlay timer={lessonTimer} />,
   });
 
   const parentLabel =
@@ -729,7 +739,15 @@ export function LessonViewerScreen({
             showParticipants={isTeacher && participants.length > 0}
             showDictionary={isStudent && !!selfStudentId}
             showBoard
+            showTimer={
+              !!isTeacher ||
+              lessonTimer.isActive ||
+              lessonTimer.state.status === 'finished'
+            }
             participantsCount={participants.length}
+            timerLabel={lessonTimer.display}
+            timerActive={lessonTimer.isActive}
+            timerPulse={lessonTimer.finishedPulse}
             onParticipants={() => setParticipantsOpen(true)}
             onChat={() => {
               const chatStudentId = isTeacher
@@ -741,6 +759,7 @@ export function LessonViewerScreen({
               }
               setChatOpen(true);
             }}
+            onTimer={() => setTimerOpen(true)}
             onVideo={() =>
               openVideoCall({lessonOwnerId: lesson?.user_id})
             }
@@ -763,6 +782,12 @@ export function LessonViewerScreen({
           onSelect={setActiveStudentId}
           onOpenDictionary={id => setDictionaryStudentId(id)}
           onClose={() => setParticipantsOpen(false)}
+        />
+
+        <LessonTimerSheet
+          visible={timerOpen}
+          timer={lessonTimer}
+          onClose={() => setTimerOpen(false)}
         />
 
         <LessonChatModal

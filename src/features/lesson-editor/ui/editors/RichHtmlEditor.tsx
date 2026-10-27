@@ -16,6 +16,10 @@ type Props = {
   onChangeHtml: (html: string) => void;
   minHeight?: number;
   placeholder?: string;
+  /** Defaults to true (lesson editor). Hide for student free-input answers. */
+  showToolbar?: boolean;
+  onFocus?: () => void;
+  onBlur?: () => void;
 };
 
 // Intersection of platform WebView props can collapse to `never` in this RN version.
@@ -103,7 +107,11 @@ function buildEditorHtml(initialHtml: string, placeholder: string) {
   }
 
   editor.addEventListener('input', scheduleEmit);
-  editor.addEventListener('blur', emitChange);
+  editor.addEventListener('focus', function() { post('focus', true); });
+  editor.addEventListener('blur', function() {
+    post('blur', true);
+    emitChange();
+  });
 
   document.addEventListener('message', handleNative);
   window.addEventListener('message', handleNative);
@@ -158,6 +166,9 @@ export function RichHtmlEditor({
   onChangeHtml,
   minHeight = 180,
   placeholder,
+  showToolbar = true,
+  onFocus,
+  onBlur,
 }: Props) {
   const {t} = useI18n();
   const resolvedPlaceholder = placeholder || t('editor.contentPlaceholder');
@@ -166,6 +177,10 @@ export function RichHtmlEditor({
   const ready = useRef(false);
   const [colorPickerOpen, setColorPickerOpen] = useState(false);
   const [textColor, setTextColor] = useState<string>(colors.primary);
+  const onFocusRef = useRef(onFocus);
+  const onBlurRef = useRef(onBlur);
+  onFocusRef.current = onFocus;
+  onBlurRef.current = onBlur;
 
   const source = useMemo(
     () => ({html: buildEditorHtml(html, resolvedPlaceholder)}),
@@ -205,6 +220,14 @@ export function RichHtmlEditor({
               )}}));true;`,
             );
           }
+          return;
+        }
+        if (msg.type === 'focus') {
+          onFocusRef.current?.();
+          return;
+        }
+        if (msg.type === 'blur') {
+          onBlurRef.current?.();
           return;
         }
         if (msg.type === 'change' || msg.type === 'html') {
@@ -248,28 +271,30 @@ export function RichHtmlEditor({
 
   return (
     <View style={styles.wrap}>
-      <View style={styles.toolbar}>
-        {TOOLBAR.map(item => (
-          <Pressable
-            key={item.cmd + (item.arg || '')}
-            style={styles.toolBtn}
-            onPress={() => onToolbarPress(item.cmd, item.arg)}>
-            <Text
-              style={[
-                styles.toolLabel,
-                item.cmd === 'bold' && styles.bold,
-                item.cmd === 'italic' && styles.italic,
-                item.cmd === 'underline' && styles.underline,
-                item.cmd === 'foreColor' && {color: textColor},
-              ]}>
-              {item.label}
-            </Text>
-            {item.cmd === 'foreColor' ? (
-              <View style={[styles.colorBar, {backgroundColor: textColor}]} />
-            ) : null}
-          </Pressable>
-        ))}
-      </View>
+      {showToolbar ? (
+        <View style={styles.toolbar}>
+          {TOOLBAR.map(item => (
+            <Pressable
+              key={item.cmd + (item.arg || '')}
+              style={styles.toolBtn}
+              onPress={() => onToolbarPress(item.cmd, item.arg)}>
+              <Text
+                style={[
+                  styles.toolLabel,
+                  item.cmd === 'bold' && styles.bold,
+                  item.cmd === 'italic' && styles.italic,
+                  item.cmd === 'underline' && styles.underline,
+                  item.cmd === 'foreColor' && {color: textColor},
+                ]}>
+                {item.label}
+              </Text>
+              {item.cmd === 'foreColor' ? (
+                <View style={[styles.colorBar, {backgroundColor: textColor}]} />
+              ) : null}
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
       <EditorWebView
         ref={webRef}
         originWhitelist={['*']}
@@ -278,15 +303,19 @@ export function RichHtmlEditor({
         style={[styles.web, {minHeight}]}
         scrollEnabled
         javaScriptEnabled
+        keyboardDisplayRequiresUserAction={false}
+        hideKeyboardAccessoryView
         domStorageEnabled
         allowsInlineMediaPlayback
       />
-      <ColorPickerModal
-        visible={colorPickerOpen}
-        value={textColor}
-        onChange={applyTextColor}
-        onClose={() => setColorPickerOpen(false)}
-      />
+      {showToolbar ? (
+        <ColorPickerModal
+          visible={colorPickerOpen}
+          value={textColor}
+          onChange={applyTextColor}
+          onClose={() => setColorPickerOpen(false)}
+        />
+      ) : null}
     </View>
   );
 }

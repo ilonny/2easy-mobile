@@ -212,7 +212,13 @@ export function CourseScreen({courseId}: Props) {
             items={[
               {
                 label: t('lessonPlans.title'),
-                onPress: () => navigation.navigate('LessonPlans'),
+                onPress: () => {
+                  if (navigation.canGoBack()) {
+                    navigation.goBack();
+                    return;
+                  }
+                  navigation.navigate('LessonPlans');
+                },
               },
               {label: course?.title || t('lessonPlans.course')},
             ]}

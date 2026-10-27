@@ -11,9 +11,9 @@ import {
 
 import {useI18n} from '../../../../shared/i18n';
 import {
+  DEFAULT_VISIBLE_HOURS,
   eventsOnDay,
   formatHm,
-  HOURS,
   isSameDay,
   nowScrollTop,
   weekdayLong,
@@ -28,11 +28,11 @@ import {
 const APPLE_BLUE = '#007AFF';
 const HOUR_HEIGHT = 60;
 const LABEL_W = 56;
-const GRID_HEIGHT = HOURS.length * HOUR_HEIGHT;
 
 type Props = {
   cursor: Date;
   events: ScheduleEvent[];
+  visibleHours?: number[];
   nameById?: Map<number, string>;
   onSlotClick: (day: Date, hour: number) => void;
   onEventClick: (event: ScheduleEvent) => void;
@@ -41,6 +41,7 @@ type Props = {
 export function DayView({
   cursor,
   events,
+  visibleHours = DEFAULT_VISIBLE_HOURS,
   nameById,
   onSlotClick,
   onEventClick,
@@ -48,6 +49,10 @@ export function DayView({
   const {t, language} = useI18n();
   const scrollRef = useRef<ScrollView>(null);
   const dayEvents = eventsOnDay(events, cursor);
+  const hours = visibleHours.length ? visibleHours : DEFAULT_VISIBLE_HOURS;
+  const windowStart = hours[0] ?? 7;
+  const windowEnd = (hours[hours.length - 1] ?? 22) + 1;
+  const gridHeight = hours.length * HOUR_HEIGHT;
   const today = useMemo(() => {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
@@ -55,6 +60,7 @@ export function DayView({
   }, []);
   const isToday = isSameDay(cursor, today);
   const [now, setNow] = useState(() => new Date());
+  const periodKey = `${cursor.getFullYear()}-${cursor.getMonth()}-${cursor.getDate()}-${windowStart}-${windowEnd}`;
 
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 60_000);
@@ -63,24 +69,24 @@ export function DayView({
 
   useEffect(() => {
     const target = isToday
-      ? nowScrollTop(HOUR_HEIGHT)
-      : Math.max(0, (9 - HOURS[0]) * HOUR_HEIGHT);
+      ? nowScrollTop(HOUR_HEIGHT, 48, hours)
+      : Math.max(0, (9 - windowStart) * HOUR_HEIGHT);
     const timer = setTimeout(() => {
       scrollRef.current?.scrollTo({y: target, animated: false});
     }, 50);
     return () => clearTimeout(timer);
-  }, [cursor, isToday]);
+  }, [periodKey, isToday, hours, windowStart]);
 
   const nowTop = useMemo(() => {
     if (!isToday) {
       return null;
     }
     const h = now.getHours() + now.getMinutes() / 60;
-    if (h < HOURS[0] || h > HOURS[HOURS.length - 1] + 1) {
+    if (h < windowStart || h > windowEnd) {
       return null;
     }
-    return (h - HOURS[0]) * HOUR_HEIGHT;
-  }, [now, isToday]);
+    return (h - windowStart) * HOUR_HEIGHT;
+  }, [now, isToday, windowStart, windowEnd]);
 
   const chipOpts = {
     detailed: true as const,
@@ -110,13 +116,13 @@ export function DayView({
         showsVerticalScrollIndicator={false}
         onScroll={(_e: NativeSyntheticEvent<NativeScrollEvent>) => undefined}
         scrollEventThrottle={16}>
-        <View style={{height: GRID_HEIGHT + 20}}>
-          {HOURS.map(hour => (
+        <View style={{height: gridHeight + 20}}>
+          {hours.map(hour => (
             <Pressable
               key={hour}
               style={[
                 styles.hourRow,
-                {top: (hour - HOURS[0]) * HOUR_HEIGHT, height: HOUR_HEIGHT},
+                {top: (hour - windowStart) * HOUR_HEIGHT, height: HOUR_HEIGHT},
               ]}
               onPress={() => onSlotClick(cursor, hour)}>
               <View style={styles.hourLabel}>
@@ -128,6 +134,14 @@ export function DayView({
             </Pressable>
           ))}
 
+          <View
+            style={[styles.endLabel, {top: gridHeight}]}
+            pointerEvents="none">
+            <Text style={styles.hourText}>
+              {`${String(windowEnd).padStart(2, '0')}:00`}
+            </Text>
+          </View>
+
           <View style={styles.eventsLayer} pointerEvents="box-none">
             {dayEvents.map(event => {
               const start = new Date(event.starts_at);
@@ -137,12 +151,12 @@ export function DayView({
                 (end.getTime() - start.getTime()) / 3_600_000,
                 event.type === 'payment' ? 1 : 0.45,
               );
-              const top = (startHour - HOURS[0]) * HOUR_HEIGHT;
+              const top = (startHour - windowStart) * HOUR_HEIGHT;
               const height = Math.min(
                 durationHours * HOUR_HEIGHT,
-                GRID_HEIGHT - top,
+                gridHeight - top,
               );
-              if (top >= GRID_HEIGHT || height <= 0) {
+              if (top >= gridHeight || height <= 0) {
                 return null;
               }
               const chip = eventChipText(event, {
@@ -228,6 +242,13 @@ const styles = StyleSheet.create({
     borderTopColor: '#f0f0f5',
   },
   hourLabel: {
+    width: LABEL_W,
+    paddingRight: 8,
+    alignItems: 'flex-end',
+  },
+  endLabel: {
+    position: 'absolute',
+    left: 0,
     width: LABEL_W,
     paddingRight: 8,
     alignItems: 'flex-end',

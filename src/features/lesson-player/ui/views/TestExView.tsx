@@ -1,5 +1,12 @@
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import {Pressable, StyleSheet, Text, View} from 'react-native';
+import {
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
 import {useI18n} from '../../../../shared/i18n';
 import {colors, radii} from '../../../../shared/config/theme';
@@ -7,7 +14,7 @@ import {resetAnswers} from '../../api/lessonApi';
 import {useLessonPlayer} from '../../model/LessonPlayerContext';
 import {useExAnswer} from '../../model/useExAnswer';
 import {ExHeader} from '../ExHeader';
-import {HtmlContent} from '../HtmlContent';
+import {HtmlContent, stripHtml} from '../HtmlContent';
 import {ImageGallery} from '../ImageGallery';
 
 type Props = {data: any};
@@ -52,6 +59,7 @@ export function TestExView({data}: Props) {
   const [errorMap, setErrorMap] = useState<Record<string, boolean>>({});
   const [submitted, setSubmitted] = useState(false);
   const [peekCorrect, setPeekCorrect] = useState(false);
+  const [answersOpen, setAnswersOpen] = useState(false);
 
   // Restore progress from saved step/score (student continue / teacher view).
   useEffect(() => {
@@ -219,6 +227,37 @@ export function TestExView({data}: Props) {
     }
   };
 
+  // Same summary as the site finished-screen teacher tooltip.
+  const studentAnswerSummary = useMemo(() => {
+    return questions.map((q, qIndex) => {
+      const rawAnswer = answers?.[String(q.id)]?.answer;
+      let selectedMapSaved: Record<string, boolean> = {};
+      try {
+        const parsedAnswer =
+          typeof rawAnswer === 'string' ? JSON.parse(rawAnswer) : rawAnswer;
+        if (
+          parsedAnswer?.selectedMap &&
+          typeof parsedAnswer.selectedMap === 'object'
+        ) {
+          selectedMapSaved = parsedAnswer.selectedMap;
+        }
+      } catch {
+        // Keep the question in the summary even if its saved answer is invalid.
+      }
+      return {
+        id: q.id,
+        index: qIndex,
+        question: stripHtml(q.value) || q.value || '',
+        selectedOptions: (q.options || []).filter(
+          option => !!selectedMapSaved[option.id],
+        ),
+      };
+    });
+  }, [answers, questions]);
+
+  const showStudentAnswerSummary =
+    finished && isTeacher && !!(activeStudentId || targetStudentId);
+
   if (!totalSteps) {
     return (
       <View style={styles.root}>
@@ -245,6 +284,16 @@ export function TestExView({data}: Props) {
           <ImageGallery images={bgImages} viewType="carousel" />
         )}
         <View style={styles.resultCard}>
+          {showStudentAnswerSummary ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t('testEx.studentAnswersAria')}
+              hitSlop={8}
+              onPress={() => setAnswersOpen(true)}
+              style={styles.infoBtn}>
+              <Text style={styles.infoBtnText}>i</Text>
+            </Pressable>
+          ) : null}
           <Text style={styles.resultLabel}>{t('testEx.yourScore')}</Text>
           <Text style={styles.resultScore}>
             {score}/{totalSteps}
@@ -258,6 +307,61 @@ export function TestExView({data}: Props) {
             <Text style={styles.btnText}>{t('testEx.restart')}</Text>
           </Pressable>
         </View>
+
+        <Modal
+          visible={answersOpen}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setAnswersOpen(false)}>
+          <Pressable
+            style={styles.summaryBackdrop}
+            onPress={() => setAnswersOpen(false)}>
+            <Pressable
+              style={styles.summarySheet}
+              onPress={e => e.stopPropagation()}>
+              <Text style={styles.summaryTitle}>
+                {t('testEx.studentAnswers')}
+              </Text>
+              <ScrollView
+                style={styles.summaryScroll}
+                contentContainerStyle={styles.summaryScrollContent}
+                showsVerticalScrollIndicator={false}>
+                {studentAnswerSummary.map(item => (
+                  <View key={String(item.id)} style={styles.summaryItem}>
+                    <Text style={styles.summaryQuestion}>
+                      {item.index + 1}. {item.question}
+                    </Text>
+                    <View style={styles.summaryOptions}>
+                      {item.selectedOptions.length ? (
+                        item.selectedOptions.map(option => (
+                          <Text
+                            key={option.id}
+                            style={[
+                              styles.summaryOption,
+                              option.isCorrect
+                                ? styles.summaryOptionOk
+                                : styles.summaryOptionBad,
+                            ]}>
+                            {option.value}
+                          </Text>
+                        ))
+                      ) : (
+                        <Text style={styles.summaryOptionBad}>
+                          {t('testEx.noAnswer')}
+                        </Text>
+                      )}
+                    </View>
+                  </View>
+                ))}
+              </ScrollView>
+              <Pressable
+                style={styles.summaryClose}
+                onPress={() => setAnswersOpen(false)}>
+                <Text style={styles.summaryCloseText}>{t('common.close')}</Text>
+              </Pressable>
+            </Pressable>
+          </Pressable>
+        </Modal>
       </View>
     );
   }
@@ -400,6 +504,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   resultCard: {
+    position: 'relative',
     backgroundColor: colors.white,
     borderRadius: radii.lg,
     padding: 24,
@@ -407,6 +512,26 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     alignItems: 'center',
+  },
+  infoBtn: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    zIndex: 2,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primarySoft,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  infoBtnText: {
+    color: colors.primary,
+    fontSize: 16,
+    fontWeight: '800',
+    fontStyle: 'italic',
   },
   resultLabel: {
     fontSize: 22,
@@ -420,6 +545,54 @@ const styles = StyleSheet.create({
     color: colors.primary,
     textAlign: 'center',
     marginVertical: 12,
+  },
+  summaryBackdrop: {
+    flex: 1,
+    backgroundColor: colors.modalBackdrop,
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+  },
+  summarySheet: {
+    backgroundColor: colors.white,
+    borderRadius: radii.lg,
+    padding: 16,
+    maxHeight: '80%',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  summaryTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: 8,
+  },
+  summaryScroll: {maxHeight: 420},
+  summaryScrollContent: {paddingBottom: 8},
+  summaryItem: {
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  summaryQuestion: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: 6,
+  },
+  summaryOptions: {gap: 4},
+  summaryOption: {fontSize: 14, fontWeight: '600'},
+  summaryOptionOk: {color: '#15803D'},
+  summaryOptionBad: {color: '#DC2626'},
+  summaryClose: {
+    marginTop: 12,
+    alignSelf: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+  },
+  summaryCloseText: {
+    color: colors.primary,
+    fontWeight: '700',
+    fontSize: 15,
   },
   progress: {
     textAlign: 'center',
