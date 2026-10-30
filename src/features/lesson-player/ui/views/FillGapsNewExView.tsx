@@ -101,6 +101,9 @@ export function FillGapsNewExView({data}: Props) {
   const [map, setMap] = useState<AnswersMap>({});
   const [selectedPoolId, setSelectedPoolId] = useState<string | null>(null);
   const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingPersistRef = useRef<string | null>(null);
+  const writeAnswerRef = useRef(writeAnswer);
+  writeAnswerRef.current = writeAnswer;
   const mapRef = useRef<AnswersMap>({});
   const userEditedRef = useRef(false);
   const focusedKeyRef = useRef<string | null>(null);
@@ -109,6 +112,11 @@ export function FillGapsNewExView({data}: Props) {
   useEffect(() => {
     userEditedRef.current = false;
     focusedKeyRef.current = null;
+    if (persistTimerRef.current) {
+      clearTimeout(persistTimerRef.current);
+      persistTimerRef.current = null;
+    }
+    pendingPersistRef.current = null;
     setMap({});
     mapRef.current = {};
   }, [resetSeq]);
@@ -149,8 +157,13 @@ export function FillGapsNewExView({data}: Props) {
       if (persistTimerRef.current) {
         clearTimeout(persistTimerRef.current);
       }
+      const payload = pendingPersistRef.current;
+      pendingPersistRef.current = null;
+      if (payload != null) {
+        void writeAnswerRef.current(data.id, payload);
+      }
     };
-  }, []);
+  }, [data.id]);
 
   const persist = useCallback(
     (next: AnswersMap) => {
@@ -158,14 +171,17 @@ export function FillGapsNewExView({data}: Props) {
       if (isTeacher) {
         return;
       }
+      const payload = JSON.stringify(next);
+      pendingPersistRef.current = payload;
       if (persistTimerRef.current) {
         clearTimeout(persistTimerRef.current);
       }
       persistTimerRef.current = setTimeout(() => {
-        void writeAnswer(data.id, JSON.stringify(next));
+        pendingPersistRef.current = null;
+        void writeAnswerRef.current(data.id, payload);
       }, 400);
     },
-    [data.id, writeAnswer, isTeacher],
+    [data.id, isTeacher],
   );
 
   const isCorrectForGap = (gap: Gap | undefined, v: string) => {

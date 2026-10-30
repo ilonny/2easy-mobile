@@ -34,8 +34,9 @@ import type {
   PaymentPlan,
   PaymentStats,
   PaymentStatsGranularity,
+  ScheduleEvent,
 } from '../model/types';
-import type {LoadStatsParams} from '../api/scheduleApi';
+import {fetchScheduleEvents, type LoadStatsParams} from '../api/scheduleApi';
 
 type StudentOption = {id: number; name?: string; email?: string};
 
@@ -102,27 +103,6 @@ const formFromPlan = (plan: PaymentPlan): PlanForm => ({
   notes: plan.notes || '',
 });
 
-const formatStudentAmounts = (
-  amounts:
-    | Array<{currency: string; actual: number; projected: number}>
-    | undefined,
-  actual: number,
-  projected: number,
-  earnedLabel: string,
-  projectedLabel: string,
-) => {
-  if (amounts?.length) {
-    const earned = amounts
-      .map(a => formatMoney(a.actual, a.currency))
-      .join(' · ');
-    const projectedText = amounts
-      .map(a => formatMoney(a.projected, a.currency))
-      .join(' · ');
-    return `${earnedLabel}: ${earned} · ${projectedLabel}: ${projectedText}`;
-  }
-  return `${earnedLabel}: ${formatMoney(actual)} · ${projectedLabel}: ${formatMoney(projected)}`;
-};
-
 const defaultRange = (granularity: PaymentStatsGranularity) => {
   const now = new Date();
   if (granularity === 'day') {
@@ -145,21 +125,75 @@ const defaultRange = (granularity: PaymentStatsGranularity) => {
 
 const frequencyLabel = (
   frequency: string | null | undefined,
-  t: (k: string) => string,
+  translate: (k: string) => string,
 ) => {
   const key = String(frequency || '')
     .trim()
     .toLowerCase();
   if (key === 'weekly') {
-    return t('schedule.freqWeekly');
+    return translate('schedule.freqWeekly');
   }
   if (key === 'biweekly') {
-    return t('schedule.freqBiweekly');
+    return translate('schedule.freqBiweekly');
   }
   if (key === 'monthly') {
-    return t('schedule.freqMonthly');
+    return translate('schedule.freqMonthly');
   }
   return frequency || '—';
+};
+
+const fill = (template: string, vars: Record<string, string | number>) =>
+  Object.entries(vars).reduce(
+    (text, [key, value]) => text.split(`{{${key}}}`).join(String(value)),
+    template,
+  );
+
+const countPassedPackageLessons = (planId: number, events: ScheduleEvent[]) => {
+  const now = Date.now();
+  let passed = 0;
+  for (const event of events) {
+    if (event.type === 'payment') {
+      continue;
+    }
+    const start = new Date(event.starts_at).getTime();
+    if (!Number.isFinite(start) || start > now) {
+      continue;
+    }
+    const hit = (event.package_progress || []).some(
+      row => Number(row.plan_id) === planId,
+    );
+    if (hit) {
+      passed += 1;
+    }
+  }
+  return passed;
+};
+
+const packageMoney = (
+  plan: PaymentPlan,
+  events: ScheduleEvent[],
+) => {
+  const total = Math.max(0, Number(plan.lessons_total || 0));
+  const unit = Number(plan.amount) || 0;
+  const remaining =
+    plan.lessons_remaining == null
+      ? total
+      : Math.max(0, Number(plan.lessons_remaining) || 0);
+  const fromCounter =
+    total > 0 ? Math.max(0, total - Math.min(remaining, total)) : 0;
+  const fromCalendar = countPassedPackageLessons(plan.id, events);
+  const passed =
+    total > 0
+      ? Math.min(Math.max(fromCalendar, fromCounter), total)
+      : Math.max(fromCalendar, fromCounter);
+  return {
+    passed,
+    total,
+    unit,
+    earned: unit * passed,
+    due: unit * total,
+    currency: plan.currency || DEFAULT_PAYMENT_CURRENCY,
+  };
 };
 
 export function PaymentsTab({
@@ -201,12 +235,97 @@ export function PaymentsTab({
     () => plans.filter(p => Number(p.is_active) !== 0),
     [plans],
   );
+  const [lessonEvents, setLessonEvents] = useState<ScheduleEvent[]>([]);
 
-  const upcomingAll = stats?.upcoming || [];
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const events = await fetchScheduleEvents(
+          addMonths(new Date(), -8).toISOString(),
+          addMonths(new Date(), 8).toISOString(),
+        );
+        if (!cancelled) {
+          setLessonEvents(events);
+        }
+      } catch {
+        if (!cancelled) {
+          setLessonEvents([]);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [plans]);
+
+  const paidByStudentCurrency = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const row of stats?.by_student || []) {
+      const sid = Number(row.student_id);
+      if (!Number.isFinite(sid)) {
+        continue;
+      }
+      if (row.amounts?.length) {
+        for (const amount of row.amounts) {
+          map.set(
+            `${sid}:${String(amount.currency || '').toUpperCase()}`,
+            Number(amount.actual) || 0,
+          );
+        }
+      } else if (row.actual) {
+        map.set(`${sid}:${DEFAULT_PAYMENT_CURRENCY}`, Number(row.actual) || 0);
+      }
+    }
+    return map;
+  }, [stats?.by_student]);
+
+  const packageRows = useMemo(
+    () =>
+      activePlans
+        .filter(plan => plan.plan_type === 'package')
+        .map(plan => {
+          const money = packageMoney(plan, lessonEvents);
+          const paid =
+            paidByStudentCurrency.get(
+              `${plan.student_id}:${String(money.currency).toUpperCase()}`,
+            ) || 0;
+          return {plan, ...money, paid, still: Math.max(0, money.due - paid)};
+        })
+        .sort((a, b) =>
+          String(a.plan.next_payment_date || '').localeCompare(
+            String(b.plan.next_payment_date || ''),
+          ),
+        ),
+    [activePlans, lessonEvents, paidByStudentCurrency],
+  );
+
+  const packageTotals = useMemo(() => {
+    const earned = new Map<string, number>();
+    const due = new Map<string, number>();
+    const still = new Map<string, number>();
+    for (const row of packageRows) {
+      const currency = String(row.currency).toUpperCase();
+      earned.set(currency, (earned.get(currency) || 0) + row.earned);
+      due.set(currency, (due.get(currency) || 0) + row.due);
+      still.set(currency, (still.get(currency) || 0) + row.still);
+    }
+    const toList = (map: Map<string, number>) =>
+      [...map.entries()]
+        .filter(([, amount]) => amount !== 0)
+        .map(([currency, amount]) => ({currency, amount}));
+    return {earned: toList(earned), due: toList(due), still: toList(still)};
+  }, [packageRows]);
+
+  const moneyCurrency =
+    packageRows[0]?.currency ||
+    activePlans[0]?.currency ||
+    DEFAULT_PAYMENT_CURRENCY;
+
   const upcomingVisible = upcomingExpanded
-    ? upcomingAll
-    : upcomingAll.slice(0, 5);
-  const upcomingHiddenCount = Math.max(0, upcomingAll.length - 5);
+    ? packageRows
+    : packageRows.slice(0, 5);
+  const upcomingHiddenCount = Math.max(0, packageRows.length - 5);
 
   const openCreate = () => {
     setEditing(null);
@@ -294,42 +413,30 @@ export function PaymentsTab({
 
       <View style={styles.statsGrid}>
         <StatCard
-          label={t('schedule.earnedPast')}
+          label={t('schedule.earnedFromLessons')}
+          hint={t('schedule.earnedFromLessonsHint')}
+          value={formatMoneyList(packageTotals.earned, moneyCurrency)}
+        />
+        <StatCard
+          label={t('schedule.alreadyPaid')}
+          hint={t('schedule.alreadyPaidHint')}
           value={formatMoneyList(
             resolveStatsMoney(
-              stats?.by_currency?.actual_past ??
-                stats?.by_currency?.actual_total,
-              stats?.actual_past ?? stats?.actual_total ?? 0,
+              stats?.by_currency?.actual_total,
+              stats?.actual_total ?? 0,
             ),
+            moneyCurrency,
           )}
         />
         <StatCard
-          label={t('schedule.earnedToday')}
-          value={formatMoneyList(
-            resolveStatsMoney(
-              stats?.by_currency?.actual_today,
-              stats?.actual_today ?? 0,
-            ),
-          )}
+          label={t('schedule.packageDue')}
+          hint={t('schedule.packageDueHint')}
+          value={formatMoneyList(packageTotals.due, moneyCurrency)}
         />
         <StatCard
-          label={t('schedule.projected')}
-          value={formatMoneyList(
-            resolveStatsMoney(
-              stats?.by_currency?.projected_total,
-              stats?.projected_total ?? 0,
-            ),
-          )}
-        />
-        <StatCard
-          label={t('schedule.expectedTotal')}
-          value={formatMoneyList(
-            resolveStatsMoney(
-              stats?.by_currency?.expected_total,
-              stats?.expected_total ??
-                (stats?.actual_total || 0) + (stats?.projected_total || 0),
-            ),
-          )}
+          label={t('schedule.stillToCollect')}
+          hint={t('schedule.stillToCollectHint')}
+          value={formatMoneyList(packageTotals.still, moneyCurrency)}
         />
       </View>
 
@@ -412,48 +519,67 @@ export function PaymentsTab({
       ) : (
         <>
           <Text style={styles.section}>{t('schedule.byStudent')}</Text>
-          {(stats?.by_student || []).length === 0 ? (
+          {packageRows.length === 0 ? (
             <Text style={styles.empty}>{t('schedule.noStatsYet')}</Text>
           ) : (
-            (stats?.by_student || []).map(row => (
-              <View key={row.student_id} style={styles.listCard}>
+            packageRows.map(row => (
+              <View key={row.plan.id} style={styles.listCard}>
                 <Text style={styles.listTitle}>
-                  {row.student_name || `#${row.student_id}`}
+                  {row.plan.student_name || `#${row.plan.student_id}`}
                 </Text>
                 <Text style={styles.listMeta}>
-                  {formatStudentAmounts(
-                    row.amounts,
-                    row.actual,
-                    row.projected,
-                    t('schedule.earned'),
-                    t('schedule.projected'),
-                  )}
+                  {t('schedule.passedLessons')}: {row.passed}/{row.total}
+                  {' · '}
+                  {t('schedule.earnedFromLessons')}:{' '}
+                  {formatMoney(row.earned, row.currency)}
+                  {' · '}
+                  {t('schedule.packageTotal')}:{' '}
+                  {formatMoney(row.due, row.currency)}
                 </Text>
               </View>
             ))
           )}
 
           <Text style={styles.section}>{t('schedule.upcomingPayments')}</Text>
-          {upcomingAll.length === 0 ? (
+          {packageRows.length === 0 ? (
             <Text style={styles.empty}>{t('schedule.noUpcoming')}</Text>
           ) : (
             <>
-              {upcomingVisible.map(u => (
-                <View key={`${u.plan_id}-${u.date}`} style={styles.listCard}>
-                  <Text style={styles.listTitle}>
-                    {u.student_name || `#${u.student_id}`}
-                  </Text>
-                  <Text style={styles.listMeta}>
-                    {formatDisplayDate(u.date)} ·{' '}
-                    {formatMoney(
-                      u.amount,
-                      u.currency || DEFAULT_PAYMENT_CURRENCY,
-                    )}{' '}
-                    ·{' '}
-                    {u.plan_type === 'package'
-                      ? t('schedule.planPackage')
-                      : t('schedule.planRecurring')}
-                  </Text>
+              {upcomingVisible.map(row => (
+                <View key={row.plan.id} style={styles.listCard}>
+                  <View style={styles.upcomingRow}>
+                    <View style={{flex: 1}}>
+                      <Text style={styles.listTitle}>
+                        {row.plan.student_name || `#${row.plan.student_id}`}
+                      </Text>
+                      <Text style={styles.listMeta}>
+                        {row.plan.next_payment_date
+                          ? formatDisplayDate(row.plan.next_payment_date)
+                          : '—'}
+                        {' · '}
+                        {fill(t('schedule.passedOfTotal'), {
+                          passed: row.passed,
+                          total: row.total,
+                        })}
+                        {' · '}
+                        {fill(t('schedule.earnedAmount'), {
+                          amount: formatMoney(row.earned, row.currency),
+                        })}
+                      </Text>
+                      <Text style={styles.listMeta}>
+                        {fill(t('schedule.needToPay'), {
+                          amount: formatMoney(row.due, row.currency),
+                        })}
+                        {' · '}
+                        {fill(t('schedule.alreadyPaidAmount'), {
+                          amount: formatMoney(row.paid, row.currency),
+                        })}
+                      </Text>
+                    </View>
+                    <Text style={styles.dueAmount}>
+                      {formatMoney(row.due, row.currency)}
+                    </Text>
+                  </View>
                 </View>
               ))}
               {upcomingHiddenCount > 0 && (
@@ -499,10 +625,38 @@ export function PaymentsTab({
                   plan.amount,
                   plan.currency || DEFAULT_PAYMENT_CURRENCY,
                 )}
-                {plan.plan_type === 'recurring'
-                  ? ` · ${frequencyLabel(plan.frequency, t)}`
-                  : ` · ${plan.lessons_remaining ?? 0}/${plan.lessons_total ?? 0}`}
+                {plan.plan_type === 'package'
+                  ? ` ${t('schedule.perLesson')}`
+                  : ` · ${frequencyLabel(plan.frequency, t)}`}
               </Text>
+              {plan.plan_type === 'package'
+                ? (() => {
+                    const row = packageRows.find(item => item.plan.id === plan.id);
+                    if (!row) {
+                      return null;
+                    }
+                    return (
+                      <>
+                        <Text style={styles.listMeta}>
+                          {fill(t('schedule.passedLessonLine'), {
+                            passed: row.passed,
+                            total: row.total,
+                            earned: formatMoney(row.earned, row.currency),
+                          })}
+                        </Text>
+                        <Text style={styles.listMeta}>
+                          {fill(t('schedule.needToPay'), {
+                            amount: formatMoney(row.due, row.currency),
+                          })}
+                          {' · '}
+                          {fill(t('schedule.alreadyPaidAmount'), {
+                            amount: formatMoney(row.paid, row.currency),
+                          })}
+                        </Text>
+                      </>
+                    );
+                  })()
+                : null}
               {!!plan.next_payment_date && (
                 <Text style={styles.listMeta}>
                   {t('schedule.nextPayment')}:{' '}
@@ -682,6 +836,9 @@ export function PaymentsTab({
                     }
                     keyboardType="numeric"
                   />
+                  <Text style={styles.statHint}>
+                    {t('schedule.lessonsRemainingHint')}
+                  </Text>
                 </View>
               </View>
             )}
@@ -717,11 +874,20 @@ export function PaymentsTab({
   );
 }
 
-function StatCard({label, value}: {label: string; value: string}) {
+function StatCard({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+}) {
   return (
     <View style={styles.statCard}>
       <Text style={styles.statLabel}>{label}</Text>
       <Text style={styles.statValue}>{value}</Text>
+      {hint ? <Text style={styles.statHint}>{hint}</Text> : null}
     </View>
   );
 }
@@ -763,6 +929,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.text,
     lineHeight: 20,
+  },
+  statHint: {
+    fontSize: 11,
+    color: colors.textSecondary,
+    marginTop: 4,
+    lineHeight: 14,
   },
   segment: {flexDirection: 'row', gap: 8, marginBottom: 12},
   segmentBtn: {
@@ -823,6 +995,8 @@ const styles = StyleSheet.create({
   },
   listTitle: {fontWeight: '700', color: colors.text, fontSize: 15},
   listMeta: {color: colors.textSecondary, fontSize: 13, marginTop: 4},
+  upcomingRow: {flexDirection: 'row', alignItems: 'flex-start', gap: 8},
+  dueAmount: {fontWeight: '700', color: colors.primary, fontSize: 15},
   planCard: {
     backgroundColor: colors.white,
     borderRadius: radii.md,

@@ -56,7 +56,7 @@ export function TextChecklistExView({data}: Props) {
                 key={`${index}-${sticker}`}
                 style={styles.item}
                 onPress={() =>
-                  writeAnswer(sticker, checked ? '0' : '1')
+                  writeAnswer(sticker, JSON.stringify(!checked))
                 }
                 accessibilityRole="checkbox"
                 accessibilityState={{checked}}>

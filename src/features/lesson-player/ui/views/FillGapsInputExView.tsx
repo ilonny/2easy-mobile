@@ -56,6 +56,9 @@ export function FillGapsInputExView({data}: Props) {
   const focusedIdRef = useRef<string | null>(null);
   const dirtyRef = useRef(false);
   const hydratedSigRef = useRef('');
+  const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const writeAnswerRef = useRef(writeAnswer);
+  writeAnswerRef.current = writeAnswer;
 
   const answersSig = useMemo(() => {
     return fields
@@ -86,24 +89,51 @@ export function FillGapsInputExView({data}: Props) {
     setLocal({});
   }, [resetSeq]);
 
-  const onChangeGap = useCallback((id: string, v: string) => {
-    dirtyRef.current = true;
-    setLocal(prev => {
-      const next = {...prev, [id]: v};
-      localRef.current = next;
-      return next;
-    });
+  const flushGap = useCallback((id: string) => {
+    if (saveTimers.current[id]) {
+      clearTimeout(saveTimers.current[id]);
+      delete saveTimers.current[id];
+    }
+    void writeAnswerRef.current(id, localRef.current[id] ?? '');
   }, []);
+
+  const onChangeGap = useCallback(
+    (id: string, v: string) => {
+      dirtyRef.current = true;
+      setLocal(prev => {
+        const next = {...prev, [id]: v};
+        localRef.current = next;
+        return next;
+      });
+      if (saveTimers.current[id]) {
+        clearTimeout(saveTimers.current[id]);
+      }
+      saveTimers.current[id] = setTimeout(() => {
+        delete saveTimers.current[id];
+        void writeAnswerRef.current(id, localRef.current[id] ?? '');
+      }, 450);
+    },
+    [],
+  );
 
   const onBlurGap = useCallback(
     (id: string) => {
       focusedIdRef.current = null;
-      const value = localRef.current[id] ?? '';
-      void writeAnswer(id, value);
+      flushGap(id);
       dirtyRef.current = false;
     },
-    [writeAnswer],
+    [flushGap],
   );
+
+  useEffect(() => {
+    const timers = saveTimers.current;
+    return () => {
+      Object.keys(timers).forEach(id => {
+        clearTimeout(timers[id]);
+        void writeAnswerRef.current(id, localRef.current[id] ?? '');
+      });
+    };
+  }, []);
 
   const bgImages = data?.images?.length ? [data.images[0]] : [];
 

@@ -65,6 +65,9 @@ export function UnscrambleWordsExView({data}: Props) {
   const [selectedPoolId, setSelectedPoolId] = useState<string | null>(null);
   const [poolOrder, setPoolOrder] = useState<Record<string, string[]>>({});
   const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingPersistRef = useRef<string | null>(null);
+  const writeAnswerRef = useRef(writeAnswer);
+  writeAnswerRef.current = writeAnswer;
 
   const dragPoolKey = useMemo(() => {
     const ex = data?.id ?? 'new';
@@ -88,6 +91,11 @@ export function UnscrambleWordsExView({data}: Props) {
   }, [dragPoolKey, resetSeq]);
 
   useEffect(() => {
+    if (persistTimerRef.current) {
+      clearTimeout(persistTimerRef.current);
+      persistTimerRef.current = null;
+    }
+    pendingPersistRef.current = null;
     setMap({});
     setSelectedPoolId(null);
   }, [resetSeq]);
@@ -124,22 +132,30 @@ export function UnscrambleWordsExView({data}: Props) {
       if (persistTimerRef.current) {
         clearTimeout(persistTimerRef.current);
       }
+      const payload = pendingPersistRef.current;
+      pendingPersistRef.current = null;
+      if (payload != null) {
+        void writeAnswerRef.current(data.id, payload);
+      }
     };
-  }, []);
+  }, [data.id]);
 
   const persist = useCallback(
     (next: AnswersMap) => {
       if (isTeacher) {
         return;
       }
+      const payload = JSON.stringify(next);
+      pendingPersistRef.current = payload;
       if (persistTimerRef.current) {
         clearTimeout(persistTimerRef.current);
       }
       persistTimerRef.current = setTimeout(() => {
-        void writeAnswer(data.id, JSON.stringify(next));
+        pendingPersistRef.current = null;
+        void writeAnswerRef.current(data.id, payload);
       }, 400);
     },
-    [data.id, writeAnswer, isTeacher],
+    [data.id, isTeacher],
   );
 
   const setAnswer = (

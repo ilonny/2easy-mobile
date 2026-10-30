@@ -107,6 +107,20 @@ function answersSignature(answersMap: Record<string, AnswerRow>, sync_v: number)
   return `v${sync_v}|${body}`;
 }
 
+/** Keep answers saved locally when a poll that started earlier comes back empty. */
+function mergeMissingAnswers(
+  server: Record<string, AnswerRow>,
+  local: Record<string, AnswerRow>,
+) {
+  const merged = {...server};
+  Object.keys(local).forEach(key => {
+    if (merged[key] == null) {
+      merged[key] = local[key];
+    }
+  });
+  return merged;
+}
+
 type SharedPollListener = {
   id: number;
   isTeacher: boolean;
@@ -291,6 +305,11 @@ export function useExAnswer({
   const lastTargetRef = useRef(0);
   const lastSyncVRef = useRef(0);
   const syncVersionRef = useRef(0);
+  /** Answers this client successfully saved. Stale polls must not drop them. */
+  const confirmedRef = useRef<Record<string, AnswerRow>>({});
+  const queuedRef = useRef<Array<{q_id: number | string; answer: string}>>(
+    [],
+  );
 
   const targetStudentId = Number(
     isTeacher ? activeStudentId || 0 : studentId || 0,
@@ -329,14 +348,21 @@ export function useExAnswer({
       const syncBumped = sync_v > 0 && sync_v !== prevSync && sameTarget;
 
       if (!sameTarget) {
+        const switchingStudent = lastTargetRef.current > 0;
+        if (switchingStudent) {
+          confirmedRef.current = {};
+        }
+        const nextMap = switchingStudent
+          ? answersMap
+          : mergeMissingAnswers(answersMap, confirmedRef.current);
         lastTargetRef.current = sid;
-        lastSignatureRef.current = nextSig;
+        lastSignatureRef.current = answersSignature(nextMap, sync_v);
         lastSyncVRef.current = sync_v;
         syncVersionRef.current = sync_v;
         if (updateState) {
-          setAnswers(answersMap);
+          setAnswers(nextMap);
         }
-        return answersMap;
+        return nextMap;
       }
 
       if (prevSig === nextSig && !syncBumped) {
@@ -346,19 +372,28 @@ export function useExAnswer({
       const prevBody = (prevSig || '').split('|').slice(1).join('|');
       const prevHadRealAnswers = !!prevBody;
       const nextHasAnswers = Object.keys(answersMap).length > 0;
-      lastSignatureRef.current = nextSig;
+
+      // A poll that left before the save returns empty and used to look like a reset.
+      // A real reset always bumps sync_v.
+      if (!syncBumped && prevHadRealAnswers && !nextHasAnswers) {
+        return mergeMissingAnswers(answersMap, confirmedRef.current);
+      }
+
+      const nextMap = syncBumped
+        ? answersMap
+        : mergeMissingAnswers(answersMap, confirmedRef.current);
+      if (syncBumped) {
+        confirmedRef.current = {};
+      }
+      lastSignatureRef.current = answersSignature(nextMap, sync_v);
       lastSyncVRef.current = sync_v;
       syncVersionRef.current = sync_v;
 
       if (updateState) {
-        setAnswers(answersMap);
+        setAnswers(nextMap);
       }
 
-      if (
-        detectReset &&
-        sid &&
-        (syncBumped || (prevHadRealAnswers && !nextHasAnswers))
-      ) {
+      if (detectReset && sid && syncBumped) {
         if (!updateState) {
           setAnswers({});
         }
@@ -372,7 +407,7 @@ export function useExAnswer({
         });
       }
 
-      return answersMap;
+      return nextMap;
     },
     [exId, lessonId, bumpWriteGen],
   );
@@ -402,45 +437,71 @@ export function useExAnswer({
 
   const writeAnswer = useCallback(
     async (q_id: number | string, answer: string) => {
-      if (!canFetch) {
+      if (String(q_id) === ANSWER_SYNC_Q_ID || q_id == null || q_id === '') {
         return {ok: false as const, stale: false};
       }
-      if (String(q_id) === ANSWER_SYNC_Q_ID) {
+      if (!canFetch) {
+        // Student tapped before the profile id was ready — send once it is.
+        if (!isTeacher) {
+          queuedRef.current = queuedRef.current
+            .filter(item => String(item.q_id) !== String(q_id))
+            .concat({q_id, answer});
+        }
         return {ok: false as const, stale: false};
       }
 
       const genAtStart = writeGenRef.current;
-      const sync_v = syncVersionRef.current;
+      let sync_v = syncVersionRef.current;
 
       const job = writeChainRef.current.then(async () => {
-        const res = await writeAnswerApi({
-          lesson_id: lessonId,
-          ex_id: exId,
-          q_id,
-          answer,
-          student_id: targetStudentId,
-          sync_v,
-        });
+        const send = (version: number) =>
+          writeAnswerApi({
+            lesson_id: lessonId,
+            ex_id: exId,
+            q_id: String(q_id),
+            answer,
+            student_id: targetStudentId,
+            sync_v: version,
+          });
+
+        let res = await send(sync_v);
+        const stale = (value: typeof res) =>
+          !!value?.stale || value?.status === 409;
+        if (stale(res)) {
+          const nextSync =
+            Number(res?.sync_v) > 0 ? Number(res?.sync_v) : syncVersionRef.current;
+          syncVersionRef.current = nextSync;
+          sync_v = nextSync;
+          // The answer was rejected as pre-reset. Send it again with the new fence.
+          res = await send(nextSync);
+        } else if (res && res.success === false && res.status !== 409) {
+          res = await send(sync_v);
+        }
         return res;
       });
       writeChainRef.current = job.catch(() => undefined);
 
       try {
         const res = (await job) as
-          | {success?: boolean; stale?: boolean; sync_v?: number}
+          | {success?: boolean; stale?: boolean; sync_v?: number; status?: number}
           | undefined;
 
         if (!mountedRef.current || writeGenRef.current !== genAtStart) {
           return {ok: false as const, stale: true};
         }
 
-        if (res?.stale || (res as {status?: number})?.status === 409) {
+        if (!res) {
+          return {ok: false as const, stale: false};
+        }
+
+        if (res?.stale || res?.status === 409) {
           const nextSync =
             Number(res?.sync_v) > 0
               ? Number(res.sync_v)
               : syncVersionRef.current;
           syncVersionRef.current = nextSync;
           lastSyncVRef.current = nextSync;
+          confirmedRef.current = {};
           lastSignatureRef.current = answersSignature({}, nextSync);
           setAnswers({});
           bumpWriteGen();
@@ -454,11 +515,20 @@ export function useExAnswer({
           return {ok: false as const, stale: true};
         }
 
+        if (res?.success === false || (res?.status != null && res.status >= 400)) {
+          return {ok: false as const, stale: false};
+        }
+
         if (mountedRef.current && writeGenRef.current === genAtStart) {
+          const row: AnswerRow = {q_id: String(q_id), answer};
+          confirmedRef.current = {
+            ...confirmedRef.current,
+            [String(q_id)]: row,
+          };
           setAnswers(prev => {
             const next = {
               ...prev,
-              [String(q_id)]: {...(prev[String(q_id)] || {}), q_id, answer},
+              [String(q_id)]: {...(prev[String(q_id)] || {}), ...row},
             };
             lastSignatureRef.current = answersSignature(
               next,
@@ -472,8 +542,18 @@ export function useExAnswer({
         return {ok: false as const, stale: false};
       }
     },
-    [canFetch, lessonId, exId, targetStudentId, bumpWriteGen],
+    [canFetch, isTeacher, lessonId, exId, targetStudentId, bumpWriteGen],
   );
+
+  useEffect(() => {
+    if (!canFetch || queuedRef.current.length === 0) {
+      return;
+    }
+    const batch = queuedRef.current.splice(0);
+    batch.forEach(item => {
+      void writeAnswer(item.q_id, item.answer);
+    });
+  }, [canFetch, writeAnswer]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -497,6 +577,7 @@ export function useExAnswer({
         bumpWriteGen();
         syncVersionRef.current = nextSync;
         lastSyncVRef.current = nextSync;
+        confirmedRef.current = {};
         lastSignatureRef.current = answersSignature({}, nextSync);
         setAnswers({});
         setResetSeq(n => n + 1);
@@ -509,6 +590,7 @@ export function useExAnswer({
       lastSignatureRef.current = null;
       lastSyncVRef.current = 0;
       syncVersionRef.current = 0;
+      confirmedRef.current = {};
       setAnswers({});
       bumpWriteGen();
     }
@@ -517,7 +599,10 @@ export function useExAnswer({
       lastSignatureRef.current = null;
       lastSyncVRef.current = 0;
       syncVersionRef.current = 0;
-      setAnswers({});
+      if (!queuedRef.current.length) {
+        confirmedRef.current = {};
+        setAnswers({});
+      }
       return;
     }
 

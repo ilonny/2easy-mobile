@@ -170,11 +170,29 @@ export function ScheduleScreen() {
   }, [students]);
 
   const visibleEvents = useMemo(() => {
+    const withPackageDue = events.map(event => {
+      if (event.type !== 'payment' || !event.plan_id) {
+        return event;
+      }
+      const plan = plans.find(item => item.id === Number(event.plan_id));
+      if (!plan || plan.plan_type !== 'package') {
+        return event;
+      }
+      const unit = Number(plan.amount) || 0;
+      const total = Math.max(0, Number(plan.lessons_total || 0));
+      const due = unit * total;
+      if (due <= 0 || Number(event.amount) === due) {
+        return event;
+      }
+      return {...event, amount: due};
+    });
     if (!filterStudentId) {
-      return events;
+      return withPackageDue;
     }
-    return events.filter(e => eventStudentIds(e).includes(filterStudentId));
-  }, [events, filterStudentId]);
+    return withPackageDue.filter(e =>
+      eventStudentIds(e).includes(filterStudentId),
+    );
+  }, [events, filterStudentId, plans]);
 
   const openCreate = (day: Date, hour?: number) => {
     if (!isTeacher) {

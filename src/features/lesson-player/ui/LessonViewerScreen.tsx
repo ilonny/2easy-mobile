@@ -97,9 +97,12 @@ export function LessonViewerScreen({
 
   const [headerHeight, setHeaderHeight] = useState(0);
 
-  const isTeacher = profile?.role_id === 1 || profile?.role_id === 2;
-  const isStudent = !!profile?.isStudent;
-  const selfStudentId = isStudent ? Number(profile.studentId) : undefined;
+  const profileStudentId =
+    Number(profile?.studentId || 0) > 0 ? Number(profile?.studentId) : undefined;
+  const isStudent = !!profile?.isStudent || profileStudentId != null;
+  const isTeacher =
+    !profileStudentId && (profile?.role_id === 1 || profile?.role_id === 2);
+  const selfStudentId = profileStudentId;
 
   const [lesson, setLesson] = useState<LessonDetail | null>(null);
   const [exercises, setExercises] = useState<Exercise[]>([]);
@@ -226,13 +229,12 @@ export function LessonViewerScreen({
         selectedIds.includes(Number(s.student_id)),
       );
       setParticipants(filtered);
-      if (filtered.length === 1) {
-        setActiveStudentId(Number(filtered[0].student_id));
-      } else if (
-        studentIdProp &&
-        filtered.some(s => Number(s.student_id) === studentIdProp)
-      ) {
+      // Opened from a student's cabinet: keep watching that student even if
+      // the participants request comes back empty.
+      if (studentIdProp) {
         setActiveStudentId(studentIdProp);
+      } else if (filtered.length === 1) {
+        setActiveStudentId(Number(filtered[0].student_id));
       } else if (
         activeStudentId &&
         !filtered.some(s => Number(s.student_id) === activeStudentId)

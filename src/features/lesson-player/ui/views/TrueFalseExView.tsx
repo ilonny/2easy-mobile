@@ -44,8 +44,16 @@ export function TrueFalseExView({data}: Props) {
 
   const [map, setMap] = useState<AnswersMap>({});
   const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingPersistRef = useRef<string | null>(null);
+  const writeAnswerRef = useRef(writeAnswer);
+  writeAnswerRef.current = writeAnswer;
 
   useEffect(() => {
+    if (persistTimerRef.current) {
+      clearTimeout(persistTimerRef.current);
+      persistTimerRef.current = null;
+    }
+    pendingPersistRef.current = null;
     setMap({});
   }, [resetSeq]);
 
@@ -78,22 +86,30 @@ export function TrueFalseExView({data}: Props) {
       if (persistTimerRef.current) {
         clearTimeout(persistTimerRef.current);
       }
+      const payload = pendingPersistRef.current;
+      pendingPersistRef.current = null;
+      if (payload != null) {
+        void writeAnswerRef.current(data.id, payload);
+      }
     };
-  }, []);
+  }, [data.id]);
 
   const persist = useCallback(
     (next: AnswersMap) => {
       if (isTeacher) {
         return;
       }
+      const payload = JSON.stringify(next);
+      pendingPersistRef.current = payload;
       if (persistTimerRef.current) {
         clearTimeout(persistTimerRef.current);
       }
       persistTimerRef.current = setTimeout(() => {
-        void writeAnswer(data.id, JSON.stringify(next));
+        pendingPersistRef.current = null;
+        void writeAnswerRef.current(data.id, payload);
       }, 400);
     },
-    [data.id, writeAnswer, isTeacher],
+    [data.id, isTeacher],
   );
 
   const onChoose = (sentenceId: string, value: boolean) => {

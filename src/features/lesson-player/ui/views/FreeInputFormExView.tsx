@@ -34,6 +34,8 @@ export function FreeInputFormExView({data}: Props) {
   const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const localRef = useRef(local);
   localRef.current = local;
+  const writeAnswerRef = useRef(writeAnswer);
+  writeAnswerRef.current = writeAnswer;
 
   // Teachers get a formatting toolbar when correcting a selected student's work
   // (same as the site FreeInputAnswerEditor).
@@ -54,8 +56,12 @@ export function FreeInputFormExView({data}: Props) {
   }, [answers, data?.questions]);
 
   useEffect(() => {
+    const timers = saveTimers.current;
     return () => {
-      Object.values(saveTimers.current).forEach(clearTimeout);
+      Object.keys(timers).forEach(key => {
+        clearTimeout(timers[key]);
+        void writeAnswerRef.current(key, localRef.current[key] ?? '');
+      });
     };
   }, []);
 
@@ -65,7 +71,8 @@ export function FreeInputFormExView({data}: Props) {
       clearTimeout(saveTimers.current[key]);
     }
     saveTimers.current[key] = setTimeout(() => {
-      void writeAnswer(questionId, value);
+      delete saveTimers.current[key];
+      void writeAnswer(questionId, localRef.current[key] ?? value);
     }, 500);
   };
 
@@ -105,7 +112,10 @@ export function FreeInputFormExView({data}: Props) {
                   clearTimeout(saveTimers.current[key]);
                   delete saveTimers.current[key];
                 }
-                void writeAnswer(question.id, localRef.current[key] ?? '');
+                void writeAnswerRef.current(
+                  question.id,
+                  localRef.current[key] ?? '',
+                );
               }}
             />
           </View>
