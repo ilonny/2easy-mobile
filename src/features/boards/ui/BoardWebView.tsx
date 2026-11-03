@@ -11,7 +11,7 @@ import {WebView} from 'react-native-webview';
 import type {WebView as WebViewType} from 'react-native-webview';
 
 import {useAuth} from '../../../entities/session';
-import {STORAGE_KEYS, WEB_URL} from '../../../shared/config';
+import {getWebUrl, STORAGE_KEYS} from '../../../shared/config';
 import {useI18n} from '../../../shared/i18n';
 import {colors} from '../../../shared/config/theme';
 import {readStorage} from '../../../shared/lib/storage';
@@ -172,7 +172,7 @@ export function BoardWebView({boardId, catalog, onClose}: Props) {
   }, [profile?.token]);
 
   const uri = useMemo(() => {
-    const base = `${WEB_URL}/board/${boardId}`;
+    const base = `${getWebUrl()}/board/${boardId}`;
     return catalog ? `${base}?catalog=1` : base;
   }, [boardId, catalog]);
 

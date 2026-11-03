@@ -18,10 +18,9 @@ import type {WebView as WebViewType} from 'react-native-webview';
 const CallWebView = WebView as unknown as ComponentType<any>;
 
 import {useAuth} from '../../../entities/session';
+import {getJitsiDomain} from '../../../shared/config';
 import {useI18n} from '../../../shared/i18n';
 import {colors, radii} from '../../../shared/config/theme';
-
-const JITSI_DOMAIN = 'meet.2easyeng.com';
 const TABLET_HEADER_H = 52;
 const PHONE_HEADER_H = 32;
 const MIN_W = 300;
@@ -178,7 +177,7 @@ function buildRoomUrl(
     params.set('interfaceConfig.TOOLBAR_TIMEOUT', '1000');
   }
   params.set('userInfo.displayName', `"${displayName.replace(/"/g, '')}"`);
-  return `https://${JITSI_DOMAIN}/${encodeURIComponent(roomName)}#${params
+  return `https://${getJitsiDomain()}/${encodeURIComponent(roomName)}#${params
     .toString()
     .replace(/\+/g, '%20')}`;
 }

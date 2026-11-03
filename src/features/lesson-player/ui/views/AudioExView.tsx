@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import Video, {type OnProgressData, type VideoRef} from 'react-native-video';
 
+import {rewriteSiteUrl} from '../../../../shared/config';
 import {useI18n} from '../../../../shared/i18n';
 import {colors, radii} from '../../../../shared/config/theme';
 import {
@@ -66,12 +67,12 @@ export function AudioExView({data}: Props) {
 
   const audioSrc = useMemo(() => {
     if (attachment?.dataURL) {
-      return attachment.dataURL;
+      return rewriteSiteUrl(attachment.dataURL);
     }
     if (typeof attachment?.path === 'string' && attachment.path) {
       return getImageUrl(attachment.path);
     }
-    return extractAudioSrcFromHtml(data?.description);
+    return rewriteSiteUrl(extractAudioSrcFromHtml(data?.description));
   }, [attachment, data?.description]);
 
   const fileName = ensureAudioFilename(

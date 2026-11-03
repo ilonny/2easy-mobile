@@ -1,6 +1,6 @@
 import type {ImageSourcePropType} from 'react-native';
 
-import {API_URL, WEB_URL} from '../config';
+import {getApiBaseUrl, getWebUrl, rewriteSiteUrl} from '../config';
 
 export function uriFromSource(source?: ImageSourcePropType | null): string | null {
   if (!source || typeof source !== 'object' || Array.isArray(source)) {
@@ -44,7 +44,7 @@ export function htmlContainsSvg(html?: string | null): boolean {
 
 export function resolveMediaUri(
   raw?: string | null,
-  baseUrl: string = WEB_URL,
+  baseUrl: string = getWebUrl(),
 ): string {
   if (!raw || typeof raw !== 'string') {
     return '';
@@ -57,10 +57,10 @@ export function resolveMediaUri(
     return trimmed;
   }
   if (/^https?:\/\//i.test(trimmed)) {
-    return trimmed;
+    return rewriteSiteUrl(trimmed);
   }
   if (trimmed.startsWith('//')) {
-    return `https:${trimmed}`;
+    return rewriteSiteUrl(`https:${trimmed}`);
   }
   if (
     /^file:\/\//i.test(trimmed) ||
@@ -84,6 +84,5 @@ export function resolveMediaUri(
   if (trimmed.includes('608dfa18-3eae-4574-a997-0a7441c16d33.selstorage.ru')) {
     return trimmed.startsWith('http') ? trimmed : `https://${trimmed}`;
   }
-  const apiBase = API_URL.replace(/\/api$/, '');
-  return `${apiBase}/${trimmed.replace(/^\//, '')}`;
+  return `${getApiBaseUrl()}/${trimmed.replace(/^\//, '')}`;
 }

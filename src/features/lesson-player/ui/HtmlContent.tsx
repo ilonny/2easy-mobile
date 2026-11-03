@@ -13,7 +13,7 @@ import RenderHTML, {
 } from 'react-native-render-html';
 import {WebView, type WebViewMessageEvent} from 'react-native-webview';
 
-import {WEB_URL} from '../../../shared/config';
+import {getWebUrl, rewriteSiteUrl} from '../../../shared/config';
 import {fontFamily, MANROPE_SYSTEM_FONTS} from '../../../shared/config/fonts';
 import {colors} from '../../../shared/config/theme';
 import {useLayout} from '../../../shared/lib/layout';
@@ -105,7 +105,7 @@ function decodeBasicEntities(text: string): string {
 /** Normalize HTML or wrap plain text so RenderHTML always gets markup. */
 export function normalizeLessonHtml(
   html: string,
-  baseUrl = WEB_URL,
+  baseUrl = getWebUrl(),
 ): string {
   const trimmed = (html || '').trim();
   if (!trimmed) {
@@ -115,7 +115,7 @@ export function normalizeLessonHtml(
     ? trimmed
     : `<p>${escapePlain(decodeBasicEntities(trimmed)).replace(/\n/g, '<br/>')}</p>`;
 
-  return asHtml
+  const normalized = asHtml
     .replace(/<img\b[^>]*>/gi, tag => {
       const srcMatch = tag.match(/\bsrc\s*=\s*["']([^"']+)["']/i);
       const src = srcMatch?.[1] || '';
@@ -130,10 +130,11 @@ export function normalizeLessonHtml(
     })
     .replace(/\shref=(["'])\/\//gi, ' href=$1https://')
     .replace(/about:\/+/gi, `${baseUrl}/`);
+  return rewriteSiteUrl(normalized);
 }
 
 /** @deprecated use normalizeLessonHtml */
-export function sanitizeLessonHtml(html: string, baseUrl = WEB_URL): string {
+export function sanitizeLessonHtml(html: string, baseUrl = getWebUrl()): string {
   return normalizeLessonHtml(html, baseUrl);
 }
 
@@ -201,7 +202,7 @@ async function openHref(href?: string) {
   if (!href) {
     return;
   }
-  const url = resolveUrl(href, WEB_URL);
+  const url = rewriteSiteUrl(resolveUrl(href, getWebUrl()));
   if (!url) {
     return;
   }
@@ -420,7 +421,7 @@ export function HtmlContent({html, baseStyle, contentWidth, inline}: Props) {
     [html],
   );
   const source = useMemo(
-    () => ({html: cleaned || '<p></p>', baseUrl: WEB_URL}),
+    () => ({html: cleaned || '<p></p>', baseUrl: getWebUrl()}),
     [cleaned],
   );
 

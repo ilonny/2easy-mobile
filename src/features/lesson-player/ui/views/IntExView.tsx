@@ -1,6 +1,7 @@
 import {StyleSheet, View} from 'react-native';
 import {WebView} from 'react-native-webview';
 
+import {rewriteSiteUrl} from '../../../../shared/config';
 import {radii} from '../../../../shared/config/theme';
 import {ExHeader} from '../ExHeader';
 import {ImageGallery} from '../ImageGallery';
@@ -28,7 +29,7 @@ export function IntExView({data}: Props) {
       )}
       {!!data?.iframe && (
         <WebView
-          source={{html: wrapIframe(data.iframe)}}
+          source={{html: rewriteSiteUrl(wrapIframe(data.iframe))}}
           style={styles.webview}
           javaScriptEnabled
           originWhitelist={['*']}

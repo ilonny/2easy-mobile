@@ -3,6 +3,7 @@ import {Pressable, StyleSheet, Text, View} from 'react-native';
 import Video, {type OnProgressData, type VideoRef} from 'react-native-video';
 import {WebView} from 'react-native-webview';
 
+import {rewriteSiteUrl} from '../../../../shared/config';
 import {useI18n} from '../../../../shared/i18n';
 import {colors, radii} from '../../../../shared/config/theme';
 import {
@@ -34,9 +35,10 @@ function FileVideoItem({
   const {t} = useI18n();
   const {lessonId, isTeacher} = useLessonPlayer();
   const attachment = video?.attachment;
-  const fileSrc =
+  const fileSrc = rewriteSiteUrl(
     attachment?.dataURL ||
-    (attachment?.path ? getImageUrl(attachment.path) : '');
+      (attachment?.path ? getImageUrl(attachment.path) : ''),
+  );
   const [paused, setPaused] = useState(true);
   const videoRef = useRef<VideoRef>(null);
   const positionRef = useRef(0);
@@ -136,7 +138,9 @@ function FileVideoItem({
 }
 
 function EmbedVideoItem({video}: {video: any}) {
-  const html = video?.content ? wrapEmbed(video.content) : '';
+  const html = video?.content
+    ? rewriteSiteUrl(wrapEmbed(video.content))
+    : '';
   if (!html) {
     return null;
   }

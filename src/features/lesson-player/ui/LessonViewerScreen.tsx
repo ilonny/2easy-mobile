@@ -650,12 +650,8 @@ export function LessonViewerScreen({
                         void (async () => {
                           setHomeworkOpening(true);
                           try {
-                            if (
-                              isTeacher &&
-                              participants.length === 1 &&
-                              participants[0]?.student_id
-                            ) {
-                              const sid = Number(participants[0].student_id);
+                            if (isTeacher && answerStudentId) {
+                              const sid = Number(answerStudentId);
                               const data = await getOrCreateHomeworkForStudent(
                                 lessonId,
                                 sid,

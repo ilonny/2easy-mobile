@@ -1,6 +1,5 @@
-import {API_URL} from '../config';
+import {ensureApiBase, getApiUrl, STORAGE_KEYS} from '../config';
 import {readStorage} from '../lib/storage';
-import {STORAGE_KEYS} from '../config';
 
 const SERVER_UNAVAILABLE_MESSAGE =
   'Сервер временно недоступен. Попробуйте позже';
@@ -91,7 +90,8 @@ async function requestJson<T>(
 
   let response: Response;
   try {
-    response = await fetch(`${API_URL}${params.path}`, {
+    await ensureApiBase();
+    response = await fetch(`${getApiUrl()}${params.path}`, {
       method,
       headers,
       body:
@@ -152,7 +152,8 @@ export async function postMultipart<T = Record<string, unknown>>(
 
   let response: Response;
   try {
-    response = await fetch(`${API_URL}${params.path}`, {
+    await ensureApiBase();
+    response = await fetch(`${getApiUrl()}${params.path}`, {
       method: 'POST',
       headers,
       body: params.formData,

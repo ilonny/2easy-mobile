@@ -1,4 +1,4 @@
-import {API_BASE_URL, STORAGE_KEYS} from '../../../shared/config';
+import {ensureApiBase, getApiBaseUrl, STORAGE_KEYS} from '../../../shared/config';
 import {readStorage} from '../../../shared/lib/storage';
 
 export const LESSON_MEDIA_WS_PATH = '/api/lesson/media/ws';
@@ -74,7 +74,8 @@ type WsIncoming = {
 
 async function getTimerWsUrl(lessonId: number) {
   const token = await readStorage(STORAGE_KEYS.token);
-  const wsBase = API_BASE_URL.replace(/^http/i, 'ws');
+  await ensureApiBase();
+  const wsBase = getApiBaseUrl().replace(/^http/i, 'ws');
   const params = new URLSearchParams({
     lesson_id: String(lessonId),
   });

@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import {WebView} from 'react-native-webview';
 
-import {WEB_URL} from '../config';
+import {getWebUrl, rewriteSiteUrl} from '../config';
 import {colors} from '../config/theme';
 import {isSvgUri, uriFromSource} from '../lib/mediaUri';
 import {
@@ -175,7 +175,7 @@ function SvgWebView({
         <WebView
           key={uri}
           originWhitelist={['*']}
-          source={{html, baseUrl: WEB_URL}}
+          source={{html, baseUrl: getWebUrl()}}
           style={[styles.fill, !painted && styles.hidden]}
           scrollEnabled={false}
           showsVerticalScrollIndicator={false}
@@ -204,7 +204,8 @@ export function SmartImage({
   resizeMode = 'cover',
   pointerEvents = 'none',
 }: Props) {
-  const uri = uriFromSource(source);
+  const rawUri = uriFromSource(source);
+  const uri = rawUri ? rewriteSiteUrl(rawUri) : rawUri;
   const [useWeb, setUseWeb] = useState(() => isSvgUri(uri));
 
   useEffect(() => {
@@ -222,9 +223,14 @@ export function SmartImage({
     );
   }
 
+  const imageSource =
+    uri && source && typeof source === 'object' && !Array.isArray(source)
+      ? {...source, uri}
+      : source;
+
   return (
     <Image
-      source={source}
+      source={imageSource}
       style={style as StyleProp<ImageStyle>}
       resizeMode={resizeMode}
       onError={() => {

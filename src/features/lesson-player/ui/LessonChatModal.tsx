@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
-import {API_BASE_URL} from '../../../shared/config';
+import {getApiBaseUrl, rewriteSiteUrl} from '../../../shared/config';
 import {useI18n} from '../../../shared/i18n';
 import {colors, radii} from '../../../shared/config/theme';
 import {useKeyboardBottomOffset} from '../../../shared/lib/useKeyboardBottomOffset';
@@ -25,9 +25,9 @@ const resolveChatMediaUrl = (path?: string) => {
     return '';
   }
   if (/^https?:\/\//i.test(path)) {
-    return path;
+    return rewriteSiteUrl(path);
   }
-  return `${API_BASE_URL}/${path.replace(/^\/+/, '')}`;
+  return `${getApiBaseUrl()}/${path.replace(/^\/+/, '')}`;
 };
 
 type Props = {

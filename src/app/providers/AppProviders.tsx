@@ -1,17 +1,31 @@
-import type {PropsWithChildren} from 'react';
+import {useEffect, useState, type PropsWithChildren} from 'react';
 import {ActivityIndicator, StatusBar, StyleSheet, View} from 'react-native';
 import {GestureHandlerRootView} from 'react-native-gesture-handler';
 import {SafeAreaProvider} from 'react-native-safe-area-context';
 
 import {AuthProvider} from '../../entities/session';
+import {ensureApiBase} from '../../shared/config';
 import {I18nProvider, useI18n} from '../../shared/i18n';
 import {colors} from '../../shared/config/theme';
 import {RootNavigator} from '../navigation';
 
 function AppShell({children}: PropsWithChildren) {
   const {ready} = useI18n();
+  const [apiReady, setApiReady] = useState(false);
 
-  if (!ready) {
+  useEffect(() => {
+    let active = true;
+    ensureApiBase().finally(() => {
+      if (active) {
+        setApiReady(true);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  if (!ready || !apiReady) {
     return (
       <View style={styles.boot}>
         <ActivityIndicator color={colors.primary} size="large" />
