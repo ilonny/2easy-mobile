@@ -27,6 +27,10 @@ export function useVideoCall() {
   return ctx;
 }
 
+export function useOptionalVideoCall() {
+  return useContext(VideoCallContext);
+}
+
 export function VideoCallProvider({children}: PropsWithChildren) {
   const {isAuthorized, profile} = useAuth();
   const [isOpen, setIsOpen] = useState(false);

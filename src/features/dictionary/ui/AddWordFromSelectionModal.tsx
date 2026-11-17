@@ -21,6 +21,7 @@ import {
 } from '../api/dictionaryApi';
 import {useDictionaryLanguagePair} from '../model/useDictionaryLanguagePair';
 import {DictionaryLanguagePairFields} from './LanguageSelect';
+import {SpeakWordButton} from './SpeakWordButton';
 
 type Props = {
   visible: boolean;
@@ -205,12 +206,19 @@ export function AddWordFromSelectionModal({
           />
 
           <Text style={styles.label}>{t('dictionary.sourceWord')}</Text>
-          <TextInput
-            value={source}
-            editable={false}
-            style={[styles.input, styles.inputReadonly]}
-            multiline
-          />
+          <View style={styles.sourceRow}>
+            <SpeakWordButton
+              id="dictionary-selection-source"
+              text={source}
+              languageCode={sourceLanguageCode}
+            />
+            <TextInput
+              value={source}
+              editable={false}
+              style={[styles.input, styles.inputReadonly, styles.sourceInput]}
+              multiline
+            />
+          </View>
           <Text style={styles.label}>{t('dictionary.translation')}</Text>
           <View style={styles.translationWrap}>
             <TextInput
@@ -283,6 +291,8 @@ const styles = StyleSheet.create({
     minHeight: 48,
   },
   inputReadonly: {color: colors.textSecondary, backgroundColor: '#F3F4F6'},
+  sourceRow: {flexDirection: 'row', alignItems: 'center', gap: 8},
+  sourceInput: {flex: 1},
   translationWrap: {position: 'relative'},
   spinner: {position: 'absolute', right: 12, top: 14},
   error: {color: colors.danger, textAlign: 'center'},

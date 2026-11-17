@@ -1,4 +1,4 @@
-import {useCallback, useMemo, useRef, useState} from 'react';
+import {useCallback, useMemo, useRef, useState, type ComponentType} from 'react';
 import {
   Linking,
   useWindowDimensions,
@@ -8,6 +8,8 @@ import {
 } from 'react-native';
 import RenderHTML, {
   defaultSystemFonts,
+  HTMLContentModel,
+  HTMLElementModel,
   type CustomBlockRenderer,
   type MixedStyleDeclaration,
 } from 'react-native-render-html';
@@ -115,7 +117,7 @@ export function normalizeLessonHtml(
     ? trimmed
     : `<p>${escapePlain(decodeBasicEntities(trimmed)).replace(/\n/g, '<br/>')}</p>`;
 
-  const normalized = asHtml
+  const normalized = promoteFontColorTags(asHtml)
     .replace(/<img\b[^>]*>/gi, tag => {
       const srcMatch = tag.match(/\bsrc\s*=\s*["']([^"']+)["']/i);
       const src = srcMatch?.[1] || '';
@@ -138,6 +140,79 @@ export function sanitizeLessonHtml(html: string, baseUrl = getWebUrl()): string 
   return normalizeLessonHtml(html, baseUrl);
 }
 
+const CSS_COLOR =
+  /^(?:#[0-9a-f]{3,8}|(?:rgb|rgba|hsl|hsla)\([^)]+\)|[a-z]+)$/i;
+
+function cssColor(style: string, property: 'color' | 'background-color') {
+  const match = style.match(
+    new RegExp(`(?:^|;)\\s*${property}\\s*:\\s*([^;]+)`, 'i'),
+  );
+  const value = match?.[1]?.trim().replace(/^['"]|['"]$/g, '');
+  if (!value || !CSS_COLOR.test(value)) {
+    return undefined;
+  }
+  return value;
+}
+
+/** draft-js and contenteditable store highlight as inline span styles, and
+ * iOS execCommand('foreColor') stores it on `<font color>`. */
+function promoteFontColorTags(html: string) {
+  return html.replace(/<font\b([^>]*)>([\s\S]*?)<\/font>/gi, (full, attrs, inner) => {
+    const colorMatch = String(attrs).match(
+      /\bcolor\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i,
+    );
+    const color = colorMatch?.[1] || colorMatch?.[2] || colorMatch?.[3];
+    if (!color || !CSS_COLOR.test(color)) {
+      return full;
+    }
+    const styleMatch = String(attrs).match(
+      /\bstyle\s*=\s*(?:"([^"]*)"|'([^']*)')/i,
+    );
+    const previous = styleMatch?.[1] || styleMatch?.[2] || '';
+    const style = previous ? `${previous};color: ${color}` : `color: ${color}`;
+    return `<span style="${style}">${inner}</span>`;
+  });
+}
+
+function inlineTextColorStyle(attributes?: Record<string, string | undefined>) {
+  const style = attributes?.style || '';
+  const color =
+    cssColor(style, 'color') ||
+    (attributes?.color && CSS_COLOR.test(attributes.color)
+      ? attributes.color
+      : undefined);
+  const backgroundColor = cssColor(style, 'background-color');
+  if (!color && !backgroundColor) {
+    return null;
+  }
+  return {
+    ...(color ? {color} : null),
+    ...(backgroundColor ? {backgroundColor} : null),
+  };
+}
+
+const ColoredTextRenderer = ({
+  TDefaultRenderer,
+  ...props
+}: {
+  TDefaultRenderer: ComponentType<any>;
+  tnode: {attributes?: Record<string, string | undefined>};
+  style?: StyleProp<TextStyle>;
+}) => {
+  const extra = inlineTextColorStyle(props.tnode.attributes);
+  return (
+    <TDefaultRenderer
+      {...props}
+      style={extra ? [props.style, extra] : props.style}
+    />
+  );
+};
+
+const fontElementModel = HTMLElementModel.fromCustomModel({
+  tagName: 'font',
+  contentModel: HTMLContentModel.textual,
+});
+
 const HtmlImgRenderer: CustomBlockRenderer = ({tnode}) => {
   const src = tnode.attributes.src;
   if (!src) {
@@ -158,7 +233,13 @@ const htmlImgStyle = {
   marginVertical: 8,
 };
 
-const htmlRenderers = {img: HtmlImgRenderer};
+const htmlRenderers = {
+  img: HtmlImgRenderer,
+  span: ColoredTextRenderer,
+  font: ColoredTextRenderer,
+};
+
+const htmlElementModels = {font: fontElementModel};
 
 const defaultTagsStyles: Record<string, MixedStyleDeclaration> = {
   body: {margin: 0, padding: 0, fontFamily: fontFamily.regular},
@@ -486,9 +567,14 @@ export function HtmlContent({html, baseStyle, contentWidth, inline}: Props) {
       }}
       tagsStyles={tagsStyles}
       renderers={htmlRenderers}
+      customHTMLElementModels={htmlElementModels}
       enableExperimentalMarginCollapsing
       renderersProps={renderersProps}
-      defaultTextProps={{selectable: true}}
+      defaultTextProps={
+        /(?:<font\b|color\s*:|background-color\s*:)/i.test(cleaned)
+          ? undefined
+          : {selectable: true}
+      }
     />
   );
 

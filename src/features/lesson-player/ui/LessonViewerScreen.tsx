@@ -311,6 +311,51 @@ export function LessonViewerScreen({
     void load();
   }, [load]);
 
+  useEffect(() => {
+    if (!isAuthorized || !lessonId || isTeacher) {
+      return;
+    }
+    let active = true;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const fingerprint = (list: Exercise[]) =>
+      list
+        .map(
+          ex =>
+            `${ex.id}:${ex.sortIndex}:${ex.is_visible}:${JSON.stringify(ex.data)}`,
+        )
+        .join('\n');
+    const tick = async () => {
+      if (!active) {
+        return;
+      }
+      try {
+        const list = await fetchExList(lessonId, {filterHidden: true});
+        if (!active) {
+          return;
+        }
+        setExercises(prev =>
+          fingerprint(prev) === fingerprint(list) ? prev : list,
+        );
+      } catch {
+        // The next tick retries. A failed poll should not blank the lesson.
+      }
+      if (active) {
+        timer = setTimeout(() => {
+          void tick();
+        }, 10000);
+      }
+    };
+    timer = setTimeout(() => {
+      void tick();
+    }, 10000);
+    return () => {
+      active = false;
+      if (timer) {
+        clearTimeout(timer);
+      }
+    };
+  }, [isAuthorized, isTeacher, lessonId]);
+
   const isLockedOnTrial = isTeacherLessonAccessBlocked(lesson, {
     isStudent,
     hasSubscription,

@@ -18,6 +18,7 @@ import {
   shuffleArray,
   type TrainingMode,
 } from '../lib/training';
+import {SpeakWordButton} from './SpeakWordButton';
 import {TrainingWordPicker} from './TrainingWordPicker';
 
 type Props = {
@@ -225,15 +226,28 @@ function CardsSession({
       <Text style={styles.progress}>
         {index + 1} / {ordered.length}
       </Text>
-      <Pressable onPress={() => setFlipped(v => !v)} style={styles.cardFlip}>
-        <Text style={styles.cardFlipLabel}>
-          {flipped ? t('dictionary.translation') : t('dictionary.sourceWord')}
-        </Text>
-        <Text style={styles.cardFlipWord}>
-          {flipped ? current.translatedWord : current.sourceWord}
-        </Text>
-        <Text style={styles.cardFlipHint}>{t('dictionary.tapToFlip')}</Text>
-      </Pressable>
+      <View style={styles.cardFlip}>
+        <Pressable
+          onPress={() => setFlipped(v => !v)}
+          style={styles.cardFlipBody}>
+          <Text style={styles.cardFlipLabel}>
+            {flipped ? t('dictionary.translation') : t('dictionary.sourceWord')}
+          </Text>
+          <Text style={styles.cardFlipWord}>
+            {flipped ? current.translatedWord : current.sourceWord}
+          </Text>
+          <Text style={styles.cardFlipHint}>{t('dictionary.tapToFlip')}</Text>
+        </Pressable>
+        <View style={styles.cardSpeak}>
+          <SpeakWordButton
+            id={`word-${current.id}-${flipped ? 'back' : 'front'}`}
+            text={flipped ? current.translatedWord : current.sourceWord}
+            languageCode={
+              flipped ? current.targetLanguageCode : current.sourceLanguageCode
+            }
+          />
+        </View>
+      </View>
       <View style={styles.nav}>
         <Button
           title={t('common.back')}
@@ -357,6 +371,13 @@ function QuizSession({
       </View>
       <View style={styles.prompt}>
         <Text style={styles.promptWord}>{current.sourceWord}</Text>
+        <View style={styles.promptSpeak}>
+          <SpeakWordButton
+            id={`word-${current.id}-quiz`}
+            text={current.sourceWord}
+            languageCode={current.sourceLanguageCode}
+          />
+        </View>
       </View>
       {mode === 'quizOptions' ? (
         options.map(option => {
@@ -458,6 +479,14 @@ const styles = StyleSheet.create({
     padding: 24,
     gap: 12,
   },
+  cardSpeak: {position: 'absolute', top: 12, left: 12, zIndex: 2},
+  cardFlipBody: {
+    alignSelf: 'stretch',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    paddingTop: 28,
+  },
   cardFlipLabel: {fontSize: 13, color: colors.muted, fontWeight: '600'},
   cardFlipWord: {
     fontSize: 28,
@@ -488,7 +517,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: 20,
+    paddingHorizontal: 64,
   },
+  promptSpeak: {position: 'absolute', left: 10, top: 10},
   promptWord: {
     fontSize: 22,
     fontWeight: '700',

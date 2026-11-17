@@ -1,2 +1,6 @@
-export {VideoCallProvider, useVideoCall} from './model/VideoCallContext';
+export {
+  VideoCallProvider,
+  useOptionalVideoCall,
+  useVideoCall,
+} from './model/VideoCallContext';
 export {GlobalVideoCallOverlay} from './ui/GlobalVideoCallOverlay';

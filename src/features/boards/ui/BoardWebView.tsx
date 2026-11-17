@@ -155,6 +155,9 @@ export function BoardWebView({boardId, catalog, onClose}: Props) {
   const [token, setToken] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const [loadError, setLoadError] = useState(false);
+  const [openProgress, setOpenProgress] = useState(0);
+  const [boardReady, setBoardReady] = useState(false);
+  const sawBoardMessage = useRef(false);
   const webRef = useRef<WebViewType>(null);
 
   useEffect(() => {
@@ -242,8 +245,39 @@ true;
             setSupportMultipleWindows={false}
             injectedJavaScriptBeforeContentLoaded={injectedBefore}
             injectedJavaScript={chromeInjectJs}
+            onLoadProgress={({nativeEvent}) => {
+              const pageProgress = Math.round((nativeEvent.progress || 0) * 100);
+              if (!sawBoardMessage.current) {
+                setOpenProgress(Math.min(35, Math.round(pageProgress * 0.35)));
+              }
+            }}
             onLoadEnd={() => {
               webRef.current?.injectJavaScript(chromeInjectJs);
+              if (!sawBoardMessage.current) {
+                setOpenProgress(prev => Math.max(prev, 35));
+              }
+              setTimeout(() => {
+                if (!sawBoardMessage.current) setBoardReady(true);
+              }, 8000);
+            }}
+            onMessage={event => {
+              try {
+                const data = JSON.parse(String(event.nativeEvent.data || ''));
+                if (data?.type !== 'board-progress') return;
+                sawBoardMessage.current = true;
+                const value = Math.max(0, Math.min(100, Number(data.progress) || 0));
+                setOpenProgress(Math.max(35, Math.round(35 + value * 0.65)));
+                if (data.stage === 'error') {
+                  setBoardReady(true);
+                  return;
+                }
+                if (data.stage === 'ready' || value >= 100) {
+                  setBoardReady(true);
+                  setOpenProgress(100);
+                }
+              } catch {
+                // ignore non-JSON messages from the page
+              }
             }}
             onError={() => setLoadError(true)}
             onHttpError={() => setLoadError(true)}
@@ -256,6 +290,9 @@ true;
               // otherwise dump students onto the site lessons list.
               if (
                 next.includes(`/board/${boardId}`) ||
+                next.includes('/api/board-lite') ||
+                next.includes('/api/board-files') ||
+                next.includes('/api/board-save') ||
                 next.startsWith('blob:') ||
                 next.startsWith('data:')
               ) {
@@ -267,9 +304,25 @@ true;
             renderLoading={() => (
               <View style={[styles.centered, StyleSheet.absoluteFill]}>
                 <ActivityIndicator color={colors.primary} size="large" />
+                <Text style={styles.openingText}>{t('boards.opening')}</Text>
               </View>
             )}
           />
+          {!boardReady ? (
+            <View pointerEvents="none" style={styles.progressWrap}>
+              <View style={styles.progressTrack}>
+                <View
+                  style={[
+                    styles.progressFill,
+                    {width: `${Math.max(openProgress, 8)}%`},
+                  ]}
+                />
+              </View>
+              <Text style={styles.openingText}>
+                {`${t('boards.opening')} ${openProgress ? `${openProgress}%` : ''}`.trim()}
+              </Text>
+            </View>
+          ) : null}
           <Pressable
             onPress={onClose}
             hitSlop={10}
@@ -305,6 +358,35 @@ const styles = StyleSheet.create({
   },
   closeText: {fontSize: 16, fontWeight: '700', color: colors.primary},
   webview: {flex: 1, backgroundColor: colors.white},
+  progressWrap: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 28,
+    zIndex: 15,
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 32,
+  },
+  progressTrack: {
+    width: '100%',
+    maxWidth: 320,
+    height: 6,
+    borderRadius: 999,
+    overflow: 'hidden',
+    backgroundColor: '#ECE8F8',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 999,
+    backgroundColor: colors.primary,
+  },
+  openingText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.primary,
+    textAlign: 'center',
+  },
   error: {color: colors.danger, textAlign: 'center', fontSize: 15},
   fabClose: {
     position: 'absolute',

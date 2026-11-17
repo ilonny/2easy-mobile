@@ -105,6 +105,20 @@ export function ExList({list, chrome}: Props) {
       label: t('lessons.copyTask'),
       onPress: () => chrome?.onPressCopy?.(menuEx),
     });
+    if (chrome?.onChangeIsVisible) {
+      const visible = isExVisible(menuEx.is_visible);
+      const isNote = menuEx.type === 'note';
+      items.push({
+        label: isNote
+          ? visible
+            ? t('lessons.hideNote')
+            : t('lessons.showNote')
+          : visible
+            ? t('lessons.hideTask')
+            : t('lessons.showTask'),
+        onPress: () => chrome.onChangeIsVisible?.(menuEx),
+      });
+    }
     items.push({
       label: t('lessons.deleteTask'),
       destructive: true,

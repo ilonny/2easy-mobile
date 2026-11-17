@@ -26,6 +26,7 @@ import {
 } from '../api/dictionaryApi';
 import {useDictionaryLanguagePair} from '../model/useDictionaryLanguagePair';
 import {DictionaryLanguagePairFields} from './LanguageSelect';
+import {SpeakWordButton} from './SpeakWordButton';
 import {TrainingPanel} from './TrainingPanel';
 
 type Tab = 'unlearned' | 'learned' | 'training';
@@ -332,28 +333,36 @@ export function DictionaryModal({visible, studentId, onClose}: Props) {
             renderItem={({item}) => {
               const selected = selectedIds.includes(item.id);
               return (
-                <Pressable
-                  onPress={() => toggleSelect(item.id)}
+                <View
                   style={[styles.wordCard, selected && styles.wordCardSelected]}>
-                  <View style={styles.wordMeta}>
-                    <Text style={styles.wordSource}>{item.sourceWord}</Text>
-                    <Text style={styles.wordTranslation}>
-                      {item.translatedWord}
-                    </Text>
-                    {!!item.lessonName && (
-                      <Text style={styles.wordLesson}>
-                        {t('dictionary.lessonBadge').replace(
-                          '{{name}}',
-                          item.lessonName,
-                        )}
+                  <SpeakWordButton
+                    id={`word-${item.id}`}
+                    text={item.sourceWord}
+                    languageCode={item.sourceLanguageCode}
+                  />
+                  <Pressable
+                    onPress={() => toggleSelect(item.id)}
+                    style={styles.wordMain}>
+                    <View style={styles.wordMeta}>
+                      <Text style={styles.wordSource}>{item.sourceWord}</Text>
+                      <Text style={styles.wordTranslation}>
+                        {item.translatedWord}
                       </Text>
-                    )}
-                  </View>
-                  <View
-                    style={[styles.check, selected && styles.checkSelected]}>
-                    {selected ? <Text style={styles.checkMark}>✓</Text> : null}
-                  </View>
-                </Pressable>
+                      {!!item.lessonName && (
+                        <Text style={styles.wordLesson}>
+                          {t('dictionary.lessonBadge').replace(
+                            '{{name}}',
+                            item.lessonName,
+                          )}
+                        </Text>
+                      )}
+                    </View>
+                    <View
+                      style={[styles.check, selected && styles.checkSelected]}>
+                      {selected ? <Text style={styles.checkMark}>✓</Text> : null}
+                    </View>
+                  </Pressable>
+                </View>
               );
             }}
           />
@@ -375,14 +384,21 @@ export function DictionaryModal({visible, studentId, onClose}: Props) {
               onSwap={swapLanguages}
               loading={loadingLanguages}
             />
-            <TextInput
-              value={sourceWord}
-              onChangeText={setSourceWord}
-              placeholder={t('dictionary.sourceWord')}
-              placeholderTextColor={colors.muted}
-              style={styles.addInput}
-              autoCapitalize="none"
-            />
+            <View style={styles.sourceRow}>
+              <SpeakWordButton
+                id="dictionary-add-source"
+                text={sourceWord}
+                languageCode={sourceLanguageCode}
+              />
+              <TextInput
+                value={sourceWord}
+                onChangeText={setSourceWord}
+                placeholder={t('dictionary.sourceWord')}
+                placeholderTextColor={colors.muted}
+                style={[styles.addInput, styles.sourceInput]}
+                autoCapitalize="none"
+              />
+            </View>
             <TextInput
               value={translatedWord}
               onChangeText={setTranslatedWord}
@@ -518,6 +534,14 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     padding: 14,
   },
+  wordMain: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  sourceRow: {flexDirection: 'row', alignItems: 'center', gap: 8},
+  sourceInput: {flex: 1},
   wordCardSelected: {
     borderColor: colors.primary,
     backgroundColor: colors.primarySoft,

@@ -12,6 +12,7 @@ import {
   useTeacherMediaSync,
   type SyncedMediaControls,
 } from '../../mediaSync';
+import {useLessonMediaProps} from '../../lib/mediaPlayback';
 import {useLessonPlayer} from '../../model/LessonPlayerContext';
 import {getImageUrl} from '../../lib/getImageUrl';
 import {ExHeader} from '../ExHeader';
@@ -34,6 +35,7 @@ function FileVideoItem({
 }) {
   const {t} = useI18n();
   const {lessonId, isTeacher} = useLessonPlayer();
+  const mediaProps = useLessonMediaProps();
   const attachment = video?.attachment;
   const fileSrc = rewriteSiteUrl(
     attachment?.dataURL ||
@@ -114,7 +116,7 @@ function FileVideoItem({
             setPaused(true);
             notifyPlaybackChange(true, positionRef.current);
           }}
-          ignoreSilentSwitch="ignore"
+          {...mediaProps}
         />
         <View style={styles.videoOverlay}>
           <Pressable style={styles.videoPlayBtn} onPress={togglePlay}>

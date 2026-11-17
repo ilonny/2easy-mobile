@@ -135,21 +135,28 @@ export type PaymentStats = {
   }>;
 };
 
+/** Distinct hues around the wheel (avoid blue-heavy clustering). */
 export const STUDENT_COLORS = [
-  '#0A84FF',
-  '#30D158',
-  '#FF9F0A',
-  '#BF5AF2',
-  '#FF6482',
-  '#64D2FF',
-  '#FFD60A',
-  '#5E5CE6',
-  '#AC8E68',
-  '#FF453A',
+  '#00C7BE', // teal (fallback for events without a student)
+  '#FF9F0A', // orange
+  '#BF5AF2', // purple
+  '#30D158', // green
+  '#FF453A', // red
+  '#FFD60A', // yellow
+  '#FF375F', // rose
+  '#AC8E68', // brown
+  '#FF6482', // coral
+  '#AF52DE', // violet
+  '#34C759', // mint green
+  '#FF6B00', // deep orange
 ];
 
-export const colorForStudent = (studentId: number) =>
-  STUDENT_COLORS[Math.abs(studentId) % STUDENT_COLORS.length];
+/** Spread consecutive ids across distant palette slots. */
+export const colorForStudent = (studentId: number) => {
+  const n = Math.abs(Number(studentId) || 0);
+  const mixed = Math.imul(n, 2654435761) >>> 0;
+  return STUDENT_COLORS[mixed % STUDENT_COLORS.length];
+};
 
 export const eventStudentIds = (event: ScheduleEvent): number[] => {
   if (Array.isArray(event.student_ids) && event.student_ids.length) {

@@ -20,6 +20,7 @@ import {
   useTeacherMediaSync,
   type SyncedMediaControls,
 } from '../../mediaSync';
+import {useLessonMediaProps} from '../../lib/mediaPlayback';
 import {useLessonPlayer} from '../../model/LessonPlayerContext';
 import {getImageUrl} from '../../lib/getImageUrl';
 import {ExHeader} from '../ExHeader';
@@ -55,6 +56,7 @@ function ensureAudioFilename(name: string) {
 export function AudioExView({data}: Props) {
   const {t} = useI18n();
   const {lessonId, isTeacher} = useLessonPlayer();
+  const mediaProps = useLessonMediaProps();
   const exId = Number(data?.id || 0);
   const [showScript, setShowScript] = useState(false);
   const [paused, setPaused] = useState(true);
@@ -213,8 +215,8 @@ export function AudioExView({data}: Props) {
               setPaused(true);
               notifyPlaybackChange(true, positionRef.current);
             }}
-            ignoreSilentSwitch="ignore"
             playInBackground={false}
+            {...mediaProps}
           />
           <View style={styles.controlsRow}>
             <Pressable style={styles.playBtn} onPress={togglePlay}>

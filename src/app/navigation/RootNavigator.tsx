@@ -2,6 +2,7 @@ import {ActivityIndicator, StyleSheet, View} from 'react-native';
 import {NavigationContainer} from '@react-navigation/native';
 
 import {useAuth} from '../../entities/session';
+import {SpeechPlaybackHost} from '../../features/dictionary/model/speechPlayback';
 import {
   GlobalVideoCallOverlay,
   VideoCallProvider,
@@ -28,6 +29,7 @@ export function RootNavigator() {
           <AppNavigator />
         </NavigationContainer>
         <GlobalVideoCallOverlay />
+        <SpeechPlaybackHost />
       </View>
     </VideoCallProvider>
   );
