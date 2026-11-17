@@ -786,6 +786,10 @@ export const en: TranslationTree = {
     promocode: 'Promo code',
     promocodeAlreadyUsed: 'This promo code has already been used',
     promocodeInvalid: 'Promo code is invalid or does not exist',
+    promocodeOwnCode: 'You cannot use your own referral code',
+    promocodeNotFirstPurchase:
+      'Referral discount applies only to the first payment',
+    promocodeReferralCap: 'This code has reached its referral limit',
     promocodeApplied: 'Promo code applied',
     apply: 'Apply',
     discount: 'Discount',
@@ -920,6 +924,16 @@ export const en: TranslationTree = {
     changePhoto: 'Change photo',
     avatarHint: 'Tap the photo to choose a new one',
     avatarUpdated: 'Avatar updated',
+  },
+  referral: {
+    title: 'Referral program',
+    step1: 'Copy your code',
+    step2: 'Share it with a colleague',
+    step3:
+      'You get a free month added to your subscription; your friend gets 50% off their first payment.',
+    copy: 'Copy',
+    copied: 'Copied',
+    paidCount: 'Paid with your code',
   },
   students: {
     noStudents: 'You have no students yet',

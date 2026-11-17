@@ -24,6 +24,7 @@ import {AppHeader} from '../../app-shell';
 import {updateProfile, uploadProfileAvatar} from '../api/profileApi';
 import {ChangePasswordModal} from './ChangePasswordModal';
 import {ProfileSubscribeInformer} from './ProfileSubscribeInformer';
+import {ProfileReferralBlock} from './ProfileReferralBlock';
 import {SubscribeCancelButton} from './SubscribeCancelButton';
 
 export function ProfileScreen() {
@@ -209,6 +210,9 @@ export function ProfileScreen() {
           {!isStudent && (
             <View style={styles.informer}>
               <ProfileSubscribeInformer />
+              <View style={styles.referralGap}>
+                <ProfileReferralBlock />
+              </View>
             </View>
           )}
         </View>
@@ -337,5 +341,8 @@ const styles = StyleSheet.create({
   },
   informer: {
     marginTop: 24,
+  },
+  referralGap: {
+    marginTop: 16,
   },
 });

@@ -87,7 +87,12 @@ export function PaymentModal({visible, tariff, onClose}: Props) {
   const [promoStatus, setPromoStatus] = useState<PromoStatus>('idle');
   const [promoValue, setPromoValue] = useState(0);
   const [promoErrorReason, setPromoErrorReason] = useState<
-    'already_used' | 'invalid' | undefined
+    | 'already_used'
+    | 'invalid'
+    | 'own_code'
+    | 'not_first_purchase'
+    | 'referral_cap'
+    | undefined
   >();
   const [loading, setLoading] = useState(false);
   const [widgetHtml, setWidgetHtml] = useState<string | null>(null);
@@ -197,7 +202,12 @@ export function PaymentModal({visible, tariff, onClose}: Props) {
       setPromoStatus('error');
       setPromoValue(0);
       setPromoErrorReason(
-        json.reason === 'already_used' ? 'already_used' : 'invalid',
+        json.reason === 'already_used' ||
+          json.reason === 'own_code' ||
+          json.reason === 'not_first_purchase' ||
+          json.reason === 'referral_cap'
+          ? json.reason
+          : 'invalid',
       );
     } catch {
       setPromoStatus('error');
@@ -316,11 +326,24 @@ export function PaymentModal({visible, tariff, onClose}: Props) {
       });
 
       if (!response.success || !response.id) {
-        if (response.reason === 'already_used') {
+        if (
+          response.reason === 'already_used' ||
+          response.reason === 'own_code' ||
+          response.reason === 'not_first_purchase' ||
+          response.reason === 'referral_cap'
+        ) {
           setPromoStatus('error');
           setPromoValue(0);
-          setPromoErrorReason('already_used');
-          setNotice(t('subscription.promocodeAlreadyUsed'));
+          setPromoErrorReason(response.reason);
+          const noticeKey =
+            response.reason === 'already_used'
+              ? 'subscription.promocodeAlreadyUsed'
+              : response.reason === 'own_code'
+                ? 'subscription.promocodeOwnCode'
+                : response.reason === 'not_first_purchase'
+                  ? 'subscription.promocodeNotFirstPurchase'
+                  : 'subscription.promocodeReferralCap';
+          setNotice(t(noticeKey));
           return;
         }
         setNotice(
@@ -520,7 +543,13 @@ export function PaymentModal({visible, tariff, onClose}: Props) {
                   <Text style={styles.promoError}>
                     {promoErrorReason === 'already_used'
                       ? t('subscription.promocodeAlreadyUsed')
-                      : t('subscription.promocodeInvalid')}
+                      : promoErrorReason === 'own_code'
+                        ? t('subscription.promocodeOwnCode')
+                        : promoErrorReason === 'not_first_purchase'
+                          ? t('subscription.promocodeNotFirstPurchase')
+                          : promoErrorReason === 'referral_cap'
+                            ? t('subscription.promocodeReferralCap')
+                            : t('subscription.promocodeInvalid')}
                   </Text>
                 ) : null}
                 {promoStatus === 'success' ? (
