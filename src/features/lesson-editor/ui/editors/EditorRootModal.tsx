@@ -14,6 +14,7 @@ import {TextChecklistEditor} from './TextChecklistEditor';
 import {TextDefaultEditor} from './TextDefaultEditor';
 import {TextStickerEditor} from './TextStickerEditor';
 import {TrueFalseEditor} from './TrueFalseEditor';
+import {MiniGameEditor} from './MiniGameEditor';
 import {UnscrambleWordsEditor} from './UnscrambleWordsEditor';
 import {VideoEditor} from './VideoEditor';
 
@@ -90,6 +91,13 @@ export function EditorRootModal({
       return <UnscrambleWordsEditor {...common} />;
     case 'TRUE_FALSE':
       return <TrueFalseEditor {...common} />;
+    case 'mini_game':
+    case 'flash-cards':
+    case 'matching-pairs':
+    case 'spin-wheel':
+    case 'hangman':
+    case 'wordsearch':
+      return <MiniGameEditor {...common} templateType={type} />;
     default:
       return null;
   }

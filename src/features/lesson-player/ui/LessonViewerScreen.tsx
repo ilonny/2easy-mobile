@@ -70,6 +70,7 @@ import {LessonParticipantsSheet} from './LessonParticipantsSheet';
 import {BoardLessonTimerOverlay} from './BoardLessonTimerOverlay';
 import {LessonTimerSheet} from './LessonTimerSheet';
 import {LessonToolsBar, LESSON_TOOLS_BAR_HEIGHT} from './LessonToolsBar';
+import {lessonMediaWsClient} from '../lib/lessonTimerWs';
 import {useLessonTimer} from '../model/useLessonTimer';
 import {useVideoCall} from '../../video-call';
 
@@ -127,6 +128,13 @@ export function LessonViewerScreen({
     enabled: isAuthorized && !!lessonId && (!!isTeacher || !!isStudent),
     isTeacher: !!isTeacher,
   });
+
+  // Shared lesson media/timer/mini-game WS — disconnect when leaving the lesson.
+  useEffect(() => {
+    return () => {
+      lessonMediaWsClient.disconnect(true);
+    };
+  }, [lessonId]);
   const {open: openVideoCall} = useVideoCall();
   const [dictionaryStudentId, setDictionaryStudentId] = useState<number | null>(
     null,
@@ -610,10 +618,33 @@ export function LessonViewerScreen({
                           hwStudent?.['student.email'] || hwStudent?.email
                         }
                         onEditHomework={() => {
-                          navigation.navigate('LessonEditor', {
-                            lessonId,
-                            ...(sid > 0 ? {studentId: sid} : {}),
-                          });
+                          void (async () => {
+                            const parentLessonId = positiveId(
+                              lesson?.lesson_id_homework,
+                            );
+                            let targetId = lessonId;
+                            if (sid > 0 && parentLessonId) {
+                              try {
+                                const data =
+                                  await getOrCreateHomeworkForStudent(
+                                    parentLessonId,
+                                    sid,
+                                  );
+                                const hwId = positiveId(
+                                  data?.homework_lesson_id,
+                                );
+                                if (hwId) {
+                                  targetId = hwId;
+                                }
+                              } catch {
+                                /* open current homework lesson */
+                              }
+                            }
+                            navigation.navigate('LessonEditor', {
+                              lessonId: targetId,
+                              ...(sid > 0 ? {studentId: sid} : {}),
+                            });
+                          })();
                         }}
                       />
                     );

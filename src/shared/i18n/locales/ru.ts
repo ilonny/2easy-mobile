@@ -20,14 +20,17 @@ export const ru = {
   },
   modals: {
     chooseTasksForHomework: 'Выберите задания для копирования в Homework',
+    chooseTasksForSharedHomework: 'Создать общую Homework (шаблон)',
     homeworkChecking: 'Проверка...',
     homeworkCopyHint:
       'Скопируйте задания из урока или создайте Homework с нуля.',
+    homeworkSharedCopyHint:
+      'Это общая Homework для всех учеников. Скопируйте задания из урока или создайте шаблон с нуля.',
     homeworkNoTasksHint:
       'В уроке нет заданий для копирования. Будет создана пустая Homework.',
     homeworkLoadingTasks: 'Загрузка заданий...',
     homeworkIndividualHint:
-      'Выберите задания из урока или создайте Homework с нуля.',
+      'Личная Homework только для этого ученика. Выберите задания из урока или создайте с нуля.',
     addTasksFromLessonTitle: 'Добавить задания из урока',
     addTasksFromLessonHint:
       'Выберите задания из урока — они будут скопированы в эту домашку (в том числе в личную домашку ученика).',
@@ -260,7 +263,7 @@ export const ru = {
     homeworkPersonalHint:
       'Личная домашка ученика. Добавляйте задания из урока кнопкой ниже — изменения увидит только этот ученик.',
     homeworkSharedHint:
-      'Это шаблон. Ученики с уже открытой домашкой не увидят эти изменения. Для личного — кабинет ученика → Homework.',
+      'Это общая Homework (шаблон). Изменения увидят ученики без личной копии. Чтобы править только для одного ученика — кабинет ученика → Homework или «Отредактировать» при проверке.',
     homeworkEditHint:
       'Это отдельная домашка. Чтобы дополнить её заданиями из урока для конкретного ученика, нажмите «Добавить задания из урока» ниже — не редактируйте общую Homework из каталога.',
     pasteExercise: 'Вставить упражнение',
@@ -371,6 +374,24 @@ export const ru = {
     trueFalseCorrectAnswer: 'Правильный ответ:',
     trueFalsePreviewEmpty:
       'Добавьте хотя бы одно предложение с текстом, чтобы увидеть превью',
+    miniGameHowTitle: 'Мини-игра',
+    miniGameHowHint:
+      'Один набор слов — разные игры. Переключайте шаблон без потери контента.',
+    miniGameHowSteps:
+      '1) Выберите игру. 2) Добавьте пары: лицевая и обратная сторона — заполняйте как угодно (слово/перевод, вопрос/ответ, картинка текстом и т.д.), любую сторону можно оставить пустой. 3) Сохраните — ученики смогут играть в уроке.',
+    miniGameItemN: 'Пара {{n}}',
+    miniGameAddItem: '+ Добавить пару',
+    miniGameNeedItems: 'Нужно минимум {{n}} пар(ы)',
+    miniGameNeedTermShort: 'Заполните хотя бы одну сторону',
+    miniGameFrontSide: 'Лицевая сторона',
+    miniGameBackSide: 'Обратная сторона',
+    miniGameTermPlaceholder: 'например: apple',
+    miniGameDefPlaceholder: 'например: a fruit',
+    miniGameShuffle: 'Перемешивать',
+    miniGameWheelDefs: 'На колесе показывать обратную сторону',
+    miniGameFlashLayout: 'Показ карточек',
+    miniGameFlashOne: 'По одной',
+    miniGameFlashAll: 'Все сразу',
     content: 'Текст',
     contentPlaceholder: 'Начните писать…',
     answerPlaceholder: 'Ваш ответ…',
@@ -544,6 +565,7 @@ export const ru = {
     lessonCopied: 'Урок добавлен в «Мои уроки»',
     lessonCopyFailed: 'Не удалось скопировать урок',
     createHomework: 'Создать homework',
+    createSharedHomework: 'Создать общую Homework',
     homeworkLabel: 'Homework',
     toLesson: 'К уроку',
     createFromScratch: 'Создать с нуля',
@@ -1174,6 +1196,19 @@ export const ru = {
     freeInputDesc: 'Пустое поле для ответов ученика',
     integrations: 'Интеграции',
     integrationsDesc: 'Miro, Wordwall, Genially, Quizlet и др.',
+    miniGames: 'Мини игры',
+    miniGamesDesc:
+      'Flash cards, memory, колесо, hangman, wordsearch — один контент, разные игры',
+    miniGameFlashCards: 'Flash cards',
+    miniGameFlashCardsDesc: 'Карточки term ↔ definition',
+    miniGameMatchingPairs: 'Matching pairs',
+    miniGameMatchingPairsDesc: 'Memory: найди пары',
+    miniGameSpinWheel: 'Spin the wheel',
+    miniGameSpinWheelDesc: 'Колесо со словами',
+    miniGameHangman: 'Hangman',
+    miniGameHangmanDesc: 'Угадай слово по буквам',
+    miniGameWordsearch: 'Wordsearch',
+    miniGameWordsearchDesc: 'Найди слова в сетке',
   },
 } as const;
 

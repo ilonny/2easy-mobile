@@ -28,6 +28,7 @@ import {useLayout} from '../../../shared/lib/layout';
 import {
   AddExercisesFromLessonModal,
   CreateHomeworkModal,
+  getOrCreateHomeworkForStudent,
   isHomeworkLesson,
   LessonModeBanner,
   positiveId,
@@ -97,6 +98,7 @@ export function LessonEditorScreen({lessonId, studentId: studentIdProp}: Props) 
     name?: string;
     email?: string;
   } | null>(null);
+  const [isPersonalHomework, setIsPersonalHomework] = useState(false);
   const contextStudentId = Number(studentIdProp || 0) || 0;
   const [insertAt, setInsertAt] = useState<number | undefined>();
   const [editor, setEditor] = useState<EditorState>(null);
@@ -163,6 +165,70 @@ export function LessonEditorScreen({lessonId, studentId: studentIdProp}: Props) 
       cancelled = true;
     };
   }, [contextStudentId]);
+
+  // Student-scoped homework edit must land on a personal copy (fork shared template).
+  useEffect(() => {
+    const parentLessonId = positiveId(lesson?.lesson_id_homework);
+    if (!contextStudentId || !parentLessonId) {
+      setIsPersonalHomework(false);
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const resolved = await resolveHomeworkForStudent(
+          parentLessonId,
+          contextStudentId,
+        );
+        if (cancelled) {
+          return;
+        }
+        const resolvedId = positiveId(resolved?.homework_lesson_id);
+        if (resolved?.has_individual_homework && resolvedId) {
+          setIsPersonalHomework(true);
+          if (resolvedId !== lessonId) {
+            navigation.replace('LessonEditor', {
+              lessonId: resolvedId,
+              studentId: contextStudentId,
+            });
+          }
+          return;
+        }
+
+        const created = await getOrCreateHomeworkForStudent(
+          parentLessonId,
+          contextStudentId,
+        );
+        if (cancelled) {
+          return;
+        }
+        const personalId = positiveId(created?.homework_lesson_id);
+        if (personalId) {
+          setIsPersonalHomework(true);
+          if (personalId !== lessonId) {
+            navigation.replace('LessonEditor', {
+              lessonId: personalId,
+              studentId: contextStudentId,
+            });
+          }
+        }
+      } catch {
+        if (!cancelled) {
+          setIsPersonalHomework(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    contextStudentId,
+    lesson?.lesson_id_homework,
+    lessonId,
+    navigation,
+  ]);
 
   const isLockedOnTrial = isTeacherLessonAccessBlocked(lesson, {
     isStudent: !!profile?.isStudent,
@@ -611,7 +677,9 @@ export function LessonEditorScreen({lessonId, studentId: studentIdProp}: Props) 
                     mode={lessonIsHomework ? 'homework-edit' : 'lesson-edit'}
                     studentName={contextStudent?.name}
                     studentEmail={contextStudent?.email}
-                    isPersonalHomework={lessonIsHomework && !!contextStudentId}
+                    isPersonalHomework={
+                      lessonIsHomework && isPersonalHomework
+                    }
                   />
                 ) : null}
                 <Text style={[styles.title, isTablet && styles.titleTablet]}>
@@ -665,7 +733,7 @@ export function LessonEditorScreen({lessonId, studentId: studentIdProp}: Props) 
                       title={
                         linkedHomeworkId
                           ? t('lessons.homeworkLabel')
-                          : t('lessons.createHomework')
+                          : t('lessons.createSharedHomework')
                       }
                       variant="secondary"
                       onPress={() => {

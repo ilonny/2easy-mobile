@@ -19,6 +19,7 @@ import {TextChecklistExView} from './TextChecklistExView';
 import {TextDefaultExView} from './TextDefaultExView';
 import {TextStickerExView} from './TextStickerExView';
 import {TrueFalseExView} from './TrueFalseExView';
+import {MiniGameExView} from './MiniGameExView';
 import {UnscrambleWordsExView} from './UnscrambleWordsExView';
 import {VideoExView} from './VideoExView';
 
@@ -69,6 +70,8 @@ export function ExViewRouter({type, data}: Props) {
       return <UnscrambleWordsExView data={data} />;
     case 'TRUE_FALSE':
       return <TrueFalseExView data={data} />;
+    case 'mini_game':
+      return <MiniGameExView data={data} />;
     default:
       return (
         <View style={styles.fallback}>

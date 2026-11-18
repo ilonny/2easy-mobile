@@ -47,12 +47,32 @@ export type LessonMediaPlayIncoming = {
   scroll: boolean;
 };
 
+export type LessonMiniGameDetail = {
+  commandId: number;
+  exId: number;
+  clientEventId: string;
+  actorId: string;
+  revision: number;
+  serverTimeMs: number;
+  clockOffsetMs: number;
+  state: Record<string, unknown>;
+};
+
+export type LessonMiniGameSend = {
+  exId: number;
+  clientEventId: string;
+  state: Record<string, unknown>;
+};
+
 type TimerCallbacks = {
   onTimer?: (state: LessonTimerState) => void;
   onPlay?: (detail: LessonMediaPlayIncoming) => void;
+  onMiniGame?: (detail: LessonMiniGameDetail) => void;
   onConnectionChange?: (connected: boolean) => void;
   onError?: (message: string) => void;
 };
+
+type MiniGameListener = (detail: LessonMiniGameDetail) => void;
 
 type WsIncoming = {
   type?: string;
@@ -70,6 +90,10 @@ type WsIncoming = {
   remaining_ms?: number | null;
   updated_at_ms?: number;
   message?: string;
+  client_event_id?: string;
+  actor_id?: string;
+  revision?: number;
+  state?: Record<string, unknown>;
 };
 
 async function getTimerWsUrl(lessonId: number) {
@@ -100,6 +124,8 @@ function parseStatus(raw?: string): LessonTimerStatus | null {
 export class LessonTimerWsAdapter {
   private ws: WebSocket | null = null;
   private callbacks: TimerCallbacks = {};
+  private miniGameListeners = new Set<MiniGameListener>();
+  private lastMiniGameByEx = new Map<number, LessonMiniGameDetail>();
   private lessonId: number | null = null;
   private role: LessonMediaWsRole | null = null;
   private pingTimer: ReturnType<typeof setInterval> | null = null;
@@ -108,9 +134,43 @@ export class LessonTimerWsAdapter {
   private connectionGen = 0;
   private clockOffsetMs = 0;
   private timerState: LessonTimerState = IDLE_LESSON_TIMER;
+  private ready = false;
 
   setCallbacks(callbacks: TimerCallbacks) {
-    this.callbacks = callbacks;
+    this.callbacks = {...this.callbacks, ...callbacks};
+  }
+
+  isOpen() {
+    return this.ready && this.ws?.readyState === WebSocket.OPEN;
+  }
+
+  getLastMiniGame(exId: number) {
+    return this.lastMiniGameByEx.get(exId) || null;
+  }
+
+  subscribeMiniGame(listener: MiniGameListener) {
+    this.miniGameListeners.add(listener);
+    this.lastMiniGameByEx.forEach(detail => {
+      listener(detail);
+    });
+    return () => {
+      this.miniGameListeners.delete(listener);
+    };
+  }
+
+  sendMiniGame(payload: LessonMiniGameSend) {
+    if (!this.isOpen() || !this.ws) {
+      return false;
+    }
+    this.ws.send(
+      JSON.stringify({
+        type: 'mini_game',
+        ex_id: payload.exId,
+        client_event_id: payload.clientEventId,
+        state: payload.state,
+      }),
+    );
+    return true;
   }
 
   getTimerState() {
@@ -122,6 +182,19 @@ export class LessonTimerWsAdapter {
   }
 
   async connect(lessonId: number, role: LessonMediaWsRole = 'student') {
+    // Reuse open socket for the same lesson (timer + mini-games share one WS).
+    if (
+      this.lessonId === lessonId &&
+      this.role === role &&
+      this.ws &&
+      this.ws.readyState <= WebSocket.OPEN
+    ) {
+      this.shouldReconnect = true;
+      return;
+    }
+    if (this.lessonId !== lessonId) {
+      this.lastMiniGameByEx.clear();
+    }
     this.disconnect(false);
     this.lessonId = lessonId;
     this.role = role;
@@ -133,6 +206,7 @@ export class LessonTimerWsAdapter {
   disconnect(clearLesson = true) {
     this.shouldReconnect = false;
     this.connectionGen += 1;
+    this.ready = false;
     this.clearTimers();
     const ws = this.ws;
     this.ws = null;
@@ -144,6 +218,7 @@ export class LessonTimerWsAdapter {
       this.role = null;
       // Keep last timer until a new lesson connects; reload restore uses HTTP/WS.
       this.timerState = IDLE_LESSON_TIMER;
+      this.lastMiniGameByEx.clear();
     }
     this.callbacks.onConnectionChange?.(false);
   }
@@ -245,12 +320,18 @@ export class LessonTimerWsAdapter {
       }
 
       if (msg.type === 'hello') {
+        this.ready = true;
         this.callbacks.onConnectionChange?.(true);
         return;
       }
 
       if (msg.type === 'timer') {
         this.applyTimer(msg);
+        return;
+      }
+
+      if (msg.type === 'mini_game') {
+        this.applyMiniGame(msg);
         return;
       }
 
@@ -266,6 +347,7 @@ export class LessonTimerWsAdapter {
 
     ws.onclose = () => {
       if (gen !== this.connectionGen) return;
+      this.ready = false;
       this.clearTimers();
       this.callbacks.onConnectionChange?.(false);
       if (!this.shouldReconnect) return;
@@ -330,6 +412,38 @@ export class LessonTimerWsAdapter {
     });
   }
 
+  private applyMiniGame(msg: WsIncoming) {
+    const exId = Number(msg.ex_id || 0);
+    const revision = Number(msg.revision || 0);
+    const clientEventId = String(msg.client_event_id || '');
+    const state = msg.state;
+    if (!exId || !revision || !clientEventId) {
+      return;
+    }
+    if (!state || typeof state !== 'object') {
+      return;
+    }
+    const prev = this.lastMiniGameByEx.get(exId);
+    if (prev && prev.revision >= revision) {
+      return;
+    }
+    const detail: LessonMiniGameDetail = {
+      commandId: Number(msg.command_id || 0),
+      exId,
+      clientEventId,
+      actorId: String(msg.actor_id || ''),
+      revision,
+      serverTimeMs: Number(msg.server_time_ms || Date.now()),
+      clockOffsetMs: this.clockOffsetMs,
+      state,
+    };
+    this.lastMiniGameByEx.set(exId, detail);
+    this.callbacks.onMiniGame?.(detail);
+    this.miniGameListeners.forEach(listener => {
+      listener(detail);
+    });
+  }
+
   private startPing(gen: number) {
     if (this.pingTimer) clearInterval(this.pingTimer);
     this.pingTimer = setInterval(() => {
@@ -340,3 +454,6 @@ export class LessonTimerWsAdapter {
     }, LESSON_TIMER_PING_MS);
   }
 }
+
+/** Shared lesson media/timer/mini-game socket for the app. */
+export const lessonMediaWsClient = new LessonTimerWsAdapter();

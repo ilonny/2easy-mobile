@@ -4,7 +4,7 @@ import {Platform, Vibration} from 'react-native';
 import {fetchLessonFocusTimer} from '../api/lessonApi';
 import {
   IDLE_LESSON_TIMER,
-  LessonTimerWsAdapter,
+  lessonMediaWsClient,
   type LessonTimerState,
 } from '../lib/lessonTimerWs';
 import {
@@ -54,7 +54,6 @@ export function useLessonTimer({
   enabled: boolean;
   isTeacher: boolean;
 }) {
-  const adapterRef = useRef<LessonTimerWsAdapter | null>(null);
   const [state, setState] = useState<LessonTimerState>(IDLE_LESSON_TIMER);
   const [remainingMs, setRemainingMs] = useState(0);
   const [finishedPulse, setFinishedPulse] = useState(false);
@@ -63,15 +62,12 @@ export function useLessonTimer({
 
   useEffect(() => {
     if (!enabled || !lessonId) {
-      adapterRef.current?.disconnect();
-      adapterRef.current = null;
       setState(IDLE_LESSON_TIMER);
       setRemainingMs(0);
       return;
     }
 
-    const adapter = new LessonTimerWsAdapter();
-    adapterRef.current = adapter;
+    const adapter = lessonMediaWsClient;
     adapter.setCallbacks({
       onTimer: next => {
         setState(next);
@@ -148,10 +144,7 @@ export function useLessonTimer({
     return () => {
       stop = true;
       if (pollTimer) clearTimeout(pollTimer);
-      adapter.disconnect();
-      if (adapterRef.current === adapter) {
-        adapterRef.current = null;
-      }
+      // Keep shared WS open for mini-games; lesson unmount disconnects elsewhere.
     };
   }, [enabled, isTeacher, lessonId, role]);
 
@@ -190,24 +183,24 @@ export function useLessonTimer({
   const start = useCallback(
     (durationSec: number) => {
       if (!isTeacher) return;
-      adapterRef.current?.startTimer(durationSec);
+      lessonMediaWsClient.startTimer(durationSec);
     },
     [isTeacher],
   );
 
   const pause = useCallback(() => {
     if (!isTeacher) return;
-    adapterRef.current?.pauseTimer();
+    lessonMediaWsClient.pauseTimer();
   }, [isTeacher]);
 
   const resume = useCallback(() => {
     if (!isTeacher) return;
-    adapterRef.current?.resumeTimer();
+    lessonMediaWsClient.resumeTimer();
   }, [isTeacher]);
 
   const reset = useCallback(() => {
     if (!isTeacher) return;
-    adapterRef.current?.resetTimer();
+    lessonMediaWsClient.resetTimer();
   }, [isTeacher]);
 
   const progress =

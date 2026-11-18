@@ -22,14 +22,17 @@ export const en: TranslationTree = {
   },
   modals: {
     chooseTasksForHomework: 'Choose tasks to copy to Homework',
+    chooseTasksForSharedHomework: 'Create shared Homework (template)',
     homeworkChecking: 'Checking...',
     homeworkCopyHint:
       'Copy tasks from the lesson or create Homework from scratch.',
+    homeworkSharedCopyHint:
+      'This is shared Homework for all students. Copy tasks from the lesson or create a template from scratch.',
     homeworkNoTasksHint:
       'No tasks to copy in the lesson. An empty Homework will be created.',
     homeworkLoadingTasks: 'Loading tasks...',
     homeworkIndividualHint:
-      'Select tasks from the lesson or create Homework from scratch.',
+      'Personal Homework for this student only. Select tasks from the lesson or create from scratch.',
     addTasksFromLessonTitle: 'Add tasks from the lesson',
     addTasksFromLessonHint:
       'Select tasks from the lesson — they will be copied into this homework (including a student’s personal homework).',
@@ -262,7 +265,7 @@ export const en: TranslationTree = {
     homeworkPersonalHint:
       'This student’s personal homework. Add tasks from the lesson with the button below — only this student will see the changes.',
     homeworkSharedHint:
-      'This is a template. Students who already have homework open won’t see these changes. For a personal copy — student cabinet → Homework.',
+      'This is shared Homework (template). Students without a personal copy will see these changes. To edit for one student only — student cabinet → Homework, or Edit while checking.',
     homeworkEditHint:
       'This is a separate homework lesson. To add tasks from the lesson for a specific student, use “Add tasks from the lesson” below — don’t edit the shared Homework from the catalog.',
     pasteExercise: 'Paste exercise',
@@ -373,6 +376,24 @@ export const en: TranslationTree = {
     trueFalseCorrectAnswer: 'Correct answer:',
     trueFalsePreviewEmpty:
       'Add at least one sentence with text to see the preview',
+    miniGameHowTitle: 'Mini game',
+    miniGameHowHint:
+      'One set of words — many games. Switch the template without losing content.',
+    miniGameHowSteps:
+      '1) Pick a game. 2) Add pairs: front and back — fill them however you like (word/translation, question/answer, etc.); either side can be left empty. 3) Save — students can play in the lesson.',
+    miniGameItemN: 'Pair {{n}}',
+    miniGameAddItem: '+ Add pair',
+    miniGameNeedItems: 'Need at least {{n}} pair(s)',
+    miniGameNeedTermShort: 'Fill in at least one side',
+    miniGameFrontSide: 'Front side',
+    miniGameBackSide: 'Back side',
+    miniGameTermPlaceholder: 'e.g. apple',
+    miniGameDefPlaceholder: 'e.g. a fruit',
+    miniGameShuffle: 'Shuffle',
+    miniGameWheelDefs: 'Show back side on the wheel',
+    miniGameFlashLayout: 'Card display',
+    miniGameFlashOne: 'One at a time',
+    miniGameFlashAll: 'All at once',
     content: 'Content',
     contentPlaceholder: 'Start writing…',
     answerPlaceholder: 'Your answer…',
@@ -538,6 +559,7 @@ export const en: TranslationTree = {
     lessonCopied: 'Lesson added to My lessons',
     lessonCopyFailed: 'Failed to copy lesson',
     createHomework: 'Create homework',
+    createSharedHomework: 'Create shared Homework',
     homeworkLabel: 'Homework',
     toLesson: 'To lesson',
     createFromScratch: 'Create from scratch',
@@ -1165,5 +1187,18 @@ export const en: TranslationTree = {
     freeInputDesc: 'Empty field for student answers',
     integrations: 'Integrations',
     integrationsDesc: 'Miro, Wordwall, Genially, Quizlet, etc.',
+    miniGames: 'Mini games',
+    miniGamesDesc:
+      'Flash cards, memory, wheel, hangman, wordsearch — one content set, many games',
+    miniGameFlashCards: 'Flash cards',
+    miniGameFlashCardsDesc: 'Cards with term ↔ definition',
+    miniGameMatchingPairs: 'Matching pairs',
+    miniGameMatchingPairsDesc: 'Memory: find the pairs',
+    miniGameSpinWheel: 'Spin the wheel',
+    miniGameSpinWheelDesc: 'Wheel with your words',
+    miniGameHangman: 'Hangman',
+    miniGameHangmanDesc: 'Guess the word letter by letter',
+    miniGameWordsearch: 'Wordsearch',
+    miniGameWordsearchDesc: 'Find words in the grid',
   },
 };

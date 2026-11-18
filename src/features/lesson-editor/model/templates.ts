@@ -119,6 +119,41 @@ export const templates: TTemplate[] = [
     descriptionDefault: 'Choose the correct option',
   },
   {
+    type: 'mini_games',
+    titleKey: 'templates.miniGames',
+    titleDefault: 'Mini games',
+    descriptionKey: 'templates.miniGamesDesc',
+    descriptionDefault:
+      'Flash cards, memory, wheel, hangman, wordsearch — one content set, many games',
+    subItems: [
+      {
+        type: 'flash-cards',
+        titleKey: 'templates.miniGameFlashCards',
+        titleDefault: 'Flash cards',
+      },
+      {
+        type: 'matching-pairs',
+        titleKey: 'templates.miniGameMatchingPairs',
+        titleDefault: 'Matching pairs',
+      },
+      {
+        type: 'spin-wheel',
+        titleKey: 'templates.miniGameSpinWheel',
+        titleDefault: 'Spin the wheel',
+      },
+      {
+        type: 'hangman',
+        titleKey: 'templates.miniGameHangman',
+        titleDefault: 'Hangman',
+      },
+      {
+        type: 'wordsearch',
+        titleKey: 'templates.miniGameWordsearch',
+        titleDefault: 'Wordsearch',
+      },
+    ],
+  },
+  {
     type: 'free-input-form',
     titleKey: 'templates.freeInput',
     titleDefault: 'Free text input',
@@ -195,6 +230,24 @@ const TYPE_META: Record<string, {titleKey: string; titleDefault: string}> = {
     titleDefault: 'Free text input',
   },
   int: {titleKey: 'templates.integrations', titleDefault: 'Integrations'},
+  mini_game: {titleKey: 'templates.miniGames', titleDefault: 'Mini games'},
+  'flash-cards': {
+    titleKey: 'templates.miniGameFlashCards',
+    titleDefault: 'Flash cards',
+  },
+  'matching-pairs': {
+    titleKey: 'templates.miniGameMatchingPairs',
+    titleDefault: 'Matching pairs',
+  },
+  'spin-wheel': {
+    titleKey: 'templates.miniGameSpinWheel',
+    titleDefault: 'Spin the wheel',
+  },
+  hangman: {titleKey: 'templates.miniGameHangman', titleDefault: 'Hangman'},
+  wordsearch: {
+    titleKey: 'templates.miniGameWordsearch',
+    titleDefault: 'Wordsearch',
+  },
 };
 
 export function getExerciseTypeLabel(
