@@ -293,7 +293,7 @@ export function CourseScreen({courseId}: Props) {
                       showHw
                         ? hwExists
                           ? t('lessons.homeworkLabel')
-                          : t('lessons.createHomework')
+                          : t('lessons.createSharedHomework')
                         : undefined
                     }
                     onActionPress={

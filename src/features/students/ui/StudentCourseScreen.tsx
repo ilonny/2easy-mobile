@@ -322,7 +322,7 @@ export function StudentCourseScreen({courseId, studentId}: Props) {
                   actionLabel={
                     showHwAction
                       ? isTeacher && !hwExists
-                        ? t('lessons.createHomework')
+                        ? t('lessons.createPersonalHomework')
                         : t('lessons.homeworkLabel')
                       : undefined
                   }

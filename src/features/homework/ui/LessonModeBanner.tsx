@@ -46,10 +46,9 @@ export function LessonModeBanner({
   if (mode === 'homework-check') {
     hint = t('lessons.homeworkCheckHint');
   } else if (mode === 'homework-edit') {
-    hint =
-      studentName || isPersonalHomework
-        ? t('editor.homeworkPersonalHint')
-        : t('editor.homeworkSharedHint');
+    hint = isPersonalHomework
+      ? t('editor.homeworkPersonalHint')
+      : t('editor.homeworkSharedHint');
   }
 
   return (

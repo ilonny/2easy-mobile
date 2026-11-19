@@ -61,6 +61,7 @@ export type LessonMiniGameDetail = {
 export type LessonMiniGameSend = {
   exId: number;
   clientEventId: string;
+  baseRevision: number;
   state: Record<string, unknown>;
 };
 
@@ -125,6 +126,7 @@ export class LessonTimerWsAdapter {
   private ws: WebSocket | null = null;
   private callbacks: TimerCallbacks = {};
   private miniGameListeners = new Set<MiniGameListener>();
+  private readyListeners = new Set<() => void>();
   private lastMiniGameByEx = new Map<number, LessonMiniGameDetail>();
   private lessonId: number | null = null;
   private role: LessonMediaWsRole | null = null;
@@ -158,6 +160,17 @@ export class LessonTimerWsAdapter {
     };
   }
 
+  /** Fires once the socket has received hello. Catch-up is sent before hello. */
+  subscribeReady(listener: () => void) {
+    this.readyListeners.add(listener);
+    if (this.ready) {
+      listener();
+    }
+    return () => {
+      this.readyListeners.delete(listener);
+    };
+  }
+
   sendMiniGame(payload: LessonMiniGameSend) {
     if (!this.isOpen() || !this.ws) {
       return false;
@@ -167,6 +180,7 @@ export class LessonTimerWsAdapter {
         type: 'mini_game',
         ex_id: payload.exId,
         client_event_id: payload.clientEventId,
+        base_revision: payload.baseRevision,
         state: payload.state,
       }),
     );
@@ -322,6 +336,7 @@ export class LessonTimerWsAdapter {
       if (msg.type === 'hello') {
         this.ready = true;
         this.callbacks.onConnectionChange?.(true);
+        this.readyListeners.forEach(listener => listener());
         return;
       }
 

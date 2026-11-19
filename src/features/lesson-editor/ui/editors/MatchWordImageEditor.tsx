@@ -1,5 +1,5 @@
 import {useEffect, useMemo, useState} from 'react';
-import {Pressable, Text, View} from 'react-native';
+import {Alert, Pressable, Text, View} from 'react-native';
 
 import {useI18n} from '../../../../shared/i18n';
 import {TextField, TitleColorField} from '../../../../shared/ui';
@@ -14,7 +14,7 @@ import {
   newId,
   persistExercise,
   readTitleColor,
-  resolvePickedAttachments,
+  resolvePickedAttachmentsAligned,
   type EditorCommonProps,
   pickedToPreviewMedia,
 } from './editorShared';
@@ -90,27 +90,30 @@ export function MatchWordImageEditor({
     setSaving(true);
     try {
       const withImages = matches.filter(m => m.image);
-      const uploaded = await resolvePickedAttachments(
+      // Keep upload slots aligned with rows. A compact list shifts every
+      // caption onto the previous picture and drops the last files.
+      const uploaded = await resolvePickedAttachmentsAligned(
         withImages.map(m => ({...m.image!, id: m.id})),
       );
 
-      let uIdx = 0;
-      const images = withImages
-        .map(m => {
-          if (m.image?.path) {
-            return {
-              id: m.image.remoteId || m.id,
-              path: m.image.path,
-              text: m.value,
-            };
-          }
-          const att = uploaded[uIdx++];
-          if (!att?.path) {
-            return null;
-          }
-          return {id: att.id || m.id, path: att.path, text: m.value};
-        })
-        .filter(Boolean);
+      if (withImages.some((_, index) => !uploaded[index]?.path)) {
+        Alert.alert('', t('editor.imagesUploadFailed'));
+        return;
+      }
+
+      const seenIds = new Set<string>();
+      const images = withImages.flatMap((m, index) => {
+        const att = uploaded[index];
+        if (!att?.path) {
+          return [];
+        }
+        let id = String(att.id || m.image?.remoteId || m.id);
+        if (seenIds.has(id)) {
+          id = newId();
+        }
+        seenIds.add(id);
+        return [{id, path: att.path, text: m.value}];
+      });
 
       await persistExercise({
         lessonId,

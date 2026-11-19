@@ -29,6 +29,8 @@ export type PickedImage = {
   isLocalFile?: boolean;
   /** Remote URL from search — upload via /upload-photos-by-url */
   isRemoteUrl?: boolean;
+  fileName?: string;
+  mimeType?: string;
 };
 
 type Props = {
@@ -90,6 +92,8 @@ export function ImagePickerField({
         uri: asset.uri!,
         isLocalFile: true,
         isRemoteUrl: false,
+        fileName: asset.fileName || undefined,
+        mimeType: asset.type || undefined,
       }));
     onChange(multiple ? images.concat(next).slice(0, max) : next.slice(0, 1));
   };

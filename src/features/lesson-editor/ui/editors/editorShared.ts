@@ -194,23 +194,52 @@ export function linkToVideoEmbed(text: string): string {
   return trimmed;
 }
 
-/** Upload local files + remote URLs, keep already-saved attachments. */
-export async function resolvePickedAttachments(
+const UPLOAD_EXT: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/jpg': 'jpg',
+  'image/png': 'png',
+  'image/gif': 'gif',
+  'image/webp': 'webp',
+  'image/svg+xml': 'svg',
+};
+
+/** HEIC from the camera roll is sent as JPEG: the upload API rejects image/heic. */
+function localUploadFile(img: PickedImage, index: number) {
+  const raw = (img.mimeType || '').toLowerCase();
+  const ext = UPLOAD_EXT[raw];
+  if (!ext) {
+    return {uri: img.uri, name: `image-${index}.jpg`, type: 'image/jpeg'};
+  }
+  return {
+    uri: img.uri,
+    name: `image-${index}.${ext}`,
+    type: raw === 'image/jpg' ? 'image/jpeg' : raw,
+  };
+}
+
+export type ResolvedAttachment = {
+  id?: number | string;
+  path?: string;
+  text?: string;
+};
+
+/**
+ * Upload local files and remote URLs. Result index matches the input index.
+ * Already saved images (with `path`) stay in place. Failed uploads are null
+ * so callers can keep each caption on its own picture.
+ */
+export async function resolvePickedAttachmentsAligned(
   images: PickedImage[],
-): Promise<Array<{id?: number | string; path?: string; text?: string}>> {
+): Promise<Array<ResolvedAttachment | null>> {
   const locals = images.filter(img => img.isLocalFile && img.uri && !img.path);
   const remotes = images.filter(img => img.isRemoteUrl && img.uri && !img.path);
 
   let localUploaded: Array<{id?: number; path?: string}> = [];
-  let remoteUploaded: Array<{id?: number; path?: string}> = [];
+  let remoteUploaded: Array<{id?: number; path?: string} | null> = [];
 
   if (locals.length) {
     const res = await uploadPhotos(
-      locals.map((img, index) => ({
-        uri: img.uri,
-        name: `image-${index}.jpg`,
-        type: 'image/jpeg',
-      })),
+      locals.map((img, index) => localUploadFile(img, index)),
     );
     localUploaded = res.attachments || [];
   }
@@ -218,30 +247,33 @@ export async function resolvePickedAttachments(
     const res = await uploadPhotosByUrl(
       remotes.map(img => ({dataURL: img.uri})),
     );
+    // Server keeps nulls at the original index when a URL fails.
     remoteUploaded = res.attachments || [];
   }
 
   let localIdx = 0;
   let remoteIdx = 0;
 
-  return images
-    .map(img => {
-      if (img.path) {
-        return {id: img.remoteId, path: img.path};
-      }
-      if (img.isLocalFile) {
-        const att = localUploaded[localIdx++];
-        return att?.path ? {id: att.id, path: att.path} : null;
-      }
-      if (img.isRemoteUrl) {
-        const att = remoteUploaded[remoteIdx++];
-        return att?.path ? {id: att.id, path: att.path} : null;
-      }
-      return null;
-    })
-    .filter(Boolean) as Array<{
-    id?: number | string;
-    path?: string;
-    text?: string;
-  }>;
+  return images.map(img => {
+    if (img.path) {
+      return {id: img.remoteId, path: img.path};
+    }
+    if (img.isLocalFile) {
+      const att = localUploaded[localIdx++];
+      return att?.path ? {id: att.id, path: att.path} : null;
+    }
+    if (img.isRemoteUrl) {
+      const att = remoteUploaded[remoteIdx++];
+      return att?.path ? {id: att.id, path: att.path} : null;
+    }
+    return null;
+  });
+}
+
+/** Upload local files + remote URLs, keep already-saved attachments. */
+export async function resolvePickedAttachments(
+  images: PickedImage[],
+): Promise<ResolvedAttachment[]> {
+  const aligned = await resolvePickedAttachmentsAligned(images);
+  return aligned.filter((item): item is ResolvedAttachment => !!item?.path);
 }

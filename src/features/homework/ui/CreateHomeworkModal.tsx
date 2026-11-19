@@ -151,8 +151,12 @@ export function CreateHomeworkModal({
       <View style={[styles.root, {paddingTop: insets.top + 8}]}>
         <View style={[styles.header, {paddingHorizontal: pageGutter}]}>
           <View style={styles.headerText}>
-            <Text style={styles.title}>{t('modals.chooseTasksForHomework')}</Text>
-            <Text style={styles.subtitle}>{t('modals.homeworkCopyHint')}</Text>
+            <Text style={styles.title}>
+              {t('modals.chooseTasksForSharedHomework')}
+            </Text>
+            <Text style={styles.subtitle}>
+              {t('modals.homeworkSharedCopyHint')}
+            </Text>
           </View>
           <Pressable onPress={onClose} hitSlop={10} style={styles.closeBtn}>
             <Text style={styles.close}>✕</Text>
@@ -263,7 +267,7 @@ export function CreateHomeworkModal({
               ]}>
               {!!error && <Text style={styles.error}>{error}</Text>}
               <Button
-                title={t('lessons.createHomework')}
+                title={t('lessons.createSharedHomework')}
                 onPress={() => {
                   void onSubmit();
                 }}

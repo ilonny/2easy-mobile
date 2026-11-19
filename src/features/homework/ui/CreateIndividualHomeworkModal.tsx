@@ -252,7 +252,7 @@ export function CreateIndividualHomeworkModal({
               ]}>
               {!!error && <Text style={styles.error}>{error}</Text>}
               <Button
-                title={t('lessons.createHomework')}
+                title={t('lessons.createPersonalHomework')}
                 onPress={() => {
                   void onSubmit();
                 }}

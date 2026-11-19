@@ -74,6 +74,10 @@ export type MiniGameAnswerState = {
 
 export type MiniGameLiveState = MiniGameAnswerState;
 
+export type MiniGamePatch =
+  | Partial<MiniGameAnswerState>
+  | ((prev: MiniGameAnswerState) => MiniGameAnswerState);
+
 export const MINI_GAME_META: Array<{
   id: MiniGameKind;
   titleKey: string;

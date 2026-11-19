@@ -26,23 +26,19 @@ export function isHomeworkLesson(lesson: HomeworkLessonFields): boolean {
   return !!positiveId(lesson.lesson_id_homework);
 }
 
-/** Teacher opens existing individual HW or get-or-creates one. */
+/** Teacher opens existing individual HW or get-or-creates a personal copy. */
 export async function openTeacherStudentHomework(options: {
   lessonId: number;
   studentId: number;
   knownHomeworkId?: number;
 }): Promise<number | null> {
-  const {lessonId, studentId, knownHomeworkId} = options;
+  const {lessonId, studentId} = options;
 
   const resolved = await resolveHomeworkForStudent(lessonId, studentId);
   const resolvedId = positiveId(resolved?.homework_lesson_id);
   if (resolved?.has_individual_homework && resolvedId) {
     await saveStartLessonSelectedIds([studentId]);
     return resolvedId;
-  }
-  if (knownHomeworkId) {
-    await saveStartLessonSelectedIds([studentId]);
-    return knownHomeworkId;
   }
 
   const created = await getOrCreateHomeworkForStudent(lessonId, studentId);
