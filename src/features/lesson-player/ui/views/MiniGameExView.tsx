@@ -26,7 +26,6 @@ import {colors, radii} from '../../../../shared/config/theme';
 import {useI18n} from '../../../../shared/i18n';
 import {useLayout} from '../../../../shared/lib/layout';
 import {
-  itemWord,
   validItems,
   type MiniGameAnswerState,
   type MiniGameItem,
@@ -345,7 +344,6 @@ export function MiniGameExView({data}: Props) {
     [data?.items, activeGame],
   );
   const shuffle = data?.options?.shuffle !== false;
-  const showDefinitionOnWheel = !!data?.options?.showDefinitionOnWheel;
   const flashCardsLayout =
     data?.options?.flashCardsLayout === 'all' ? 'all' : 'one';
 
@@ -491,7 +489,6 @@ export function MiniGameExView({data}: Props) {
         {activeGame === 'spin-wheel' && (
           <SpinWheel
             items={items}
-            showDefinition={showDefinitionOnWheel}
             canInteract={canInteract}
             state={state}
             onPatch={patch}
@@ -565,11 +562,17 @@ function useSharedCardOrder(
   const ids = useMemo(() => items.map(i => i.id), [items]);
   const defaultSeed = useMemo(() => hashSeed(ids.join('|')), [ids]);
   return useMemo(() => {
+    if (!shuffle) {
+      return ids;
+    }
     if (state.order?.length) {
-      return state.order;
+      const known = new Set(ids);
+      const kept = state.order.filter(id => known.has(id));
+      const missing = ids.filter(id => !kept.includes(id));
+      return kept.length ? [...kept, ...missing] : ids;
     }
     const seed = state.layoutSeed ?? defaultSeed;
-    return shuffle ? shuffleWithSeed(ids, seed) : ids;
+    return shuffleWithSeed(ids, seed);
   }, [defaultSeed, ids, shuffle, state.layoutSeed, state.order]);
 }
 
@@ -598,6 +601,41 @@ function FlashCardsOne({
   const currentId = remaining[index];
   const current = currentId ? byId.get(currentId) : undefined;
   const flipped = !!state.flipped;
+  const frontText = String(current?.term || '').trim();
+  const backText = String(current?.definition || '').trim();
+  const hasBack = !!backText;
+
+  const drawAnim = useRef(new Animated.Value(1)).current;
+  const prevCardId = useRef<string | undefined>(undefined);
+  const [drawing, setDrawing] = useState(false);
+
+  useEffect(() => {
+    if (!currentId) {
+      return;
+    }
+    if (prevCardId.current === undefined) {
+      prevCardId.current = currentId;
+      return;
+    }
+    if (prevCardId.current === currentId) {
+      return;
+    }
+    prevCardId.current = currentId;
+    setDrawing(true);
+    drawAnim.setValue(0);
+    const anim = Animated.timing(drawAnim, {
+      toValue: 1,
+      duration: 480,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    });
+    anim.start(({finished}) => {
+      if (finished) {
+        setDrawing(false);
+      }
+    });
+    return () => anim.stop();
+  }, [currentId, drawAnim]);
 
   const restartAll = () => {
     if (!canInteract) {
@@ -622,6 +660,44 @@ function FlashCardsOne({
     });
   };
 
+  const drawNext = () => {
+    if (!canInteract || remaining.length <= 1 || drawing) {
+      return;
+    }
+    onPatch({
+      flipped: false,
+      cardIndex: (index + 1) % remaining.length,
+    });
+  };
+
+  const markKnown = () => {
+    if (!canInteract || !current || drawing) {
+      return;
+    }
+    onPatch(prev => {
+      const nextKnown = Array.from(
+        new Set([...(prev.knownIds || []), current.id]),
+      );
+      const nextRemaining = order.filter(id => !nextKnown.includes(id));
+      const nextIndex =
+        nextRemaining.length === 0
+          ? 0
+          : index >= nextRemaining.length
+            ? 0
+            : index;
+      return {
+        ...prev,
+        activeGame: 'flash-cards',
+        knownIds: nextKnown,
+        score: nextKnown.length,
+        total: items.length,
+        completed: nextRemaining.length === 0,
+        flipped: false,
+        cardIndex: nextIndex,
+      };
+    });
+  };
+
   if (!remaining.length) {
     return (
       <View style={styles.center}>
@@ -641,6 +717,22 @@ function FlashCardsOne({
     );
   }
 
+  const deckBehind = Math.max(0, remaining.length - 1);
+  const deckLayers = Math.min(Math.max(deckBehind, 1), 4);
+  const canDraw = canInteract && deckBehind > 0 && !drawing;
+  const drawTranslate = drawAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-110, 0],
+  });
+  const drawScale = drawAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.52, 1],
+  });
+  const drawRotate = drawAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['-8deg', '0deg'],
+  });
+
   return (
     <View style={styles.center}>
       <Text style={styles.score}>
@@ -649,76 +741,110 @@ function FlashCardsOne({
           total: items.length,
         })}
       </Text>
-      <FlipCard
-        flipped={flipped}
-        resetKey={currentId || 'card'}
-        disabled={!canInteract}
-        dimmed={!canInteract}
-        duration={550}
-        onPress={() =>
-          canInteract && onPatch(prev => ({...prev, flipped: !prev.flipped}))
-        }
-        style={styles.flashCard}
-        frontStyle={styles.flashFaceFront}
-        backStyle={styles.flashFaceBack}
-        front={
-          <>
-            <Text style={styles.big}>{String(current?.term || '') || ' '}</Text>
-            <Text style={styles.flashHint}>{t('editor.miniGameFlipHint')}</Text>
-          </>
-        }
-        back={
-          <>
-            <Text style={styles.big}>
-              {String(current?.definition || '') || ' '}
-            </Text>
-            <Text style={styles.flashHint}>{t('editor.miniGameFlipHint')}</Text>
-          </>
-        }
-      />
+      <View style={styles.flashDeckRow}>
+        <Pressable
+          style={[
+            styles.flashDeck,
+            deckBehind === 0 ? styles.flashDeckEmpty : null,
+          ]}
+          disabled={!canDraw}
+          onPress={drawNext}
+          accessibilityRole="button"
+          accessibilityLabel={fill(t('editor.miniGameCardCount'), {
+            total: deckBehind,
+          })}>
+          {Array.from({length: deckLayers}).map((_, i) => (
+            <View
+              key={i}
+              style={[
+                styles.flashDeckLayer,
+                {
+                  transform: [{translateX: i * 3}, {translateY: i * 3}],
+                  zIndex: i + 1,
+                },
+              ]}
+            />
+          ))}
+          {deckBehind > 0 ? (
+            <View style={styles.flashDeckBadgeWrap} pointerEvents="none">
+              <View style={styles.flashDeckBadge}>
+                <Text style={styles.flashDeckBadgeText}>{deckBehind}</Text>
+              </View>
+            </View>
+          ) : null}
+        </Pressable>
+        <Animated.View
+          style={[
+            styles.flashCardInDeck,
+            {
+              opacity: drawAnim,
+              transform: [
+                {translateX: drawTranslate},
+                {scale: drawScale},
+                {rotate: drawRotate},
+              ],
+            },
+          ]}>
+          <FlipCard
+            flipped={flipped}
+            resetKey={currentId || 'card'}
+            disabled={!canInteract || drawing}
+            dimmed={!canInteract}
+            duration={650}
+            onPress={() =>
+              canInteract &&
+              !drawing &&
+              onPatch(prev => ({...prev, flipped: !prev.flipped}))
+            }
+            style={styles.flashCardFill}
+            frontStyle={styles.flashFaceFront}
+            backStyle={[
+              styles.flashFaceBack,
+              !hasBack ? styles.flashFaceBlank : null,
+            ]}
+            front={
+              frontText ? (
+                <>
+                  <Text style={styles.big}>{frontText}</Text>
+                  <Text style={styles.flashHint}>
+                    {t('editor.miniGameFlipHint')}
+                  </Text>
+                </>
+              ) : (
+                <View style={styles.flashFaceEmpty} />
+              )
+            }
+            back={
+              hasBack ? (
+                <>
+                  <Text style={styles.big}>{backText}</Text>
+                  <Text style={styles.flashHint}>
+                    {t('editor.miniGameFlipHint')}
+                  </Text>
+                </>
+              ) : (
+                <View style={styles.flashFaceEmpty} />
+              )
+            }
+          />
+        </Animated.View>
+      </View>
       <View style={styles.row}>
         <Pressable
           style={styles.secondaryBtn}
-          disabled={!canInteract}
-          onPress={() => {
-            if (!canInteract) {
-              return;
-            }
-            onPatch({
-              flipped: false,
-              cardIndex: remaining.length ? (index + 1) % remaining.length : 0,
-            });
-          }}>
+          disabled={!canInteract || drawing}
+          onPress={drawNext}>
           <Text style={styles.secondaryBtnText}>{t('editor.miniGameAgain')}</Text>
         </Pressable>
         <Pressable
           style={styles.primaryBtn}
-          disabled={!canInteract || !current}
-          onPress={() => {
-            if (!canInteract || !current) {
-              return;
-            }
-            onPatch(prev => {
-              const nextKnown = Array.from(
-                new Set([...(prev.knownIds || []), current.id]),
-              );
-              return {
-                ...prev,
-                activeGame: 'flash-cards',
-                knownIds: nextKnown,
-                score: nextKnown.length,
-                total: items.length,
-                completed: nextKnown.length >= items.length,
-                flipped: false,
-                cardIndex: 0,
-              };
-            });
-          }}>
+          disabled={!canInteract || !current || drawing}
+          onPress={markKnown}>
           <Text style={styles.primaryBtnText}>{t('editor.miniGameNext')}</Text>
         </Pressable>
         <Pressable
           style={styles.secondaryBtn}
-          disabled={!canInteract}
+          disabled={!canInteract || drawing}
           onPress={restartAll}>
           <Text style={styles.secondaryBtnText}>{t('editor.miniGameRestart')}</Text>
         </Pressable>
@@ -814,16 +940,25 @@ function FlashCardsAll({
               }}
               style={styles.flashAllCard}
               frontStyle={styles.flashAllFaceFront}
-              backStyle={styles.flashAllFaceBack}
+              backStyle={[
+                styles.flashAllFaceBack,
+                !String(item.definition || '').trim()
+                  ? styles.flashFaceBlank
+                  : null,
+              ]}
               front={
                 <Text style={styles.flashAllText}>
                   {String(item.term || '') || ' '}
                 </Text>
               }
               back={
-                <Text style={styles.flashAllText}>
-                  {String(item.definition || '') || ' '}
-                </Text>
+                String(item.definition || '').trim() ? (
+                  <Text style={styles.flashAllText}>
+                    {String(item.definition || '')}
+                  </Text>
+                ) : (
+                  <View style={styles.flashFaceEmpty} />
+                )
               }
             />
           );
@@ -1002,13 +1137,11 @@ function MatchingPairs({
 
 function SpinWheel({
   items,
-  showDefinition,
   canInteract,
   state,
   onPatch,
 }: {
   items: MiniGameItem[];
-  showDefinition: boolean;
   canInteract: boolean;
   state: MiniGameAnswerState;
   onPatch: (patch: MiniGamePatch) => void;
@@ -1020,9 +1153,9 @@ function SpinWheel({
     () =>
       items.map(i => ({
         id: i.id,
-        text: showDefinition && i.definition ? i.definition : i.term,
+        text: String(i.term || '').trim(),
       })),
-    [items, showDefinition],
+    [items],
   );
   const n = Math.max(labels.length, 1);
   const slice = 360 / n;
@@ -1280,7 +1413,7 @@ function Hangman({
     Math.max(0, items.length - 1),
   );
   const item = items[wordIndex];
-  const word = normalizeHangman(item ? itemWord(item) : '');
+  const word = normalizeHangman(String(item?.term || '').trim());
   const revealed = useMemo(
     () => new Set(resolveHangmanRevealed(word, state.hangman)),
     [word, state.hangman],
@@ -1418,10 +1551,7 @@ function Hangman({
     });
   };
 
-  const clue =
-    String(item?.definition || '').trim() && String(item?.term || '').trim()
-      ? item?.definition
-      : undefined;
+  const clue = String(item?.definition || '').trim() || undefined;
 
   return (
     <View>
@@ -1592,7 +1722,10 @@ function WordSearchGame({
 }) {
   const {t} = useI18n();
   const built = useMemo(
-    () => buildWordsearchGrid(items.map(i => itemWord(i))),
+    () =>
+      buildWordsearchGrid(
+        items.map(i => String(i.term || '').trim()).filter(Boolean),
+      ),
     [items],
   );
   const found = new Set((state.foundWords || []).map(w => w.toUpperCase()));
@@ -1909,21 +2042,99 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   flipDimmed: {opacity: 0.85},
+  flashDeckRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 16,
+    width: '100%',
+    maxWidth: 720,
+    alignSelf: 'center',
+  },
+  flashDeck: {
+    width: 84,
+    height: 120,
+    marginRight: 4,
+    position: 'relative',
+  },
+  flashDeckEmpty: {
+    opacity: 0.35,
+  },
+  flashDeckLayer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(63, 40, 198, 0.28)',
+    backgroundColor: '#eee9ff',
+    shadowColor: '#3F28C6',
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    shadowOffset: {width: 0, height: 4},
+    elevation: 2,
+  },
+  flashDeckBadgeWrap: {
+    position: 'absolute',
+    zIndex: 20,
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  flashDeckBadge: {
+    minWidth: 36,
+    height: 36,
+    paddingHorizontal: 8,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(63, 40, 198, 0.92)',
+  },
+  flashDeckBadgeText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '800',
+  },
   flashCard: {
     width: '100%',
     maxWidth: 420,
     minHeight: 220,
     alignSelf: 'center',
   },
+  flashCardInDeck: {
+    flex: 1,
+    minWidth: 0,
+    maxWidth: 420,
+    minHeight: 220,
+  },
+  flashCardFill: {
+    width: '100%',
+    minHeight: 220,
+  },
   flashFaceFront: {
     backgroundColor: '#f7f7ff',
-    borderWidth: 1,
-    borderColor: 'rgba(63, 40, 198, 0.25)',
+    borderWidth: 2,
+    borderColor: 'rgba(63, 40, 198, 0.35)',
   },
   flashFaceBack: {
     backgroundColor: '#efeaff',
-    borderWidth: 1,
-    borderColor: 'rgba(63, 40, 198, 0.25)',
+    borderWidth: 2,
+    borderColor: 'rgba(63, 40, 198, 0.35)',
+  },
+  flashFaceBlank: {
+    backgroundColor: '#f4f4f8',
+    borderColor: 'rgba(63, 40, 198, 0.18)',
+  },
+  flashFaceEmpty: {
+    width: '42%',
+    height: 3,
+    borderRadius: 999,
+    backgroundColor: 'rgba(63, 40, 198, 0.12)',
   },
   flashHint: {
     fontSize: 12,

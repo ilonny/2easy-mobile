@@ -88,6 +88,13 @@ export const templates: TTemplate[] = [
     descriptionDefault: 'Read the sentence and choose True or False',
   },
   {
+    type: 'TABLES',
+    titleKey: 'templates.tables',
+    titleDefault: 'Tables',
+    descriptionKey: 'templates.tablesDesc',
+    descriptionDefault: 'Up to 10 tables, custom rows and columns, italic and color',
+  },
+  {
     type: 'match_words',
     titleKey: 'templates.match',
     titleDefault: 'Match',
@@ -125,33 +132,6 @@ export const templates: TTemplate[] = [
     descriptionKey: 'templates.miniGamesDesc',
     descriptionDefault:
       'Flash cards, memory, wheel, hangman, wordsearch — one content set, many games',
-    subItems: [
-      {
-        type: 'flash-cards',
-        titleKey: 'templates.miniGameFlashCards',
-        titleDefault: 'Flash cards',
-      },
-      {
-        type: 'matching-pairs',
-        titleKey: 'templates.miniGameMatchingPairs',
-        titleDefault: 'Matching pairs',
-      },
-      {
-        type: 'spin-wheel',
-        titleKey: 'templates.miniGameSpinWheel',
-        titleDefault: 'Spin the wheel',
-      },
-      {
-        type: 'hangman',
-        titleKey: 'templates.miniGameHangman',
-        titleDefault: 'Hangman',
-      },
-      {
-        type: 'wordsearch',
-        titleKey: 'templates.miniGameWordsearch',
-        titleDefault: 'Wordsearch',
-      },
-    ],
   },
   {
     type: 'free-input-form',
@@ -200,6 +180,10 @@ const TYPE_META: Record<string, {titleKey: string; titleDefault: string}> = {
     titleKey: 'templates.trueFalse',
     titleDefault: 'TRUE / FALSE',
   },
+  TABLES: {
+    titleKey: 'templates.tables',
+    titleDefault: 'Tables',
+  },
   'fill-gaps-drag': {
     titleKey: 'templates.fillGapsDrag',
     titleDefault: 'Drag word from list',
@@ -230,6 +214,7 @@ const TYPE_META: Record<string, {titleKey: string; titleDefault: string}> = {
     titleDefault: 'Free text input',
   },
   int: {titleKey: 'templates.integrations', titleDefault: 'Integrations'},
+  mini_games: {titleKey: 'templates.miniGames', titleDefault: 'Mini games'},
   mini_game: {titleKey: 'templates.miniGames', titleDefault: 'Mini games'},
   'flash-cards': {
     titleKey: 'templates.miniGameFlashCards',

@@ -36,6 +36,7 @@ import {fetchCourseLessons, saveCourse, type Course} from '../api/coursesApi';
 type Props = {
   visible: boolean;
   course?: Course | null;
+  folderId?: number | null;
   onClose: () => void;
   onSaved: (courseId: number) => void;
 };
@@ -47,7 +48,13 @@ function isLessonLinkedToSource(lesson: Lesson, sourceId: number): boolean {
   );
 }
 
-export function CreateCourseModal({visible, course, onClose, onSaved}: Props) {
+export function CreateCourseModal({
+  visible,
+  course,
+  folderId,
+  onClose,
+  onSaved,
+}: Props) {
   const insets = useSafeAreaInsets();
   const {t} = useI18n();
   const {profile} = useAuth();
@@ -199,6 +206,7 @@ export function CreateCourseModal({visible, course, onClose, onSaved}: Props) {
         description,
         tags,
         ...(image_id != null ? {image_id} : {}),
+        ...(folderId != null && !isEdit ? {folder_id: folderId} : {}),
         lesson_ids: orderedLessons.map(lesson => Number(lesson.id)),
       });
       const courseId = Number(res?.createdCourse?.id || course?.id || 0);

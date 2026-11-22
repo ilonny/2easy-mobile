@@ -42,6 +42,7 @@ export const AI_SUPPORTED_EX_TYPES = [
   'match-word-word',
   'match-word-column',
   'free-input-form',
+  'TABLES',
 ] as const;
 
 type ChatMessage = {

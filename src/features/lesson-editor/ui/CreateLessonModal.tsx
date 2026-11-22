@@ -38,6 +38,7 @@ type Props = {
   onClose: () => void;
   onCreated: (lessonId: number) => void;
   courseId?: number;
+  folderId?: number | null;
   initialTitle?: string;
   initialDescription?: string;
   initialTags?: string;
@@ -50,6 +51,7 @@ export function CreateLessonModal({
   onClose,
   onCreated,
   courseId,
+  folderId,
   initialTitle = '',
   initialDescription = '',
   initialTags = '',
@@ -113,6 +115,7 @@ export function CreateLessonModal({
         tags,
         ...(image_id != null ? {image_id} : {}),
         ...(courseId != null ? {course_id: courseId} : {}),
+        ...(folderId != null && courseId == null ? {folder_id: folderId} : {}),
       })) as {success?: boolean; createdLesson?: {id?: number}};
 
       const lessonId = Number(res?.createdLesson?.id || 0);

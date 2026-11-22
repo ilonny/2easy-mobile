@@ -16,4 +16,5 @@ export {Text2ColExView} from './Text2ColExView';
 export {TextChecklistExView} from './TextChecklistExView';
 export {TextDefaultExView} from './TextDefaultExView';
 export {TextStickerExView} from './TextStickerExView';
+export {TablesExView} from './TablesExView';
 export {VideoExView} from './VideoExView';

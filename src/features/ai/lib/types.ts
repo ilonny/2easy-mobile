@@ -18,6 +18,7 @@ export const AI_EXERCISE_TYPE_OPTIONS: AiExerciseTypeOption[] = [
   {type: 'match-word-word', titleKey: 'templates.matchWordWord'},
   {type: 'match-word-column', titleKey: 'templates.matchWordColumn'},
   {type: 'free-input-form', titleKey: 'templates.freeInput'},
+  {type: 'TABLES', titleKey: 'templates.tables'},
 ];
 
 export type AiChatMessage = {

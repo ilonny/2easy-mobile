@@ -1,6 +1,8 @@
 import {ActivityIndicator, Pressable, StyleSheet, Text, View} from 'react-native';
+import {GestureDetector, type GestureType} from 'react-native-gesture-handler';
 
 import {getLessonCoverSource} from '../../../entities/lesson';
+import {useI18n} from '../../../shared/i18n';
 import {colors, radii} from '../../../shared/config/theme';
 import {SmartImage} from '../../../shared/ui';
 
@@ -15,7 +17,15 @@ type Props = {
   item: CatalogCardItem;
   onPress: () => void;
   onMenuPress?: () => void;
+  /** When false, long-press does not open the menu (e.g. drag-reorder). Default true. */
+  menuOnLongPress?: boolean;
+  /**
+   * Gesture on the ↔️ handle for drag-reorder (site-style).
+   * When set, the whole card is not a drag target.
+   */
+  dragHandleGesture?: GestureType;
   locked?: boolean;
+  isFolder?: boolean;
   /** Optional secondary action (e.g. Homework / Create homework). */
   actionLabel?: string;
   onActionPress?: () => void;
@@ -36,30 +46,60 @@ export function LessonCard({
   item,
   onPress,
   onMenuPress,
+  menuOnLongPress = true,
+  dragHandleGesture,
   locked,
+  isFolder,
   actionLabel,
   onActionPress,
   actionLoading,
 }: Props) {
+  const {t} = useI18n();
+  const title = item.title || `#${item.id}`;
+  const handleNode = (
+    <View
+      accessibilityRole="button"
+      accessibilityLabel={t('lessons.dragHandle')}
+      style={styles.dragHandle}>
+      <Text style={styles.dragHandleIcon}>↔️</Text>
+    </View>
+  );
+
   return (
     <View style={styles.wrap}>
-      <Pressable
-        onPress={onPress}
-        onLongPress={onMenuPress}
-        style={({pressed}) => [styles.card, pressed && styles.pressed]}>
+      <View style={[styles.card, styles.cardPress]}>
         <View style={styles.imageWrap}>
-          <SmartImage
-            source={getLessonCoverSource(item.image_path)}
-            style={styles.image}
-            resizeMode="cover"
-          />
-          {locked ? (
-            <View style={styles.lockOverlay} pointerEvents="none">
-              <View style={styles.lockBadge}>
-                <Text style={styles.lockIcon}>🔒</Text>
+          <Pressable
+            onPress={onPress}
+            onLongPress={
+              dragHandleGesture
+                ? undefined
+                : menuOnLongPress
+                  ? onMenuPress
+                  : undefined
+            }
+            style={({pressed}) => [
+              styles.imagePress,
+              pressed && styles.pressed,
+            ]}>
+            <SmartImage
+              source={getLessonCoverSource(item.image_path)}
+              style={styles.image}
+              resizeMode="cover"
+            />
+            {locked ? (
+              <View style={styles.lockOverlay} pointerEvents="none">
+                <View style={styles.lockBadge}>
+                  <Text style={styles.lockIcon}>🔒</Text>
+                </View>
               </View>
-            </View>
-          ) : null}
+            ) : null}
+            {isFolder ? (
+              <View style={styles.folderBadge} pointerEvents="none">
+                <Text style={styles.folderBadgeText}>📁</Text>
+              </View>
+            ) : null}
+          </Pressable>
           {!!onMenuPress && (
             <Pressable
               onPress={onMenuPress}
@@ -68,23 +108,36 @@ export function LessonCard({
               accessibilityLabel="More actions"
               style={({pressed}) => [
                 styles.menuBtn,
+                isFolder && styles.menuBtnFolder,
                 pressed && styles.menuBtnPressed,
               ]}>
               <KebabIcon />
             </Pressable>
           )}
+          {/* Sibling of Pressable so RNGH long-press + pan is not stolen. */}
+          {dragHandleGesture ? (
+            <GestureDetector gesture={dragHandleGesture}>
+              {handleNode}
+            </GestureDetector>
+          ) : null}
         </View>
-        <View style={styles.body}>
-          <Text style={styles.title} numberOfLines={2}>
-            {item.title || `#${item.id}`}
-          </Text>
-          {!!item.tags && (
-            <Text style={styles.tags} numberOfLines={1}>
-              {item.tags}
+        <Pressable
+          onPress={onPress}
+          style={({pressed}) => [pressed && styles.pressed]}>
+          <View style={styles.body}>
+            <Text style={styles.title} numberOfLines={2}>
+              {isFolder
+                ? t('lessons.folderTitlePrefix').replace('{{title}}', title)
+                : title}
             </Text>
-          )}
-        </View>
-      </Pressable>
+            {!!item.tags && (
+              <Text style={styles.tags} numberOfLines={1}>
+                {item.tags}
+              </Text>
+            )}
+          </View>
+        </Pressable>
+      </View>
       {!!actionLabel && !!onActionPress ? (
         <Pressable
           onPress={onActionPress}
@@ -116,6 +169,12 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: colors.border,
+  },
+  cardPress: {
+    width: '100%',
+  },
+  imagePress: {
+    ...StyleSheet.absoluteFill,
   },
   lockOverlay: {
     ...StyleSheet.absoluteFill,
@@ -165,8 +224,42 @@ const styles = StyleSheet.create({
     shadowOffset: {width: 0, height: 2},
     elevation: 3,
   },
+  menuBtnFolder: {
+    left: 8,
+    right: undefined,
+  },
   menuBtnPressed: {
     backgroundColor: colors.primarySoft,
+  },
+  folderBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  folderBadgeText: {
+    fontSize: 16,
+  },
+  dragHandle: {
+    position: 'absolute',
+    bottom: 6,
+    right: 6,
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: 'rgba(32, 16, 125, 0.42)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 2,
+  },
+  dragHandleIcon: {
+    fontSize: 16,
+    color: colors.white,
   },
   kebab: {
     alignItems: 'center',

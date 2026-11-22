@@ -5,7 +5,7 @@ import {colors, radii} from '../config/theme';
 import {useLayout} from '../lib/layout';
 
 type Props = TextInputProps & {
-  label: string;
+  label?: string;
   error?: string;
 };
 
@@ -17,7 +17,11 @@ export const TextField = forwardRef<TextInput, Props>(function TextField(
 
   return (
     <View style={styles.wrap}>
-      <Text style={[styles.label, isTablet && styles.labelTablet]}>{label}</Text>
+      {!!label ? (
+        <Text style={[styles.label, isTablet && styles.labelTablet]}>
+          {label}
+        </Text>
+      ) : null}
       <TextInput
         ref={ref}
         {...rest}

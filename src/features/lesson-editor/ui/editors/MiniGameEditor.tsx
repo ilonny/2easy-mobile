@@ -50,7 +50,7 @@ export function MiniGameEditor({
   const {t} = useI18n();
   const [title, setTitle] = useState("Let's play!");
   const [titleColor, setTitleColor] = useState(TITLE_COLOR);
-  const [subtitle, setSubtitle] = useState('Mini game');
+  const [subtitle, setSubtitle] = useState('');
   const [description, setDescription] = useState('');
   const [activeGame, setActiveGame] = useState<MiniGameKind>('flash-cards');
   const [items, setItems] = useState<MiniGameItem[]>([makeItem()]);
@@ -70,7 +70,7 @@ export function MiniGameEditor({
     const d = exercise?.data || {};
     setTitle(String(d.title || "Let's play!"));
     setTitleColor(readTitleColor(d.titleColor));
-    setSubtitle(String(d.subtitle || 'Mini game'));
+    setSubtitle(String(d.subtitle ?? ''));
     setDescription(String(d.description || ''));
     setImages(attachmentsToPicked(d.images));
     setActiveGame(resolveActiveGame(templateType || exercise?.type, d as any));
@@ -96,13 +96,21 @@ export function MiniGameEditor({
 
   const onSave = async () => {
     const keepEmpty = activeGame === 'flash-cards';
-    const usable = keepEmpty ? items : items.filter(isMiniGameItemValid);
+    const isWheel = activeGame === 'spin-wheel';
+    const isWordOnly = isWheel || activeGame === 'wordsearch';
+    const isHangman = activeGame === 'hangman';
+    const needsWord = isWordOnly || isHangman;
+    const isItemOk = (i: MiniGameItem) =>
+      needsWord
+        ? !!String(i.term || '').trim()
+        : isMiniGameItemValid(i);
+    const usable = keepEmpty ? items : items.filter(isItemOk);
     const min = minItemsForGame(activeGame);
     if (usable.length < min) {
       if (!keepEmpty) {
         const mark: Record<string, boolean> = {};
         items.forEach(i => {
-          if (!isMiniGameItemValid(i)) {
+          if (!isItemOk(i)) {
             mark[i.id] = true;
           }
         });
@@ -130,8 +138,19 @@ export function MiniGameEditor({
           description,
           images: hero,
           activeGame,
-          items: validItems(items, {keepEmpty}),
-          options: {shuffle, showDefinitionOnWheel, flashCardsLayout},
+          items: needsWord
+            ? usable.map(i => ({
+                ...i,
+                term: String(i.term || '').trim(),
+                definition:
+                  String(i.definition || '').trim() || undefined,
+              }))
+            : validItems(items, {keepEmpty}),
+          options: {
+            shuffle,
+            showDefinitionOnWheel: isWheel ? false : showDefinitionOnWheel,
+            flashCardsLayout,
+          },
         },
       });
       onSaved();
@@ -242,16 +261,6 @@ export function MiniGameEditor({
         <Text style={styles.optionCheck}>{shuffle ? '☑' : '☐'}</Text>
         <Text style={styles.optionText}>{t('editor.miniGameShuffle')}</Text>
       </Pressable>
-      {activeGame === 'spin-wheel' ? (
-        <Pressable
-          style={styles.optionRow}
-          onPress={() => setShowDefinitionOnWheel(v => !v)}>
-          <Text style={styles.optionCheck}>
-            {showDefinitionOnWheel ? '☑' : '☐'}
-          </Text>
-          <Text style={styles.optionText}>{t('editor.miniGameWheelDefs')}</Text>
-        </Pressable>
-      ) : null}
       {activeGame === 'flash-cards' ? (
         <View style={styles.flashLayoutBlock}>
           <Text style={styles.optionText}>{t('editor.miniGameFlashLayout')}</Text>
@@ -289,15 +298,40 @@ export function MiniGameEditor({
       ) : null}
 
       {items.map((item, index) => {
+        const isWordOnly =
+          activeGame === 'spin-wheel' || activeGame === 'wordsearch';
+        const isHangman = activeGame === 'hangman';
+        const isMatching = activeGame === 'matching-pairs';
+        const needsWord = isWordOnly || isHangman;
         const showError =
           activeGame !== 'flash-cards' &&
           touched[item.id] &&
-          !isMiniGameItemValid(item);
+          (needsWord
+            ? !String(item.term || '').trim()
+            : !isMiniGameItemValid(item));
+        const termLabel = isWordOnly
+          ? t('editor.word')
+          : isHangman
+            ? t('editor.miniGameSecretWord')
+            : isMatching
+              ? undefined
+              : t('editor.miniGameFrontSide');
+        const defLabel = isHangman
+          ? t('editor.miniGameHint')
+          : isMatching
+            ? undefined
+            : t('editor.miniGameBackSide');
+        const defPlaceholder = isHangman
+          ? t('editor.miniGameHintPlaceholder')
+          : t('editor.miniGameDefPlaceholder');
         return (
           <View key={item.id} style={editorStyles.itemCard}>
             <View style={styles.itemHead}>
               <Text style={styles.itemLabel}>
-                {t('editor.miniGameItemN').replace('{{n}}', String(index + 1))}
+                {(needsWord
+                  ? t('editor.miniGameWordN')
+                  : t('editor.miniGameItemN')
+                ).replace('{{n}}', String(index + 1))}
               </Text>
               {items.length > 1 ? (
                 <Pressable
@@ -311,21 +345,31 @@ export function MiniGameEditor({
               ) : null}
             </View>
             <TextField
-              label={t('editor.miniGameFrontSide')}
+              label={termLabel}
               value={item.term}
               placeholder={t('editor.miniGameTermPlaceholder')}
               onChangeText={text => {
                 setTouched(prev => ({...prev, [item.id]: true}));
                 updateItem(item.id, {term: text});
               }}
-              error={showError ? t('editor.miniGameNeedTermShort') : undefined}
+              error={
+                showError
+                  ? needsWord
+                    ? t('editor.miniGameNeedWord')
+                    : t('editor.miniGameNeedTermShort')
+                  : undefined
+              }
             />
-            <TextField
-              label={t('editor.miniGameBackSide')}
-              value={item.definition || ''}
-              placeholder={t('editor.miniGameDefPlaceholder')}
-              onChangeText={text => updateItem(item.id, {definition: text})}
-            />
+            {!isWordOnly ? (
+              <TextField
+                label={defLabel}
+                value={item.definition || ''}
+                placeholder={defPlaceholder}
+                onChangeText={text =>
+                  updateItem(item.id, {definition: text})
+                }
+              />
+            ) : null}
           </View>
         );
       })}
@@ -334,7 +378,11 @@ export function MiniGameEditor({
         style={editorStyles.addBtn}
         onPress={() => setItems(prev => prev.concat(makeItem()))}>
         <Text style={editorStyles.addBtnText}>
-          {t('editor.miniGameAddItem')}
+          {activeGame === 'spin-wheel' ||
+          activeGame === 'wordsearch' ||
+          activeGame === 'hangman'
+            ? t('editor.miniGameAddWord')
+            : t('editor.miniGameAddItem')}
         </Text>
       </Pressable>
     </EditorShell>

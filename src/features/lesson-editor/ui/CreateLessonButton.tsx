@@ -15,6 +15,7 @@ type Props = {
   description?: string;
   tags?: string;
   courseId?: number;
+  folderId?: number | null;
   buttonTitle?: string;
   onCreated?: (lessonId: number) => void;
   /** Return false to keep the modal closed (e.g. send the user to Subscription). */
@@ -30,6 +31,7 @@ export function CreateLessonButton({
   description = '',
   tags = '',
   courseId,
+  folderId,
   buttonTitle,
   onCreated,
   beforeOpen,
@@ -53,6 +55,7 @@ export function CreateLessonButton({
         visible={modalOpen}
         onClose={() => setModalOpen(false)}
         courseId={courseId}
+        folderId={folderId}
         initialTitle={title || ''}
         initialDescription={description}
         initialTags={tags}

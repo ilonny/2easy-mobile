@@ -8,6 +8,7 @@ export type Course = {
   user_id?: number;
   image_path?: string;
   tags?: string;
+  folder_id?: number | null;
   canEdit?: boolean;
   lesson_ids?: string | number[];
   'lesson_relations.status'?: LessonRelationStatus;
@@ -68,9 +69,10 @@ export async function saveCourse(payload: {
   description?: string;
   tags?: string;
   image_id?: number;
+  folder_id?: number | null;
   lesson_ids: number[];
 }) {
-  const {id, lesson_ids, ...rest} = payload;
+  const {id, lesson_ids, folder_id, ...rest} = payload;
   return postJson<{
     success?: boolean;
     message?: string;
@@ -81,6 +83,7 @@ export async function saveCourse(payload: {
     data: {
       ...rest,
       ...(id ? {id} : {}),
+      ...(folder_id != null && !id ? {folder_id} : {}),
       lesson_ids: JSON.stringify(lesson_ids),
     },
   });

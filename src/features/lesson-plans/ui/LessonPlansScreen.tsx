@@ -27,6 +27,7 @@ import {catalogTileWidth, useLayout} from '../../../shared/lib/layout';
 import {
   ActionMenuModal,
   AppDialog,
+  Breadcrumbs,
   Button,
   type ActionMenuItem,
 } from '../../../shared/ui';
@@ -43,19 +44,29 @@ import {
   copyLesson,
   deleteLesson,
 } from '../../lesson-player/api/lessonApi';
-import {EditLessonMetaModal, CreateLessonButton} from '../../lesson-editor';
+import {CreateLessonModal, EditLessonMetaModal} from '../../lesson-editor';
 import {AppHeader} from '../../app-shell';
+import {
+  moveCatalogItem,
+  reorderCatalog,
+} from '../api/catalogApi';
 import type {Course} from '../api/coursesApi';
+import type {CatalogFolder, CatalogItem} from '../model/catalogTypes';
+import {isCatalogCourse, isCatalogFolder} from '../model/catalogTypes';
 import {useLessonPlans} from '../model/useLessonPlans';
 import {AddLessonToCourseModal} from './AddLessonToCourseModal';
 import {AttachLessonToStudentsModal} from './AttachLessonToStudentsModal';
+import {CatalogSortableGrid} from './CatalogSortableGrid';
 import {CreateCourseModal} from './CreateCourseModal';
+import {CreateFolderModal} from './CreateFolderModal';
+import {DeleteFolderModal} from './DeleteFolderModal';
 import {LessonCard} from './LessonCard';
+import {MoveToFolderModal} from './MoveToFolderModal';
 import {TryNowModal} from './TryNowModal';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
-type CatalogRow = Lesson | Course | Board;
+type CatalogRow = Lesson | Course | Board | CatalogItem;
 
 const AnimatedFlatList = Animated.createAnimatedComponent(FlatList<CatalogRow>);
 
@@ -75,6 +86,16 @@ export function LessonPlansScreen() {
   const {
     lessons,
     courses,
+    catalogItems,
+    setCatalogItems,
+    rootFolders,
+    currentFolderId,
+    currentFolderMeta,
+    enterFolder,
+    leaveFolder,
+    refreshCatalog,
+    isMyCatalogTab,
+    useCatalogMode,
     isCoursesTab,
     isBoardsTab,
     hasMyCourses,
@@ -98,7 +119,13 @@ export function LessonPlansScreen() {
   const [boards, setBoards] = useState<Board[]>([]);
   const [boardsLoading, setBoardsLoading] = useState(false);
   const [createBoardOpen, setCreateBoardOpen] = useState(false);
+  const [createLessonOpen, setCreateLessonOpen] = useState(false);
   const [createCourseOpen, setCreateCourseOpen] = useState(false);
+  const [createFolderOpen, setCreateFolderOpen] = useState(false);
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const [editFolder, setEditFolder] = useState<CatalogFolder | null>(null);
+  const [deleteFolderTarget, setDeleteFolderTarget] =
+    useState<CatalogFolder | null>(null);
   const [editCourse, setEditCourse] = useState<Course | null>(null);
   const [editBoard, setEditBoard] = useState<Board | null>(null);
   const [attachBoard, setAttachBoard] = useState<Board | null>(null);
@@ -107,6 +134,8 @@ export function LessonPlansScreen() {
 
   const [menuLesson, setMenuLesson] = useState<Lesson | null>(null);
   const [menuCourse, setMenuCourse] = useState<Course | null>(null);
+  const [menuFolder, setMenuFolder] = useState<CatalogFolder | null>(null);
+  const [moveItem, setMoveItem] = useState<CatalogItem | null>(null);
   const [editLesson, setEditLesson] = useState<Lesson | null>(null);
   const [attachLesson, setAttachLesson] = useState<Lesson | null>(null);
   const [attachCourse, setAttachCourse] = useState<Course | null>(null);
@@ -132,6 +161,9 @@ export function LessonPlansScreen() {
           b.tags?.toLowerCase().includes(q),
       );
     }
+    if (isMyCatalogTab) {
+      return catalogItems;
+    }
     const rows = isCoursesTab ? courses : lessons;
     if (isCoursesTab || !isFreeTariff || isStudent) {
       return rows;
@@ -141,6 +173,8 @@ export function LessonPlansScreen() {
     isBoardsTab,
     boards,
     search,
+    isMyCatalogTab,
+    catalogItems,
     isCoursesTab,
     courses,
     lessons,
@@ -202,9 +236,8 @@ export function LessonPlansScreen() {
     }).start();
   }, [headerHeight, headerTranslate]);
 
-  const onScroll = useCallback(
-    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-      const y = event.nativeEvent.contentOffset.y;
+  const onScrollOffset = useCallback(
+    (y: number) => {
       const diff = y - lastScrollY.current;
 
       if (y <= 8) {
@@ -220,15 +253,39 @@ export function LessonPlansScreen() {
     [hideHeader, showHeader],
   );
 
+  const onScroll = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      onScrollOffset(event.nativeEvent.contentOffset.y);
+    },
+    [onScrollOffset],
+  );
+
   const onRefresh = async () => {
     setRefreshing(true);
     if (isBoardsTab) {
       await loadBoards();
+    } else if (isMyCatalogTab) {
+      await refreshCatalog();
     } else {
       await reload();
     }
     setRefreshing(false);
   };
+
+  const onCatalogReorder = useCallback(
+    async (data: CatalogItem[]) => {
+      setCatalogItems(data);
+      try {
+        await reorderCatalog(
+          currentFolderId,
+          data.map(item => ({type: item.type, id: Number(item.id)})),
+        );
+      } catch {
+        await refreshCatalog(true);
+      }
+    },
+    [currentFolderId, refreshCatalog, setCatalogItems],
+  );
 
   const requireSubscription = () => {
     if (isStudent) {
@@ -280,6 +337,13 @@ export function LessonPlansScreen() {
     navigation.navigate('Course', {courseId: course.id});
   };
 
+  const closeMenus = () => {
+    setMenuLesson(null);
+    setMenuCourse(null);
+    setMenuBoard(null);
+    setMenuFolder(null);
+  };
+
   const onMenuPress = (lesson: Lesson) => {
     if (!isAuthorized) {
       setTryNowVisible(true);
@@ -288,7 +352,7 @@ export function LessonPlansScreen() {
     if (!requireSubscription()) {
       return;
     }
-    setMenuCourse(null);
+    closeMenus();
     setMenuLesson(lesson);
   };
 
@@ -300,17 +364,48 @@ export function LessonPlansScreen() {
     if (!requireSubscription()) {
       return;
     }
-    setMenuLesson(null);
+    closeMenus();
     setMenuCourse(course);
+  };
+
+  const onFolderMenuPress = (folder: CatalogFolder) => {
+    if (!requireSubscription()) {
+      return;
+    }
+    closeMenus();
+    setMenuFolder(folder);
   };
 
   const onBoardMenuPress = (board: Board) => {
     if (!requireSubscription()) {
       return;
     }
-    setMenuLesson(null);
-    setMenuCourse(null);
+    closeMenus();
     setMenuBoard(board);
+  };
+
+  const onCatalogItemPress = (item: CatalogItem) => {
+    if (isCatalogFolder(item)) {
+      enterFolder(item);
+      return;
+    }
+    if (isCatalogCourse(item)) {
+      onPressCourse(item);
+      return;
+    }
+    onPressLesson(item);
+  };
+
+  const onCatalogItemMenu = (item: CatalogItem) => {
+    if (isCatalogFolder(item)) {
+      onFolderMenuPress(item);
+      return;
+    }
+    if (isCatalogCourse(item)) {
+      onCourseMenuPress(item);
+      return;
+    }
+    onMenuPress(item);
   };
 
   const openCreateBoard = () => {
@@ -346,10 +441,23 @@ export function LessonPlansScreen() {
         },
       ];
     }
+    if (menuFolder) {
+      return [
+        {
+          label: t('lessons.editFolder'),
+          onPress: () => setEditFolder(menuFolder),
+        },
+        {
+          label: t('common.delete'),
+          destructive: true,
+          onPress: () => setDeleteFolderTarget(menuFolder),
+        },
+      ];
+    }
     if (menuCourse) {
       const ownCourse =
         profileId > 0 && Number(menuCourse.user_id) === profileId;
-      return [
+      const items: ActionMenuItem[] = [
         ...(ownCourse
           ? [
               {
@@ -363,6 +471,14 @@ export function LessonPlansScreen() {
           onPress: () => setAttachCourse(menuCourse),
         },
       ];
+      if (ownCourse && useCatalogMode) {
+        items.push({
+          label: t('lessons.moveToFolder'),
+          onPress: () =>
+            setMoveItem({...menuCourse, type: 'course'} as CatalogItem),
+        });
+      }
+      return items;
     }
     if (!menuLesson) {
       return [];
@@ -386,6 +502,13 @@ export function LessonPlansScreen() {
       label: t('lessons.addToCourse'),
       onPress: () => setCourseLesson(lesson),
     });
+    if (own && useCatalogMode) {
+      items.push({
+        label: t('lessons.moveToFolder'),
+        onPress: () =>
+          setMoveItem({...lesson, type: 'lesson'} as CatalogItem),
+      });
+    }
     items.push({
       label: twoEasy ? t('lessons.addToMyLessons') : t('lessons.copyLesson'),
       onPress: () => {
@@ -412,7 +535,18 @@ export function LessonPlansScreen() {
       });
     }
     return items;
-  }, [menuBoard, menuLesson, menuCourse, profileId, reload, t, navigation]);
+  }, [
+    menuBoard,
+    menuFolder,
+    menuLesson,
+    menuCourse,
+    profileId,
+    reload,
+    t,
+    navigation,
+    isMyCatalogTab,
+    useCatalogMode,
+  ]);
 
   const onConfirmDelete = async () => {
     if (!deleteTarget) {
@@ -427,7 +561,11 @@ export function LessonPlansScreen() {
       }
       setDeleteTarget(null);
       setNotice(t('lessons.deleteLessonSuccess'));
-      await reload();
+      if (isMyCatalogTab) {
+        await refreshCatalog();
+      } else {
+        await reload();
+      }
     } catch {
       setNotice(t('lessons.deleteLessonFailed'));
     } finally {
@@ -586,29 +724,30 @@ export function LessonPlansScreen() {
 
           {isAuthorized && tab === 'my' ? (
             <View style={styles.createWrap}>
-              <CreateLessonButton
-                beforeOpen={() => requireSubscription()}
+              <Button
+                title={t('lessons.actions')}
+                onPress={() => {
+                  if (!requireSubscription()) {
+                    return;
+                  }
+                  setActionsOpen(true);
+                }}
               />
-              {isTeacher ? (
-                <Button
-                  title={t('lessons.createCourse')}
-                  variant="secondary"
-                  onPress={() => {
-                    if (!requireSubscription()) {
-                      return;
-                    }
-                    setCreateCourseOpen(true);
-                  }}
-                />
-              ) : null}
-              {isTeacher ? (
-                <Button
-                  title={t('boards.createBoard')}
-                  variant="secondary"
-                  onPress={openCreateBoard}
-                />
-              ) : null}
             </View>
+          ) : null}
+
+          {isMyCatalogTab && currentFolderId != null ? (
+            <Breadcrumbs
+              items={[
+                {
+                  label: t('lessons.backToLessons'),
+                  onPress: leaveFolder,
+                },
+                {
+                  label: currentFolderMeta?.title || t('lessons.createFolder'),
+                },
+              ]}
+            />
           ) : null}
 
           {isAuthorized && isCoursesTab && isTeacher && tab === 'myCourses' ? (
@@ -692,6 +831,28 @@ export function LessonPlansScreen() {
               <Text style={styles.retry}>{t('lessonPlans.retry')}</Text>
             </Pressable>
           </View>
+        ) : isMyCatalogTab ? (
+          <CatalogSortableGrid
+            data={catalogItems}
+            columns={catalogColumns}
+            gap={gap}
+            tileWidth={tileWidth}
+            listPaddingTop={listPaddingTop}
+            listPaddingBottom={insets.bottom + 24}
+            canDrag={!search.trim()}
+            showMenu={showMenu}
+            isFreeTariff={isFreeTariff}
+            isStudent={isStudent}
+            refreshing={refreshing}
+            emptyComponent={
+              <Text style={styles.empty}>{t('lessonPlans.empty')}</Text>
+            }
+            onScroll={onScroll}
+            onRefresh={onRefresh}
+            onReorder={data => void onCatalogReorder(data)}
+            onPressItem={onCatalogItemPress}
+            onMenuItem={onCatalogItemMenu}
+          />
         ) : (
           <AnimatedFlatList
             key={`cols-${catalogColumns}-${isBoardsTab ? 'b' : isCoursesTab ? 'c' : 'l'}`}
@@ -786,14 +947,123 @@ export function LessonPlansScreen() {
       />
 
       <ActionMenuModal
-        visible={!!menuLesson || !!menuCourse || !!menuBoard}
-        title={menuLesson?.title || menuCourse?.title || menuBoard?.title}
+        visible={!!menuLesson || !!menuCourse || !!menuBoard || !!menuFolder}
+        title={
+          menuLesson?.title ||
+          menuCourse?.title ||
+          menuBoard?.title ||
+          menuFolder?.title
+        }
         items={menuItems}
         cancelLabel={t('common.cancel')}
+        onClose={closeMenus}
+      />
+
+      <ActionMenuModal
+        visible={actionsOpen}
+        title={t('lessons.actions')}
+        cancelLabel={t('common.cancel')}
+        onClose={() => setActionsOpen(false)}
+        items={[
+          {
+            label: t('editor.createLesson'),
+            onPress: () => setCreateLessonOpen(true),
+          },
+          ...(isTeacher
+            ? [
+                {
+                  label: t('lessons.createCourse'),
+                  onPress: () => setCreateCourseOpen(true),
+                },
+              ]
+            : []),
+          ...(isTeacher && currentFolderId == null
+            ? [
+                {
+                  label: t('boards.createBoard'),
+                  onPress: openCreateBoard,
+                },
+              ]
+            : []),
+          ...(isTeacher && isMyCatalogTab && currentFolderId == null
+            ? [
+                {
+                  label: t('lessons.createFolder'),
+                  onPress: () => setCreateFolderOpen(true),
+                },
+              ]
+            : []),
+        ]}
+      />
+
+      <CreateLessonModal
+        visible={createLessonOpen}
+        onClose={() => setCreateLessonOpen(false)}
+        folderId={currentFolderId}
+        onCreated={lessonId => {
+          setCreateLessonOpen(false);
+          if (isMyCatalogTab) {
+            void refreshCatalog();
+          } else {
+            void reload();
+          }
+          navigation.navigate('LessonEditor', {lessonId});
+        }}
+      />
+
+      <CreateFolderModal
+        visible={createFolderOpen || !!editFolder}
+        folder={editFolder}
         onClose={() => {
-          setMenuLesson(null);
-          setMenuCourse(null);
-          setMenuBoard(null);
+          setCreateFolderOpen(false);
+          setEditFolder(null);
+        }}
+        onSaved={() => {
+          setCreateFolderOpen(false);
+          setEditFolder(null);
+          void refreshCatalog();
+        }}
+      />
+
+      <DeleteFolderModal
+        visible={!!deleteFolderTarget}
+        folder={deleteFolderTarget}
+        onClose={() => setDeleteFolderTarget(null)}
+        onDeleted={() => {
+          const deletedId = deleteFolderTarget?.id;
+          setDeleteFolderTarget(null);
+          if (currentFolderId === deletedId) {
+            leaveFolder();
+          } else {
+            void refreshCatalog();
+          }
+        }}
+      />
+
+      <MoveToFolderModal
+        visible={!!moveItem}
+        folders={rootFolders}
+        currentFolderId={
+          moveItem && 'folder_id' in moveItem
+            ? (moveItem.folder_id as number | null | undefined) ??
+              currentFolderId
+            : currentFolderId
+        }
+        onClose={() => setMoveItem(null)}
+        onPick={async folderId => {
+          if (!moveItem || isCatalogFolder(moveItem)) {
+            return;
+          }
+          const res = await moveCatalogItem(
+            moveItem.type,
+            Number(moveItem.id),
+            folderId,
+          );
+          if (res.success === false) {
+            throw new Error(res.message || 'move failed');
+          }
+          setMoveItem(null);
+          await Promise.all([refreshCatalog(), reload()]);
         }}
       />
 
@@ -875,13 +1145,18 @@ export function LessonPlansScreen() {
         onClose={() => setEditLesson(null)}
         onSaved={() => {
           setEditLesson(null);
-          void reload();
+          if (isMyCatalogTab) {
+            void refreshCatalog();
+          } else {
+            void reload();
+          }
         }}
       />
 
       <CreateCourseModal
         visible={createCourseOpen || !!editCourse}
         course={editCourse}
+        folderId={currentFolderId}
         onClose={() => {
           setCreateCourseOpen(false);
           setEditCourse(null);
@@ -889,7 +1164,11 @@ export function LessonPlansScreen() {
         onSaved={courseId => {
           setCreateCourseOpen(false);
           setEditCourse(null);
-          void reload();
+          if (isMyCatalogTab) {
+            void refreshCatalog();
+          } else {
+            void reload();
+          }
           navigation.navigate('Course', {courseId});
         }}
       />
